@@ -1,0 +1,278 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\JobOrder;
+use App\Models\ActionReport;
+use App\Models\User;
+use App\Notifications\DiagnosisPopulatedNotification; // Import notification
+use App\Notifications\DiagnosisConfirmedNotification; // Import confirmation notification
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use setasign\Fpdi\Tcpdf\Fpdi;
+use Illuminate\Support\Facades\Storage;
+
+class JobOrderController extends Controller
+{
+    /*
+    |-------------------------------------------------------------------------- 
+    | INDEX 
+    |-------------------------------------------------------------------------- 
+    */
+    public function index(Request $request)
+    {
+        $query = JobOrder::with([
+            'department',
+            'requester',
+            'categories',
+            'actionReport.servicedBy',
+        ])->orderBy('created_at', 'desc');
+
+        if (!$request->user()->isAdmin()) {
+            $query->where('requested_by', $request->user()->id);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+
+            $query->where(function ($q) use ($search) {
+                $q->where('job_order_no', 'like', "%{$search}%")
+                  ->orWhereHas('department', function ($d) use ($search) {
+                      $d->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        return $query->paginate(10);
+    }
+
+    /*
+    |-------------------------------------------------------------------------- 
+    | SHOW 
+    |-------------------------------------------------------------------------- 
+    */
+    public function show(JobOrder $jobOrder)
+    {
+        return $jobOrder->load([
+            'department',
+            'requester',
+            'creator',
+            'approver',
+            'conformer',
+            'categories',
+            'attachments', // 🔥 include attachments
+            'actionReport.servicedBy',
+            'actionReport.acceptedBy',
+            'actionReport.cancelledBy',
+        ]);
+    }
+
+    /*
+    |-------------------------------------------------------------------------- 
+    | STORE 
+    |-------------------------------------------------------------------------- 
+    */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'date' => ['required', 'date'],
+            'department_id' => ['required', 'exists:departments,id'],
+            'request_description' => ['required', 'string'],
+            'contact_no' => ['required', 'string'],
+            'signature_name' => ['nullable', 'string'],
+            'categories' => ['required', 'array', 'min:1'],
+            'categories.*.id' => ['required', 'exists:categories,id'],
+            'files' => ['nullable', 'array', 'max:3'],
+            'files.*' => ['file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
+            'diagnosis' => ['nullable', 'string'],
+        ]);
+
+        return DB::transaction(function () use ($validated, $request) {
+            // Generate Job Order Number
+            $signatureName = $validated['signature_name'] ?? $request->user()->name;
+            $last = JobOrder::lockForUpdate()->latest('id')->first();
+            $nextNumber = str_pad(($last?->id ?? 0) + 1, 6, '0', STR_PAD_LEFT);
+            $jobOrderNo = now()->year . '-' . $nextNumber;
+
+            // Create the Job Order
+            $jobOrder = JobOrder::create([
+                'job_order_no' => $jobOrderNo,
+                'date' => $validated['date'],
+                'department_id' => $validated['department_id'],
+                'requested_by' => $request->user()->id,
+                'created_by' => $request->user()->id,
+                'request_description' => $validated['request_description'],
+                'contact_no' => $validated['contact_no'],
+                'signature_name' => $signatureName,
+                'status' => 'Pending',
+            ]);
+
+            // Attach Categories
+            foreach ($validated['categories'] as $category) {
+                $jobOrder->categories()->attach(
+                    $category['id'],
+                    ['other_description' => $category['other_description'] ?? null]
+                );
+            }
+
+            // Create Action Report
+            ActionReport::create([
+                'job_order_id' => $jobOrder->id,
+                'status' => 'Pending',
+            ]);
+
+            // Handle File Uploads
+            if ($request->hasFile('files')) {
+                $mergedPdf = new Fpdi();
+                $mergedPdf->SetAutoPageBreak(false);
+                Storage::disk('public')->makeDirectory('job_orders/' . $jobOrder->id);
+
+                foreach ($request->file('files') as $file) {
+                    $extension = strtolower($file->getClientOriginalExtension());
+                    $path = $file->store('job_orders/' . $jobOrder->id, 'public');
+
+                    $jobOrder->attachments()->create([
+                        'original_name' => $file->getClientOriginalName(),
+                        'file_path' => $path,
+                        'type' => $extension === 'pdf' ? 'pdf' : 'image',
+                    ]);
+                }
+            }
+
+            // If diagnosis is populated, send notification
+            if (!empty($request->input('diagnosis'))) {
+                $requestedByUser = User::find($jobOrder->requested_by);
+                if ($requestedByUser) {
+                    $requestedByUser->notify(new DiagnosisPopulatedNotification($jobOrder)); // Send notification
+                }
+            }
+
+            return $jobOrder->load([
+                'department',
+                'requester',
+                'categories',
+                'attachments',
+                'actionReport',
+            ]);
+        });
+    }
+
+    /*
+    |-------------------------------------------------------------------------- 
+    | UPDATE STATUS 
+    |-------------------------------------------------------------------------- 
+    */
+    public function update(Request $request, JobOrder $jobOrder)
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'in:Pending,Ongoing,Cancelled,Unservicable'],
+            'diagnosis' => ['nullable', 'string'],
+            'action_taken' => ['nullable', 'string'],
+            'remarks' => ['nullable', 'string'],
+        ]);
+
+        return DB::transaction(function () use ($validated, $jobOrder, $request) {
+
+            $actionReport = $jobOrder->actionReport;
+
+            if (!$actionReport) {
+                return response()->json([
+                    'message' => 'Action report not found.'
+                ], 404);
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Update Diagnosis & Action Taken
+            |--------------------------------------------------------------------------
+            */
+
+            $actionReport->update([
+                'diagnosis' => $validated['diagnosis'] ?? $actionReport->diagnosis,
+                'action_taken' => $validated['action_taken'] ?? $actionReport->action_taken,
+                'remarks' => $validated['remarks'] ?? $actionReport->remarks,
+            ]);
+
+            /*
+            |--------------------------------------------------------------------------
+            | Move to Pending Confirmation ONLY if BOTH filled
+            |--------------------------------------------------------------------------
+            */
+
+            $diagnosisFilled = !empty(trim($actionReport->diagnosis));
+            $actionTakenFilled = !empty(trim($actionReport->action_taken));
+
+            if ($diagnosisFilled && $actionTakenFilled && !$actionReport->conformed) {
+
+                $jobOrder->update(['status' => 'Ongoing']);
+
+                $actionReport->update([
+                    'status' => 'Ongoing'
+                ]);
+
+                // Notify requester
+                $requestedByUser = User::find($jobOrder->requested_by);
+
+                if ($requestedByUser) {
+                    $requestedByUser->notify(
+                        new DiagnosisPopulatedNotification($jobOrder)
+                    );
+                }
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Normal Status Handling
+            |--------------------------------------------------------------------------
+            */
+
+            if ($validated['status'] === 'Ongoing') {
+
+                $jobOrder->update(['status' => 'Ongoing']);
+
+                $actionReport->update([
+                    'status' => 'Ongoing',
+                    'accepted_by' => $request->user()->id,
+                    'accepted_at' => now(),
+                ]);
+            }
+
+            if ($validated['status'] === 'Cancelled') {
+
+                $jobOrder->update(['status' => 'Cancelled']);
+
+                $actionReport->update([
+                    'status' => 'Cancelled',
+                    'cancelled_by' => $request->user()->id,
+                    'cancelled_at' => now(),
+                ]);
+            }
+
+            if ($validated['status'] === 'Unservicable') {
+
+                $jobOrder->update(['status' => 'Unservicable']);
+
+                $actionReport->update([
+                    'status' => 'Unservicable',
+                    // You can handle additional logic here for Unservicable, if required.
+                ]);
+            }
+
+
+            // ✅ RETURN RESPONSE (FIX)
+            return response()->json(
+                $jobOrder->load([
+                    'department',
+                    'requester',
+                    'categories',
+                    'attachments',
+                    'actionReport.servicedBy',
+                    'actionReport.acceptedBy',
+                    'actionReport.cancelledBy',
+                ]),
+                200
+            );
+        });
+    }
+
+}

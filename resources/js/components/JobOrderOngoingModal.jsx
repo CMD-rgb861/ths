@@ -1,0 +1,626 @@
+import { useEffect, useState, useCallback, memo } from 'react';
+import axios from 'axios';
+
+const STATUS_OPTIONS = ['Pending', 'Ongoing', 'Cancelled'];
+const TABS = ['Details', 'Dates'];
+
+const Info = memo(({ label, value }) => (
+  <div>
+    <div className="text-xs text-gray-500">{label}</div>
+    <div className="text-sm font-medium text-gray-900 break-words">
+      {value || '—'}
+    </div>
+  </div>
+));
+
+const Field = memo(({ title, description, children }) => (
+  <div className="space-y-1">
+    <label className="text-sm font-semibold">{title}</label>
+    {children}
+    {description && (
+      <p className="text-xs text-gray-500">{description}</p>
+    )}
+  </div>
+));
+
+export default function JobOrderOngoingModal({
+  jobId,
+  isOpen,
+  onClose,
+  onStatusChange,
+  showNotification,
+  isAdmin
+}) {
+  const [job, setJob] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [activeTab, setActiveTab] = useState(TABS[0]);
+
+  const currentUser = JSON.parse(localStorage.getItem('user'));
+
+  const [form, setForm] = useState({
+    diagnosis: '',
+    action_taken: '',
+    status: 'Pending',
+    serviced_by: '',
+    date_accepted: '',
+    date_started: '',
+    date_finished: '',
+    cancel: false,
+    unserviceable: false,
+  });
+
+  // ================= COMPUTED STATES =================
+
+  const isCompleted =
+    job?.action_report?.status === 'Completed';
+
+  const isConfirmed =
+    !!job?.action_report?.confirmed_at;
+
+  const isRequester =
+    job?.requester?.id === currentUser?.id;
+
+  const readOnly =
+    !isAdmin || isCompleted;
+
+  const showConfirmButton =
+  isRequester &&
+  job?.action_report?.status === 'Ongoing' &&
+  form.diagnosis &&
+  form.action_taken &&
+  !isConfirmed;
+
+  // ================= FORMATTERS =================
+  const formatDisplayDate = (dateString) => {
+      if (!dateString) return '—';
+
+      // Ensure the string is in ISO format (handle ' ' to 'T' conversion)
+      const isoString = dateString.includes(' ') ? dateString.replace(' ', 'T') : dateString;
+      const d = new Date(isoString);
+
+      // Handle invalid date case
+      if (isNaN(d)) return '—';
+
+      // Return a formatted string like "February 19, 2026 at 06:39 PM"
+      return d.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true, // AM/PM format
+      });
+    };
+
+    const formatDateTime = (value) =>
+      value ? value.replace(' ', 'T').slice(0, 16) : '';
+
+
+  // ================= LOAD JOB =================
+
+  const loadJob = useCallback(() => {
+    if (!jobId) return;
+
+    setLoading(true);
+
+    axios
+      .get(`/job-orders/${jobId}`)
+      .then((res) => {
+        const data = res.data;
+        setJob(data);
+
+        // Update the form state based on the fetched job data
+        setForm({
+          diagnosis: data.action_report?.diagnosis || '',
+          action_taken: data.action_report?.action_taken || '',
+          status: data.action_report?.status || 'Pending',
+          serviced_by: data.action_report?.serviced_by?.id || '',  // Default to empty string
+          date_accepted: formatDateTime(data.action_report?.accepted_at) || '',
+          date_started: formatDateTime(data.action_report?.date_started) || '',  // Default to empty string
+          date_finished: formatDateTime(data.action_report?.date_finished) || '',  // Default to empty string
+        });
+
+      })
+      .catch((err) => console.error('Load job failed:', err))
+      .finally(() => setLoading(false));
+  }, [jobId]);
+
+  // ================= LOAD TECHNICIANS =================
+
+  useEffect(() => {
+    axios
+      .get('/technicians')
+      .then((res) => setUsers(res.data))
+      .catch(() => setUsers([]));
+  }, []);
+
+  // ================= RELOAD WHEN OPEN =================
+
+  useEffect(() => {
+    if (isOpen) {
+      loadJob();
+    }
+  }, [isOpen, jobId, loadJob]);
+
+  // ================= HANDLE CHANGE =================
+
+  const handleChange = (e) => {
+    if (readOnly) return;
+
+    const { name, value, type, checked } = e.target;
+
+    if (type === 'checkbox') {
+      // Ensure only one checkbox can be selected
+      if (name === 'cancel' && checked) {
+        setForm((prev) => ({
+          ...prev,
+          cancel: true,
+          unserviceable: false,
+        }));
+      } else if (name === 'unserviceable' && checked) {
+        setForm((prev) => ({
+          ...prev,
+          cancel: false,
+          unserviceable: true,
+        }));
+      }
+    } else {
+      setForm((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
+  };
+
+  // ================= SAVE ACTION REPORT =================
+
+  const handleSave = () => {
+    console.log('Form before save:', form); // Debugging form data
+
+    // Prevent saving if saving is in progress
+    if (!job?.id || saving) return;
+
+    // Validate required fields
+    if (!form.serviced_by || !form.date_started || !form.date_finished) {
+      showNotification(
+        'error',
+        'Validation Failed',
+        'Technician, Date Started, and Date Finished are required.'
+      );
+      return;
+    }
+
+    setSaving(true);
+
+    // Conditionally set 'conformed' based on form data
+    const updatedForm = {
+      ...form,
+      conformed: form.diagnosis && form.action_taken ? true : false, // Set 'conformed' based on form data
+    };
+
+    console.log('Updated form with conformed:', updatedForm); // Check conformed status
+
+    // Send the updated form data to the backend
+    axios.put(`/job-orders/${job.id}/action-report`, updatedForm)
+      .then(() => {
+        showNotification(
+          "success",
+          "Action Report Updated",
+          "The job order action report was saved successfully."
+        );
+
+        // Lock form if status is 'Completed'
+        if (updatedForm.status === "Completed") setReadOnly(true);
+
+        // Optionally call `onStatusChange` if necessary
+        if (onStatusChange) onStatusChange();
+
+        // Ensure form fields are not reset to null after save
+        setForm({
+          diagnosis: updatedForm.diagnosis || '',
+          action_taken: updatedForm.action_taken || '',
+          status: updatedForm.status || 'Pending',
+          serviced_by: updatedForm.serviced_by || '',
+          date_accepted: formatDateTime(updatedForm.date_accepted) || '',
+          date_started: formatDateTime(updatedForm.date_started) || '',
+          date_finished: formatDateTime(updatedForm.date_finished) || '',
+          cancel: updatedForm.cancel || false,  // Store cancel status
+          unserviceable: updatedForm.unserviceable || false,  // Store unserviceable status
+          remarks: updatedForm.remarks || '',  // Update remarks with saved value
+        });
+      })
+      .catch((err) => {
+        console.error(err);
+        showNotification(
+          "error",
+          "Update Failed",
+          "Something went wrong while updating the action report."
+        );
+      })
+      .finally(() => setSaving(false));
+  };
+
+
+
+  // ================= CONFIRM COMPLETION =================
+
+  const handleConfirm = () => {
+    if (!job?.id || confirming) return;
+
+    setConfirming(true);
+
+    axios
+      .patch(`/job-orders/${job.id}/confirm-diagnosis`)
+      .then(() => {
+        showNotification(
+          'success',
+          'Job Confirmed',
+          'You have successfully confirmed the completion of this job.'
+        );
+
+        loadJob();
+        if (onStatusChange) onStatusChange();
+      })
+      .catch((err) => {
+        console.error(err);
+        showNotification(
+          'error',
+          'Confirmation Failed',
+          'Something went wrong while confirming.'
+        );
+      })
+      .finally(() => setConfirming(false));
+  };
+
+  if (!isOpen || !job) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]">
+
+        {/* ================= HEADER ================= */}
+        <div className="flex justify-between items-center px-6 py-4 border-b">
+          <h2 className="text-lg font-semibold">
+            Job Order Details
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-800 text-xl"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* ================= CONTENT ================= */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8 overflow-y-auto">
+
+          {/* LEFT SIDE */}
+          <div className="space-y-4">
+            <h3 className="font-semibold border-b pb-2">
+              Job Information
+            </h3>
+
+            <Info label="Job Order No." value={job.job_order_no} />
+            <Info label="Date" value={formatDisplayDate(job.date)} />
+            <Info label="Department" value={job.department?.name} />
+            <Info
+              label="Categories"
+              value={job.categories?.map(c => c.name).join(', ')}
+            />
+            <Info
+              label="Request Description"
+              value={job.request_description}
+            />
+            <Info
+              label="Requested By"
+              value={job.requester?.name}
+            />
+            <Info label="Contact No." value={job.contact_no} />
+
+            {/* ================= ATTACHMENTS SECTION ================= */}
+            {job.attachments?.length > 0 && (
+              <div className="space-y-2 pt-4">
+                <h4 className="text-sm font-semibold text-gray-700 border-b pb-1">
+                  Attachments
+                </h4>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {job.attachments.map((file) => {
+                    const fileUrl = `/storage/${file.file_path}`;
+
+                    if (file.type === 'image') {
+                      return (
+                        <a
+                          key={file.id}
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block"
+                        >
+                          <img
+                            src={fileUrl}
+                            alt={file.original_name}
+                            className="rounded-lg border hover:opacity-80 transition cursor-pointer object-cover h-32 w-full"
+                          />
+                        </a>
+                      );
+                    }
+
+                    if (file.type === 'pdf') {
+                      return (
+                        <a
+                          key={file.id}
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center h-32 border rounded-lg bg-gray-100 hover:bg-gray-200 transition text-sm font-medium"
+                        >
+                          📄 View PDF
+                        </a>
+                      );
+                    }
+
+                    return null;
+                  })}
+                </div>
+              </div>
+            )}
+            {/* ========================================================= */}
+          </div>
+
+          {/* RIGHT SIDE (UNCHANGED) */}
+          <div className="space-y-4 flex flex-col">
+            <h3 className="font-semibold border-b pb-2">
+              Action Report
+            </h3>
+
+            <div className="flex space-x-2 border-b">
+              {TABS.map((tab) => (
+                <button
+                  key={tab}
+                  className={`px-3 py-1 text-sm font-medium ${
+                    activeTab === tab
+                      ? 'border-b-2 border-gray-900'
+                      : 'text-gray-500'
+                  }`}
+                  onClick={() => setActiveTab(tab)}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 space-y-4 overflow-y-auto max-h-[60vh]">
+
+              {activeTab === 'Details' && (
+                <>
+                  <Field title="Diagnosis">
+                    {readOnly ? (
+                      <div className="text-sm font-medium text-gray-900">{form.diagnosis || '—'}</div>
+                    ) : (
+                      <textarea
+                        name="diagnosis"
+                        value={form.diagnosis}
+                        onChange={handleChange}
+                        className="w-full border rounded-lg p-2 text-sm"
+                        rows="3"
+                        disabled={readOnly}
+                      />
+                    )}
+                  </Field>
+
+                  <Field title="Action Taken">
+                    {readOnly ? (
+                      <div className="text-sm font-medium text-gray-900">{form.action_taken || '—'}</div>
+                    ) : (
+                      <textarea
+                        name="action_taken"
+                        value={form.action_taken}
+                        onChange={handleChange}
+                        className="w-full border rounded-lg p-2 text-sm"
+                        rows="3"
+                        disabled={readOnly}
+                      />
+                    )}
+                  </Field>
+
+                  <Field title="Status:">
+                    <div className="text-sm font-medium text-gray-900">
+                      {form.status || '—'}
+                    </div>
+                  </Field>
+
+                  {/* ================= NEW CHECKBOXES ================= */}
+                  <Field title="Cancellation / Unserviceable">
+                    <div className="flex space-x-4">
+                      <div className="flex items-center">
+                        {/* Cancel checkbox */}
+                        <input
+                          type="checkbox"
+                          id="cancel"
+                          name="cancel"
+                          checked={form.cancel}
+                          onChange={() => {}}
+                          className="mr-2"
+                          disabled={true} // Disabled on the user side
+                        />
+                        <label htmlFor="cancel" className="text-sm text-gray-600">
+                          Cancel
+                        </label>
+                      </div>
+                      <div className="flex items-center">
+                        {/* Unserviceable checkbox */}
+                        <input
+                          type="checkbox"
+                          id="unserviceable"
+                          name="unserviceable"
+                          checked={form.unserviceable}
+                          onChange={() => {}}
+                          className="mr-2"
+                          disabled={true} // Disabled on the user side
+                        />
+                        <label htmlFor="unserviceable" className="text-sm text-gray-600">
+                          Unserviceable
+                        </label>
+                      </div>
+                    </div>
+                  </Field>
+
+
+                  <Field title="Technician">
+                    {readOnly ? (
+                      <div className="text-sm font-medium text-gray-900">
+                        {job?.action_report?.serviced_by?.name || '—'}
+                      </div>
+                    ) : (
+                      <select
+                        name="serviced_by"
+                        value={form.serviced_by}
+                        onChange={handleChange}
+                        className="w-full border rounded-lg p-2 text-sm"
+                        disabled={readOnly}
+                      >
+                        <option value="">Select Technician</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}
+                          </option>
+                        ))}
+                      </select>
+
+                    )}
+                  </Field>
+
+                  <Field title="Remarks">
+                  {/* Show Remarks in Admin Side */}
+                  {readOnly ? (
+                    // User Side: Only show if remarks are not empty
+                    form.remarks ? (
+                      <div className="text-sm font-medium text-gray-900">{form.remarks || '—'}</div>
+                    ) : (
+                      // Don't render anything if remarks are empty
+                      <div className="hidden" />
+                    )
+                  ) : (
+                    // Admin Side: Always show remarks field, editable
+                    <textarea
+                      name="remarks"
+                      value={form.remarks}
+                      onChange={handleChange}
+                      className="w-full border rounded-lg p-2 text-sm"
+                      rows="3"
+                      disabled={readOnly}
+                    />
+                  )}
+                </Field>
+                </>
+              )}
+
+              {activeTab === 'Dates' && (
+ 
+                  <>
+                    <Field title="Date Accepted">
+                      {readOnly ? (
+                        <div className="text-sm font-medium text-gray-900">
+                          {formatDisplayDate(form.date_accepted) || '—'}
+                        </div>
+                      ) : (
+                        <input
+                          type="datetime-local"
+                          value={form.date_accepted || ''}
+                          disabled
+                          className="w-full border rounded-lg p-2 text-sm bg-gray-100"
+                        />
+                      )}
+                    </Field>
+
+                    <Field title="Date Started">
+                      {readOnly ? (
+                        <div className="text-sm font-medium text-gray-900">
+                          {formatDisplayDate(form.date_started) || '—'}
+                        </div>
+                      ) : (
+                        <input
+                          type="datetime-local"
+                          name="date_started"
+                          value={form.date_started || ''}
+                          onChange={handleChange}
+                          disabled={readOnly}
+                          className="w-full border rounded-lg p-2 text-sm"
+                        />
+                      )}
+                    </Field>
+
+                    <Field title="Date Finished">
+                      {readOnly ? (
+                        <div className="text-sm font-medium text-gray-900">
+                          {formatDisplayDate(form.date_finished) || '—'}
+                        </div>
+                      ) : (
+                        <input
+                          type="datetime-local"
+                          name="date_finished"
+                          value={form.date_finished || ''}
+                          onChange={handleChange}
+                          disabled={readOnly}
+                          className="w-full border rounded-lg p-2 text-sm"
+                        />
+                      )}
+                    </Field>
+
+                    <Field title="Confirmed At">
+                    {isConfirmed ? (
+                      <div className="text-sm font-medium text-gray-900">
+                        {formatDisplayDate(job?.action_report?.confirmed_at) || '—'}
+                      </div>
+                    ) : (
+                      <div className="text-sm font-medium text-gray-500">Not confirmed yet</div>
+                    )}
+                  </Field>
+                  </>
+                )}
+
+            </div>
+          </div>
+        </div>
+
+        {!readOnly && (
+          <div className="px-8 pb-4">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className={`px-6 py-2 rounded-lg text-white ${
+                saving
+                  ? 'bg-gray-500 cursor-not-allowed'
+                  : 'bg-gray-900 hover:bg-gray-800'
+              }`}
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        )}
+
+        {showConfirmButton && (
+          <div className="px-8 pb-6">
+            <button
+              onClick={handleConfirm}
+              disabled={confirming}
+              className={`px-6 py-2 rounded-lg text-white ${
+                confirming
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
+            >
+              {confirming ? 'Confirming...' : 'Confirm'}
+            </button>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}

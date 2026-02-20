@@ -1,0 +1,39 @@
+<?php
+
+// app/Notifications/DiagnosisPopulatedNotification.php
+
+namespace App\Notifications;
+
+use App\Models\JobOrder;
+use Illuminate\Bus\Queueable;
+use Illuminate\Notifications\Notification;
+
+class DiagnosisPopulatedNotification extends Notification
+{
+    use Queueable;
+
+    public $job;
+
+    public function __construct(JobOrder $job)
+    {
+        $this->job = $job;
+    }
+
+    public function via($notifiable)
+    {
+        return ['database'];  // Store the notification in the database
+    }
+
+    public function toDatabase($notifiable)
+    {
+        return [
+            'job_order_id' => $this->job->id,
+            'message' => 'The diagnosis has been updated. Please confirm it.',
+            // Fix: Use the correct parameter `id`
+            'action_url' => route('job-orders.confirm', [
+                'jobOrder' => $this->job->id
+            ]),
+
+        ];
+    }
+}
