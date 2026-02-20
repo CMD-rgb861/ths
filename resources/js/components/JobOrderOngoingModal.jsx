@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, memo } from 'react';
 import axios from 'axios';
+import UnserviceableModal from './UnserviceableModal';
 
 const STATUS_OPTIONS = ['Pending', 'Ongoing', 'Cancelled'];
 const TABS = ['Details', 'Dates'];
@@ -38,6 +39,7 @@ export default function JobOrderOngoingModal({
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [activeTab, setActiveTab] = useState(TABS[0]);
+  const [isUnserviceableModalOpen, setIsUnserviceableModalOpen] = useState(false);
 
   const currentUser = JSON.parse(localStorage.getItem('user'));
 
@@ -161,6 +163,18 @@ export default function JobOrderOngoingModal({
       loadJob();
     }
   }, [isOpen, jobId, loadJob]);
+
+  // ================= HANDLE UNSERVICEABLE CHANGE =================
+
+  const handleUnserviceableChange = (e) => {
+    if (e.target.checked) {
+      setIsUnserviceableModalOpen(true);
+    }
+    setForm((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.checked,
+    }));
+  };
 
   // ================= HANDLE CHANGE =================
 
@@ -529,7 +543,7 @@ export default function JobOrderOngoingModal({
                           id="unserviceable"
                           name="unserviceable"
                           checked={form.unserviceable}
-                          onChange={handleChange}
+                          onChange={handleUnserviceableChange}
                           className="mr-2"
                           disabled={readOnly && !isAdmin} // Only disable for regular users
                         />
@@ -539,6 +553,14 @@ export default function JobOrderOngoingModal({
                       </div>
                     </div>
                   </Field>
+
+                  {/* Show Unserviceable Modal when open */}
+                  <UnserviceableModal
+                    isOpen={isUnserviceableModalOpen}
+                    onClose={() => setIsUnserviceableModalOpen(false)}
+                    jobId={jobId}
+                    showNotification={showNotification}
+                  />
 
 
                   <Field title="Technician">
@@ -657,6 +679,7 @@ export default function JobOrderOngoingModal({
             </div>
           </div>
         </div>
+        
 
         {!readOnly && (
           <div className="px-8 pb-4">
