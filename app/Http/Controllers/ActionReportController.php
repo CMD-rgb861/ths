@@ -257,4 +257,49 @@ class ActionReportController extends Controller
             storage_path("app/public/{$jobOrder->final_report_path}")
         );
     }
+
+    public function updateUnserviceable(Request $request, JobOrder $jobOrder)
+    {
+        $validated = $request->validate([
+            'item' => ['required', 'string'],
+            'findings' => ['required', 'string'],
+            'noted_by_its' => ['required', 'string'],
+            'noted_by_pc' => ['required', 'string'],
+            'date' => ['required', 'date'],
+        ]);
+
+        $actionReport = $jobOrder->actionReport;
+
+        if (!$actionReport) {
+            return response()->json([
+                'message' => 'Action Report not found.'
+            ], 404);
+        }
+
+        $actionReport->update([
+            'item' => $validated['item'],
+            'findings' => $validated['findings'],
+            'noted_by_its' => $validated['noted_by_its'],
+            'noted_by_pc' => $validated['noted_by_pc'],
+            'unserviceable_date' => $validated['date'],
+            'status' => 'Unserviceable',
+        ]);
+
+        $jobOrder->update([
+            'status' => 'Unserviceable'
+        ]);
+
+        return response()->json(
+            $jobOrder->fresh()->load([
+                'department',
+                'requester',
+                'categories',
+                'attachments',
+                'actionReport.servicedBy',
+                'actionReport.acceptedBy',
+                'actionReport.cancelledBy',
+            ]),
+            200
+        );
+    }
 }

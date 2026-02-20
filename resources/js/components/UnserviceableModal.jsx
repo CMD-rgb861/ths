@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
 
 export default function UnserviceableModal({
@@ -13,20 +13,9 @@ export default function UnserviceableModal({
     noted_by_its: '',
     noted_by_pc: '',
     date: '',
-    serviced_by: '',
   });
-  const [technicians, setTechnicians] = useState([]);
-  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      // Fetch technicians
-      axios
-        .get('/technicians')
-        .then((res) => setTechnicians(res.data))
-        .catch(() => showNotification('error', 'Error', 'Unable to fetch technicians.'));
-    }
-  }, [isOpen, showNotification]);
+  const [saving, setSaving] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -41,23 +30,34 @@ export default function UnserviceableModal({
 
     setSaving(true);
 
-    // Validate fields
-    if (!form.item || !form.findings || !form.date || !form.serviced_by) {
-      showNotification('error', 'Validation Failed', 'Please fill out all required fields.');
+    // Basic validation
+    if (!form.item || !form.findings || !form.date) {
+      showNotification(
+        'error',
+        'Validation Failed',
+        'Please fill out all required fields.'
+      );
       setSaving(false);
       return;
     }
 
-    // Send data to backend (update action_report for the job)
     axios
       .put(`/job-orders/${jobId}/action-report/unserviceable`, form)
       .then(() => {
-        showNotification('success', 'Saved', 'Unserviceable details saved successfully.');
+        showNotification(
+          'success',
+          'Saved',
+          'Unserviceable details saved successfully.'
+        );
         onClose();
       })
       .catch((err) => {
         console.error(err);
-        showNotification('error', 'Save Failed', 'Something went wrong while saving the details.');
+        showNotification(
+          'error',
+          'Save Failed',
+          'Something went wrong while saving the details.'
+        );
       })
       .finally(() => setSaving(false));
   };
@@ -70,7 +70,10 @@ export default function UnserviceableModal({
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b">
           <h2 className="text-lg font-semibold">Unserviceable Details</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-xl">
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-800 text-xl"
+          >
             ✕
           </button>
         </div>
@@ -102,7 +105,7 @@ export default function UnserviceableModal({
           <div>
             <label className="block text-sm font-semibold">Date</label>
             <input
-              type="datetime-local"
+              type="date"
               name="date"
               value={form.date}
               onChange={handleChange}
@@ -111,24 +114,9 @@ export default function UnserviceableModal({
           </div>
 
           <div>
-            <label className="block text-sm font-semibold">Serviced By</label>
-            <select
-              name="serviced_by"
-              value={form.serviced_by}
-              onChange={handleChange}
-              className="w-full border rounded-lg p-2 text-sm"
-            >
-              <option value="">Select Technician</option>
-              {technicians.map((tech) => (
-                <option key={tech.id} value={tech.id}>
-                  {tech.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold">Noted By (ITS Director)</label>
+            <label className="block text-sm font-semibold">
+              Noted By (ITS Director)
+            </label>
             <input
               type="text"
               name="noted_by_its"
@@ -139,7 +127,9 @@ export default function UnserviceableModal({
           </div>
 
           <div>
-            <label className="block text-sm font-semibold">Noted By (Property Custodian)</label>
+            <label className="block text-sm font-semibold">
+              Noted By (Property Custodian)
+            </label>
             <input
               type="text"
               name="noted_by_pc"
@@ -156,9 +146,12 @@ export default function UnserviceableModal({
             >
               Cancel
             </button>
+
             <button
               onClick={handleSave}
-              className={`px-6 py-2 bg-green-600 text-white rounded-lg ${saving ? 'cursor-not-allowed' : ''}`}
+              className={`px-6 py-2 bg-green-600 text-white rounded-lg ${
+                saving ? 'cursor-not-allowed opacity-70' : ''
+              }`}
               disabled={saving}
             >
               {saving ? 'Saving...' : 'Save'}

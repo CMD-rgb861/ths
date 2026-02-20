@@ -28,6 +28,13 @@ class ActionReport extends Model
         'confirmed_at',
         'confirmed_by',
         'remarks',
+
+        // ADD THESE FIELDS
+        'item',               // Item field
+        'findings',           // Findings field
+        'noted_by_its',       // Noted by ITS field
+        'noted_by_pc',        // Noted by Property Custodian field
+        'unserviceable_date', // Date field for unserviceable status
     ];
 
 
