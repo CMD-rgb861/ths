@@ -262,9 +262,13 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
           <input
             type="text"
             value={form.contact_no}
-            onChange={e =>
-              setForm({ ...form, contact_no: e.target.value })
-            }
+            onChange={e => {
+              const regex = /^[0-9\+\-]*$/;
+              // Only update the form state if the input matches the pattern
+              if (regex.test(e.target.value)) {
+                setForm({ ...form, contact_no: e.target.value });
+              }
+            }}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
           />
         </div>

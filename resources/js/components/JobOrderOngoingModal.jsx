@@ -29,7 +29,8 @@ export default function JobOrderOngoingModal({
   onClose,
   onStatusChange,
   showNotification,
-  isAdmin
+  isAdmin,
+  isEditable = true
 }) {
   const [job, setJob] = useState(null);
   const [users, setUsers] = useState([]);
@@ -56,17 +57,29 @@ export default function JobOrderOngoingModal({
 
   const isCompleted =
     job?.action_report?.status === 'Completed';
+  
+  const isUnserviceable =
+    job?.action_report?.status === 'Unserviceable';
+
+  const isCancelled =
+    job?.action_report?.status === 'Cancelled';
 
   const isConfirmed =
     !!job?.action_report?.confirmed_at;
 
   const isRequester =
     job?.requester?.id === currentUser?.id;
+    
 
   const readOnly =
-    !isAdmin || isCompleted;
+    !isAdmin ||
+    !isEditable ||
+    isCompleted ||
+    isUnserviceable ||
+    isCancelled;
 
   const showConfirmButton =
+  !isAdmin &&
   isRequester &&
   job?.action_report?.status === 'Ongoing' &&
   form.diagnosis &&
@@ -122,6 +135,9 @@ export default function JobOrderOngoingModal({
           date_accepted: formatDateTime(data.action_report?.accepted_at) || '',
           date_started: formatDateTime(data.action_report?.date_started) || '',  // Default to empty string
           date_finished: formatDateTime(data.action_report?.date_finished) || '',  // Default to empty string
+          cancel: data.action_report?.cancel || false,  // Fetch cancel status
+          unserviceable: data.action_report?.unserviceable || false,  // Fetch unserviceable status
+          remarks: data.action_report?.remarks || '',  // Populate remarks
         });
 
       })
@@ -149,7 +165,7 @@ export default function JobOrderOngoingModal({
   // ================= HANDLE CHANGE =================
 
   const handleChange = (e) => {
-    if (readOnly) return;
+    if (readOnly && !isAdmin) return; // Allow only admins to make changes
 
     const { name, value, type, checked } = e.target;
 
@@ -184,8 +200,12 @@ export default function JobOrderOngoingModal({
     // Prevent saving if saving is in progress
     if (!job?.id || saving) return;
 
-    // Validate required fields
-    if (!form.serviced_by || !form.date_started || !form.date_finished) {
+    // Validate required fields (ONLY when not Cancel/Unserviceable)
+    if (
+      !form.cancel &&
+      !form.unserviceable &&
+      (!form.serviced_by || !form.date_started || !form.date_finished)
+    ) {
       showNotification(
         'error',
         'Validation Failed',
@@ -199,13 +219,58 @@ export default function JobOrderOngoingModal({
     // Conditionally set 'conformed' based on form data
     const updatedForm = {
       ...form,
-      conformed: form.diagnosis && form.action_taken ? true : false, // Set 'conformed' based on form data
+      conformed: form.diagnosis && form.action_taken ? true : false,
     };
 
-    console.log('Updated form with conformed:', updatedForm); // Check conformed status
+    console.log('Updated form with conformed:', updatedForm);
 
-    // Send the updated form data to the backend
-    axios.put(`/job-orders/${job.id}/action-report`, updatedForm)
+    // ================= STATUS LOGIC =================
+    let request;
+
+    // 🔴 CANCEL
+    if (form.cancel) {
+      request = Promise.all([
+        axios.put(`/job-orders/${job.id}/action-report`, {
+          diagnosis: form.diagnosis,
+          action_taken: form.action_taken,
+          serviced_by: form.serviced_by,
+          date_started: form.date_started,
+          date_finished: form.date_finished,
+          remarks: form.remarks,
+        }),
+        axios.put(`/job-orders/${job.id}`, {
+          status: "Cancelled",
+        }),
+      ]);
+    }
+
+    // 🟡 UNSERVICEABLE
+    else if (form.unserviceable) {
+      request = Promise.all([
+        axios.put(`/job-orders/${job.id}/action-report`, {
+          diagnosis: form.diagnosis,
+          action_taken: form.action_taken,
+          serviced_by: form.serviced_by,
+          date_started: form.date_started,
+          date_finished: form.date_finished,
+          remarks: form.remarks,
+        }),
+        axios.put(`/job-orders/${job.id}`, {
+          status: "Unserviceable",
+        }),
+      ]);
+    }
+
+    // 🟢 NORMAL SAVE (Ongoing update)
+    else {
+      request = axios.put(
+        `/job-orders/${job.id}/action-report`,
+        updatedForm
+      );
+    }
+    // =================================================
+
+    request
       .then(() => {
         showNotification(
           "success",
@@ -213,13 +278,15 @@ export default function JobOrderOngoingModal({
           "The job order action report was saved successfully."
         );
 
-        // Lock form if status is 'Completed'
-        if (updatedForm.status === "Completed") setReadOnly(true);
+        // Lock form if status becomes Completed
+        if (updatedForm.status === "Completed") {
+          // Only if you have setReadOnly state
+          // setReadOnly(true);
+        }
 
-        // Optionally call `onStatusChange` if necessary
         if (onStatusChange) onStatusChange();
 
-        // Ensure form fields are not reset to null after save
+        // Preserve form state
         setForm({
           diagnosis: updatedForm.diagnosis || '',
           action_taken: updatedForm.action_taken || '',
@@ -228,10 +295,13 @@ export default function JobOrderOngoingModal({
           date_accepted: formatDateTime(updatedForm.date_accepted) || '',
           date_started: formatDateTime(updatedForm.date_started) || '',
           date_finished: formatDateTime(updatedForm.date_finished) || '',
-          cancel: updatedForm.cancel || false,  // Store cancel status
-          unserviceable: updatedForm.unserviceable || false,  // Store unserviceable status
-          remarks: updatedForm.remarks || '',  // Update remarks with saved value
+          cancel: form.cancel || false,
+          unserviceable: form.unserviceable || false,
+          remarks: updatedForm.remarks || '',
         });
+
+        // Reload latest job state
+        loadJob();
       })
       .catch((err) => {
         console.error(err);
@@ -243,7 +313,6 @@ export default function JobOrderOngoingModal({
       })
       .finally(() => setSaving(false));
   };
-
 
 
   // ================= CONFIRM COMPLETION =================
@@ -434,7 +503,8 @@ export default function JobOrderOngoingModal({
                     </div>
                   </Field>
 
-                  {/* ================= NEW CHECKBOXES ================= */}
+                  {/* ================= RENDER THE CHECKBOXES ================= */}
+
                   <Field title="Cancellation / Unserviceable">
                     <div className="flex space-x-4">
                       <div className="flex items-center">
@@ -444,9 +514,9 @@ export default function JobOrderOngoingModal({
                           id="cancel"
                           name="cancel"
                           checked={form.cancel}
-                          onChange={() => {}}
+                          onChange={handleChange}
                           className="mr-2"
-                          disabled={true} // Disabled on the user side
+                          disabled={readOnly && !isAdmin} // Only disable for regular users
                         />
                         <label htmlFor="cancel" className="text-sm text-gray-600">
                           Cancel
@@ -459,9 +529,9 @@ export default function JobOrderOngoingModal({
                           id="unserviceable"
                           name="unserviceable"
                           checked={form.unserviceable}
-                          onChange={() => {}}
+                          onChange={handleChange}
                           className="mr-2"
-                          disabled={true} // Disabled on the user side
+                          disabled={readOnly && !isAdmin} // Only disable for regular users
                         />
                         <label htmlFor="unserviceable" className="text-sm text-gray-600">
                           Unserviceable
@@ -496,27 +566,27 @@ export default function JobOrderOngoingModal({
                   </Field>
 
                   <Field title="Remarks">
-                  {/* Show Remarks in Admin Side */}
-                  {readOnly ? (
-                    // User Side: Only show if remarks are not empty
-                    form.remarks ? (
-                      <div className="text-sm font-medium text-gray-900">{form.remarks || '—'}</div>
+                    {/* Show Remarks in Admin Side */}
+                    {readOnly ? (
+                      // User Side: Only show if remarks are not empty
+                      form.remarks ? (
+                        <div className="text-sm font-medium text-gray-900">{form.remarks || '—'}</div>
+                      ) : (
+                        // Don't render anything if remarks are empty
+                        <div className="hidden" />
+                      )
                     ) : (
-                      // Don't render anything if remarks are empty
-                      <div className="hidden" />
-                    )
-                  ) : (
-                    // Admin Side: Always show remarks field, editable
-                    <textarea
-                      name="remarks"
-                      value={form.remarks}
-                      onChange={handleChange}
-                      className="w-full border rounded-lg p-2 text-sm"
-                      rows="3"
-                      disabled={readOnly}
-                    />
-                  )}
-                </Field>
+                      // Admin Side: Always show remarks field, editable
+                      <textarea
+                        name="remarks"
+                        value={form.remarks}
+                        onChange={handleChange}
+                        className="w-full border rounded-lg p-2 text-sm"
+                        rows="3"
+                        disabled={readOnly}
+                      />
+                    )}
+                  </Field>
                 </>
               )}
 

@@ -10,6 +10,7 @@ export default function JobOrderStatusSummary({ orders = [] }) {
     Ongoing: 0,
     Completed: 0,
     Cancelled: 0,
+    Unserviceable: 0, // ✅ ADDED
   };
 
   // COUNT STATUSES
@@ -42,10 +43,15 @@ export default function JobOrderStatusSummary({ orders = [] }) {
       text: 'text-red-700',
       badge: 'bg-red-100 text-red-800',
     },
+    Unserviceable: { // ✅ ADDED
+      bg: 'bg-gray-50',
+      text: 'text-gray-700',
+      badge: 'bg-gray-200 text-gray-800',
+    },
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       {Object.entries(counts).map(([status, count]) => {
         const style = styles[status];
 

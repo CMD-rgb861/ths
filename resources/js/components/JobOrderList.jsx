@@ -34,7 +34,7 @@ export default function JobOrderList({ showNotification }) {
 
       // Only show Pending & Ongoing
       data = data.filter(job =>
-        ['Pending', 'Ongoing'].includes(
+        ['Pending', 'Ongoing', 'Unserviceable'].includes(
           job.action_report?.status || 'Pending'
         )
       );

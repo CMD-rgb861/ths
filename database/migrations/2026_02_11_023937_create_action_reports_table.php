@@ -19,7 +19,8 @@ return new class extends Migration {
                 'Pending',
                 'Ongoing',
                 'Completed',
-                'Cancelled'
+                'Cancelled',
+                'Unserviceable'
             ])->default('Pending');
 
             $table->foreignId('serviced_by')->nullable()->constrained('users');

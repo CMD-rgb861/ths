@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-export default function JobOrderModal({ isOpen, job, onClose, onStatusChange, showNotification }) {
+export default function JobOrderModal({
+  isOpen,
+  job,
+  onClose,
+  onStatusChange,
+  showNotification,
+}) {
   const [loadingAction, setLoadingAction] = useState(null);
   const user = JSON.parse(localStorage.getItem('user')); // Get user info from localStorage
 
@@ -151,7 +157,6 @@ export default function JobOrderModal({ isOpen, job, onClose, onStatusChange, sh
 
             </div>
           )}
-
 
           {/* Close Button */}
           <button

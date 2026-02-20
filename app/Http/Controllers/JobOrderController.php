@@ -165,7 +165,7 @@ class JobOrderController extends Controller
     public function update(Request $request, JobOrder $jobOrder)
     {
         $validated = $request->validate([
-            'status' => ['required', 'in:Pending,Ongoing,Cancelled,Unservicable'],
+            'status' => ['required', 'in:Pending,Ongoing,Cancelled,Unserviceable'],
             'diagnosis' => ['nullable', 'string'],
             'action_taken' => ['nullable', 'string'],
             'remarks' => ['nullable', 'string'],
@@ -248,13 +248,13 @@ class JobOrderController extends Controller
                 ]);
             }
 
-            if ($validated['status'] === 'Unservicable') {
+            if ($validated['status'] === 'Unserviceable') {
 
-                $jobOrder->update(['status' => 'Unservicable']);
+                $jobOrder->update(['status' => 'Unserviceable']);
 
                 $actionReport->update([
-                    'status' => 'Unservicable',
-                    // You can handle additional logic here for Unservicable, if required.
+                    'status' => 'Unserviceable',
+                    // You can handle additional logic here for Unserviceable, if required.
                 ]);
             }
 

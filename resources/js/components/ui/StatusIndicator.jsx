@@ -1,14 +1,11 @@
-import { FaCheck, FaSpinner } from 'react-icons/fa'; // Example icons
+import { FaCheck, FaSpinner } from 'react-icons/fa';
 
 const StatusIndicator = ({ status, isConformed, requesterId }) => {
-    console.log('StatusIndicator Props:', { status, isConformed, requesterId });
   const user = JSON.parse(localStorage.getItem('user'));
   const isRequester = user?.id === requesterId;
 
-  if (status === 'Ongoing' && isConformed === undefined) {
-    // Don't show indicator if still waiting for confirmation
-    return null; 
-  }
+  // Don't show indicator if waiting for confirmation and status is Ongoing
+  if (status === 'Ongoing' && isConformed === undefined) return null;
 
   if (status === 'Ongoing') {
     if (isConformed) {
@@ -29,6 +26,5 @@ const StatusIndicator = ({ status, isConformed, requesterId }) => {
 
   return null;
 };
-
 
 export default StatusIndicator;

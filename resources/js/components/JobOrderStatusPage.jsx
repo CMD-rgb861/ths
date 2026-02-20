@@ -18,6 +18,7 @@ export default function JobOrderStatusPage({ showNotification }) {
 
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [isEditable, setIsEditable] = useState(true); // Default to true for Ongoing
 
   /* ================= LOAD ORDERS ================= */
   const loadOrders = useCallback(() => {
@@ -45,9 +46,10 @@ export default function JobOrderStatusPage({ showNotification }) {
   }, [loadOrders]);
 
   /* ================= HANDLE VIEW ================= */
-  const handleView = (id) => {
+  const handleView = (id, status) => {
     setSelectedJobId(id);
     setShowModal(true);
+    setIsEditable(status === 'Ongoing'); // Only editable if status is "Ongoing"
   };
 
   /* ================= STATUS BADGES ================= */
@@ -56,16 +58,8 @@ export default function JobOrderStatusPage({ showNotification }) {
     Ongoing: 'bg-blue-100 text-blue-800',
     Completed: 'bg-green-100 text-green-800',
     Cancelled: 'bg-red-100 text-red-800',
+    Unserviceable: 'bg-gray-200 text-gray-800',
   };
-
-  const Info = ({ label, value }) => (
-    <div>
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className="text-sm font-medium text-gray-900 break-words">
-        {value || '—'}
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-6">
@@ -97,8 +91,8 @@ export default function JobOrderStatusPage({ showNotification }) {
         />
       </div>
 
-      {/* LIST */}
-      <div className="bg-white border rounded-xl overflow-hidden">
+      {/* JOB ORDER TABLE */}
+      <div className="overflow-x-auto bg-white border rounded-xl mt-4">
         {loading && (
           <div className="p-6 text-sm text-gray-500">Loading...</div>
         )}
@@ -110,37 +104,69 @@ export default function JobOrderStatusPage({ showNotification }) {
         )}
 
         {!loading && orders.length > 0 && (
-          <div className="divide-y">
-            {orders.map(o => (
-              <div key={o.id} className="p-6 flex justify-between items-center">
-                <div>
-                  <div className="font-medium">{o.job_order_no}</div>
-                  <div className="text-sm text-gray-500">{o.department?.name}</div>
-                  <div className="text-sm text-gray-500">
-                    Requested by: {o.requester?.name}
-                  </div>
-                </div>
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 border-b">
+              <tr className="text-left text-gray-600">
+                <th className="px-6 py-3 font-medium">Job Order No.</th>
+                <th className="px-6 py-3 font-medium">Department</th>
+                <th className="px-6 py-3 font-medium">Categories</th>
+                <th className="px-6 py-3 font-medium">Status</th>
+                <th className="px-6 py-3 font-medium">Actions</th>
+              </tr>
+            </thead>
 
-                <div className="flex items-center gap-3">
-                  <span className={`px-3 py-1 text-xs rounded-full ${badgeStyle[formattedStatus]}`}>
-                    {formattedStatus}
-                  </span>
+            <tbody className="divide-y">
+              {orders.map((o) => (
+                <tr key={o.id} className="hover:bg-gray-50 transition">
+                  <td className="px-6 py-4 font-medium text-gray-900">
+                    {o.job_order_no}
+                  </td>
 
-                  <button
-                    onClick={() => handleView(o.id)}
-                    className="px-4 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800"
-                  >
-                    View
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                  <td className="px-6 py-4 text-gray-700">
+                    {o.department?.name || '—'}
+                  </td>
+
+                  <td className="px-6 py-4">
+                    {o.categories?.length > 0 ? (
+                      o.categories.map((category, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 inline-block bg-blue-100 text-blue-800 rounded-full text-xs font-medium mr-1"
+                        >
+                          {category.name}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-gray-500">No categories assigned</span>
+                    )}
+                  </td>
+
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col items-center">
+                      <span className={`px-3 py-1 text-xs rounded-full ${badgeStyle[o.action_report?.status]}`}>
+                        {o.action_report?.status}
+                      </span>
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-4 flex gap-2">
+                    {/* View Button */}
+                    <button
+                      onClick={() => handleView(o.id, o.action_report?.status)}
+                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                    >
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
       {/* PAGINATION */}
-      <div className="flex justify-between items-center text-sm">
+      <div className="flex justify-between items-center text-sm mt-4">
         <button
           disabled={page === 1}
           onClick={() => setPage(p => p - 1)}
@@ -168,6 +194,7 @@ export default function JobOrderStatusPage({ showNotification }) {
           onClose={() => setShowModal(false)}
           onStatusChange={loadOrders}
           showNotification={showNotification}
+          isEditable={isEditable} // Pass isEditable prop to JobOrderOngoingModal
         />
       )}
     </div>
