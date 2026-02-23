@@ -51,7 +51,7 @@ export default function UnserviceableModal({
             'Unserviceable details saved successfully.'
           );
 
-          onSaved();  // 🔥 IMPORTANT
+          onSaved(); 
         })
       .catch((err) => {
         console.error(err);

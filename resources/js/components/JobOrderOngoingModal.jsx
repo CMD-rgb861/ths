@@ -73,12 +73,10 @@ export default function JobOrderOngoingModal({
     job?.requester?.id === currentUser?.id;
     
 
-  const readOnly =
-    !isAdmin ||
-    !isEditable ||
-    isCompleted ||
-    isUnserviceable ||
-    isCancelled;
+const readOnly =
+  !isAdmin ||
+  !isEditable ||
+  isCompleted;
 
   const showConfirmButton =
   !isAdmin &&
@@ -218,15 +216,44 @@ export default function JobOrderOngoingModal({
     if (!job?.id || saving) return;
 
     // Validate required fields (ONLY when not Cancel/Unserviceable)
-    if (
-      !form.cancel &&
-      !form.unserviceable &&
-      (!form.serviced_by || !form.date_started || !form.date_finished)
-    ) {
+    // ================= VALIDATION =================
+
+    // Always required for ALL statuses
+    if (!form.serviced_by || !form.date_started || !form.date_finished) {
       showNotification(
-        'error',
-        'Validation Failed',
-        'Technician, Date Started, and Date Finished are required.'
+        "error",
+        "Validation Failed",
+        "Technician, Date Started, and Date Finished are required."
+      );
+      return;
+    }
+
+    // Diagnosis & Action should also always exist
+    if (!form.diagnosis || !form.action_taken) {
+      showNotification(
+        "error",
+        "Validation Failed",
+        "Diagnosis and Action Taken are required."
+      );
+      return;
+    }
+
+    // If Cancelled → remarks required
+    if (form.cancel && !form.remarks) {
+      showNotification(
+        "error",
+        "Validation Failed",
+        "Remarks are required when cancelling a job."
+      );
+      return;
+    }
+
+    // If Unserviceable → remarks required (optional, remove if not needed)
+    if (form.unserviceable && !form.remarks) {
+      showNotification(
+        "error",
+        "Validation Failed",
+        "Remarks are required when marking as Unserviceable."
       );
       return;
     }
@@ -301,7 +328,7 @@ export default function JobOrderOngoingModal({
           // setReadOnly(true);
         }
 
-        if (onStatusChange) onStatusChange();
+        // if (onStatusChange) onStatusChange();
 
         // Preserve form state
         setForm({
@@ -349,7 +376,11 @@ export default function JobOrderOngoingModal({
         );
 
         loadJob();
-        if (onStatusChange) onStatusChange();
+        if (onStatusChange) {
+          axios.get(`/job-orders/${job.id}`).then(res => {
+            onStatusChange(res.data);
+          });
+        }
       })
       .catch((err) => {
         console.error(err);
@@ -522,74 +553,75 @@ export default function JobOrderOngoingModal({
 
                   {/* ================= RENDER THE CHECKBOXES ================= */}
 
-                  <Field title="Cancellation / Unserviceable">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                  {isAdmin && (
+                    <Field title="Cancellation / Unserviceable">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-6">
 
-                      {/* LEFT SIDE – CHECKBOXES */}
-                      <div className="flex items-center space-x-6">
+                        {/* LEFT SIDE – CHECKBOXES */}
+                        <div className="flex items-center space-x-6">
 
-                        {/* Cancel */}
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            id="cancel"
-                            name="cancel"
-                            checked={form.cancel}
-                            onChange={handleChange}
-                            className="mr-2 h-4 w-4 accent-red-600"
-                            disabled={readOnly && !isAdmin}
-                          />
-                          <label htmlFor="cancel" className="text-sm font-medium text-gray-700">
-                            Cancel
-                          </label>
+                          {/* Cancel */}
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="cancel"
+                              name="cancel"
+                              checked={form.cancel}
+                              onChange={handleChange}
+                              className="mr-2 h-4 w-4 accent-red-600"
+                              disabled={readOnly}
+                            />
+                            <label htmlFor="cancel" className="text-sm font-medium text-gray-700">
+                              Cancel
+                            </label>
+                          </div>
+
+                          {/* Unserviceable */}
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="unserviceable"
+                              name="unserviceable"
+                              checked={form.unserviceable}
+                              onChange={handleUnserviceableChange}
+                              className="mr-2 h-4 w-4 accent-blue-600"
+                              disabled={readOnly}
+                            />
+                            <label htmlFor="unserviceable" className="text-sm font-medium text-gray-700">
+                              Unserviceable
+                            </label>
+                          </div>
+
                         </div>
 
-                        {/* Unserviceable */}
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            id="unserviceable"
-                            name="unserviceable"
-                            checked={form.unserviceable}
-                            onChange={handleUnserviceableChange}
-                            className="mr-2 h-4 w-4 accent-blue-600"
-                            disabled={readOnly && !isAdmin}
-                          />
-                          <label htmlFor="unserviceable" className="text-sm font-medium text-gray-700">
-                            Unserviceable
-                          </label>
-                        </div>
+                        {isUnserviceable &&  (
+                          <button
+                            onClick={() =>
+                              window.open(
+                                `/job-orders/${jobId}/unserviceable/pdf`,
+                                "_blank"
+                              )
+                            }
+                            className="
+                              px-3 py-2
+                              bg-indigo-600
+                              text-white
+                              text-sm font-semibold
+                              rounded-xl
+                              shadow-md
+                              hover:bg-indigo-700
+                              hover:shadow-lg
+                              active:scale-95
+                              transition-all duration-200
+                            "
+                          >
+                            View Report
+                          </button>
+                        )}
 
                       </div>
-
-                      {/* RIGHT SIDE – BUTTON (ONLY IN READ MODE) */}
-                      {form.unserviceable && readOnly && (
-                        <button
-                          onClick={() =>
-                            window.open(
-                              `/job-orders/${jobId}/unserviceable/pdf`,
-                              "_blank"
-                            )
-                          }
-                          className="
-                            px-3 py-2
-                            bg-indigo-600
-                            text-white
-                            text-sm font-semibold
-                            rounded-xl
-                            shadow-md
-                            hover:bg-indigo-700
-                            hover:shadow-lg
-                            active:scale-95
-                            transition-all duration-200
-                          "
-                        >
-                          View Report
-                        </button>
-                      )}
-
-                    </div>
-                  </Field>
+                    </Field>
+                  )}
 
                   {/* Show Unserviceable Modal when open */}
                   <UnserviceableModal

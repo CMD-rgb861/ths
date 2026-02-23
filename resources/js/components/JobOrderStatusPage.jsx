@@ -1,13 +1,17 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
+import JobOrderModal from './JobOrderModal';
 import JobOrderOngoingModal from './JobOrderOngoingModal';
 
 export default function JobOrderStatusPage({ showNotification }) {
   const { status } = useParams();
   const navigate = useNavigate();
+  const user = JSON.parse(localStorage.getItem('user'));
+  const isAdmin = user?.role === 'admin';
 
-  const formattedStatus = status?.charAt(0).toUpperCase() + status?.slice(1);
+  const formattedStatus =
+    status?.charAt(0).toUpperCase() + status?.slice(1);
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -18,23 +22,32 @@ export default function JobOrderStatusPage({ showNotification }) {
 
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [isEditable, setIsEditable] = useState(true); // Default to true for Ongoing
+  const [isEditable, setIsEditable] = useState(true);
+
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [showPendingModal, setShowPendingModal] = useState(false);
 
   /* ================= LOAD ORDERS ================= */
   const loadOrders = useCallback(() => {
     setLoading(true);
 
-    axios.get('/job-orders', { params: { page, search } })
-      .then(res => {
-        const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+    axios
+      .get('/job-orders', { params: { page, search } })
+      .then((res) => {
+        const rows = Array.isArray(res.data?.data)
+          ? res.data.data
+          : [];
+
         const filtered = rows.filter(
-          o => (o.action_report?.status || 'Pending') === formattedStatus
+          (o) =>
+            (o.action_report?.status || 'Pending') ===
+            formattedStatus
         );
 
         setOrders(filtered);
         setLastPage(res.data?.last_page || 1);
       })
-      .catch(err => {
+      .catch((err) => {
         console.error('Load orders failed:', err);
         setOrders([]);
       })
@@ -43,13 +56,21 @@ export default function JobOrderStatusPage({ showNotification }) {
 
   useEffect(() => {
     loadOrders();
-  }, [loadOrders]);
+  }, [page, search, formattedStatus]);
 
   /* ================= HANDLE VIEW ================= */
-  const handleView = (id, status) => {
-    setSelectedJobId(id);
-    setShowModal(true);
-    setIsEditable(status === 'Ongoing'); // Only editable if status is "Ongoing"
+  const handleView = (job) => {
+    const jobStatus =
+      job.action_report?.status || 'Pending';
+
+    if (jobStatus === 'Pending') {
+      setSelectedJob(job);
+      setShowPendingModal(true);
+    } else {
+      setSelectedJobId(job.id);
+      setShowModal(true);
+      setIsEditable(jobStatus !== 'Completed');
+    }
   };
 
   /* ================= STATUS BADGES ================= */
@@ -63,7 +84,6 @@ export default function JobOrderStatusPage({ showNotification }) {
 
   return (
     <div className="space-y-6">
-
       {/* BACK BUTTON */}
       <button
         onClick={() => navigate('/reports')}
@@ -91,10 +111,12 @@ export default function JobOrderStatusPage({ showNotification }) {
         />
       </div>
 
-      {/* JOB ORDER TABLE */}
+      {/* TABLE */}
       <div className="overflow-x-auto bg-white border rounded-xl mt-4">
         {loading && (
-          <div className="p-6 text-sm text-gray-500">Loading...</div>
+          <div className="p-6 text-sm text-gray-500">
+            Loading...
+          </div>
         )}
 
         {!loading && orders.length === 0 && (
@@ -107,17 +129,30 @@ export default function JobOrderStatusPage({ showNotification }) {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr className="text-left text-gray-600">
-                <th className="px-6 py-3 font-medium">Job Order No.</th>
-                <th className="px-6 py-3 font-medium">Department</th>
-                <th className="px-6 py-3 font-medium">Categories</th>
-                <th className="px-6 py-3 font-medium">Status</th>
-                <th className="px-6 py-3 font-medium">Actions</th>
+                <th className="px-6 py-3 font-medium">
+                  Job Order No.
+                </th>
+                <th className="px-6 py-3 font-medium">
+                  Department
+                </th>
+                <th className="px-6 py-3 font-medium">
+                  Categories
+                </th>
+                <th className="px-6 py-3 font-medium">
+                  Status
+                </th>
+                <th className="px-6 py-3 font-medium">
+                  Actions
+                </th>
               </tr>
             </thead>
 
             <tbody className="divide-y">
               {orders.map((o) => (
-                <tr key={o.id} className="hover:bg-gray-50 transition">
+                <tr
+                  key={o.id}
+                  className="hover:bg-gray-50 transition"
+                >
                   <td className="px-6 py-4 font-medium text-gray-900">
                     {o.job_order_no}
                   </td>
@@ -137,22 +172,27 @@ export default function JobOrderStatusPage({ showNotification }) {
                         </span>
                       ))
                     ) : (
-                      <span className="text-gray-500">No categories assigned</span>
+                      <span className="text-gray-500">
+                        No categories assigned
+                      </span>
                     )}
                   </td>
 
                   <td className="px-6 py-4">
                     <div className="flex flex-col items-center">
-                      <span className={`px-3 py-1 text-xs rounded-full ${badgeStyle[o.action_report?.status]}`}>
+                      <span
+                        className={`px-3 py-1 text-xs rounded-full ${
+                          badgeStyle[o.action_report?.status]
+                        }`}
+                      >
                         {o.action_report?.status}
                       </span>
                     </div>
                   </td>
 
                   <td className="px-6 py-4 flex gap-2">
-                    {/* View Button */}
                     <button
-                      onClick={() => handleView(o.id, o.action_report?.status)}
+                      onClick={() => handleView(o)}
                       className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                     >
                       View
@@ -169,32 +209,67 @@ export default function JobOrderStatusPage({ showNotification }) {
       <div className="flex justify-between items-center text-sm mt-4">
         <button
           disabled={page === 1}
-          onClick={() => setPage(p => p - 1)}
+          onClick={() => setPage((p) => p - 1)}
           className="px-3 py-1 border rounded disabled:opacity-40"
         >
           Previous
         </button>
 
-        <span>Page {page} of {lastPage}</span>
+        <span>
+          Page {page} of {lastPage}
+        </span>
 
         <button
           disabled={page === lastPage}
-          onClick={() => setPage(p => p + 1)}
+          onClick={() => setPage((p) => p + 1)}
           className="px-3 py-1 border rounded disabled:opacity-40"
         >
           Next
         </button>
       </div>
 
-      {/* ================= REUSABLE MODAL ================= */}
-      {selectedJobId && (
-        <JobOrderOngoingModal
-          jobId={selectedJobId}
-          isOpen={showModal}
-          onClose={() => setShowModal(false)}
+      {/* ================= ONGOING / COMPLETED MODAL ================= */}
+    {showModal && selectedJobId && (
+      <JobOrderOngoingModal
+        jobId={selectedJobId}
+        isOpen={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setSelectedJobId(null);
+        }}
+        onStatusChange={(updatedJob) => {
+          if (
+            (updatedJob.action_report?.status || 'Pending') !== formattedStatus
+          ) {
+            setOrders(prev => prev.filter(o => o.id !== updatedJob.id));
+          } else {
+            setOrders(prev =>
+              prev.map(o =>
+                o.id === updatedJob.id ? updatedJob : o
+              )
+            );
+          }
+
+          setShowModal(false);
+          setSelectedJobId(null);
+        }}
+        showNotification={showNotification}
+        isEditable={isEditable}
+        isAdmin={isAdmin}
+      />
+    )}
+
+      {/* ================= PENDING MODAL ================= */}
+      {showPendingModal && selectedJob && (
+        <JobOrderModal
+          isOpen={showPendingModal}
+          job={selectedJob}
+          onClose={() => {
+            setShowPendingModal(false);
+            setSelectedJob(null);
+          }}
           onStatusChange={loadOrders}
           showNotification={showNotification}
-          isEditable={isEditable} // Pass isEditable prop to JobOrderOngoingModal
         />
       )}
     </div>
