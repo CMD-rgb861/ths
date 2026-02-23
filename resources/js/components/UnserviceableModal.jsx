@@ -4,6 +4,7 @@ import axios from 'axios';
 export default function UnserviceableModal({
   isOpen,
   onClose,
+  onSaved,
   jobId,
   showNotification,
 }) {
@@ -44,13 +45,14 @@ export default function UnserviceableModal({
     axios
       .put(`/job-orders/${jobId}/action-report/unserviceable`, form)
       .then(() => {
-        showNotification(
-          'success',
-          'Saved',
-          'Unserviceable details saved successfully.'
-        );
-        onClose();
-      })
+          showNotification(
+            'success',
+            'Saved',
+            'Unserviceable details saved successfully.'
+          );
+
+          onSaved();  // 🔥 IMPORTANT
+        })
       .catch((err) => {
         console.error(err);
         showNotification(
@@ -141,7 +143,7 @@ export default function UnserviceableModal({
 
           <div className="flex justify-end space-x-4">
             <button
-              onClick={onClose}
+              onClick={() => onClose()}
               className="px-6 py-2 bg-gray-500 text-white rounded-lg"
             >
               Cancel

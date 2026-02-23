@@ -137,8 +137,8 @@ export default function JobOrderOngoingModal({
           date_accepted: formatDateTime(data.action_report?.accepted_at) || '',
           date_started: formatDateTime(data.action_report?.date_started) || '',  // Default to empty string
           date_finished: formatDateTime(data.action_report?.date_finished) || '',  // Default to empty string
-          cancel: data.action_report?.cancel || false,  // Fetch cancel status
-          unserviceable: data.action_report?.unserviceable || false,  // Fetch unserviceable status
+          cancel: data.action_report?.status === "Cancelled",  // Fetch cancel status
+          unserviceable: data.action_report?.status === "Unserviceable",  // Fetch unserviceable status
           remarks: data.action_report?.remarks || '',  // Populate remarks
         });
 
@@ -168,12 +168,15 @@ export default function JobOrderOngoingModal({
 
   const handleUnserviceableChange = (e) => {
     if (e.target.checked) {
+      // Only open modal
       setIsUnserviceableModalOpen(true);
+    } else {
+      // Allow manual uncheck
+      setForm((prev) => ({
+        ...prev,
+        unserviceable: false,
+      }));
     }
-    setForm((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.checked,
-    }));
   };
 
   // ================= HANDLE CHANGE =================
@@ -520,46 +523,92 @@ export default function JobOrderOngoingModal({
                   {/* ================= RENDER THE CHECKBOXES ================= */}
 
                   <Field title="Cancellation / Unserviceable">
-                    <div className="flex space-x-4">
-                      <div className="flex items-center">
-                        {/* Cancel checkbox */}
-                        <input
-                          type="checkbox"
-                          id="cancel"
-                          name="cancel"
-                          checked={form.cancel}
-                          onChange={handleChange}
-                          className="mr-2"
-                          disabled={readOnly && !isAdmin} // Only disable for regular users
-                        />
-                        <label htmlFor="cancel" className="text-sm text-gray-600">
-                          Cancel
-                        </label>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+
+                      {/* LEFT SIDE – CHECKBOXES */}
+                      <div className="flex items-center space-x-6">
+
+                        {/* Cancel */}
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="cancel"
+                            name="cancel"
+                            checked={form.cancel}
+                            onChange={handleChange}
+                            className="mr-2 h-4 w-4 accent-red-600"
+                            disabled={readOnly && !isAdmin}
+                          />
+                          <label htmlFor="cancel" className="text-sm font-medium text-gray-700">
+                            Cancel
+                          </label>
+                        </div>
+
+                        {/* Unserviceable */}
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="unserviceable"
+                            name="unserviceable"
+                            checked={form.unserviceable}
+                            onChange={handleUnserviceableChange}
+                            className="mr-2 h-4 w-4 accent-blue-600"
+                            disabled={readOnly && !isAdmin}
+                          />
+                          <label htmlFor="unserviceable" className="text-sm font-medium text-gray-700">
+                            Unserviceable
+                          </label>
+                        </div>
+
                       </div>
-                      <div className="flex items-center">
-                        {/* Unserviceable checkbox */}
-                        <input
-                          type="checkbox"
-                          id="unserviceable"
-                          name="unserviceable"
-                          checked={form.unserviceable}
-                          onChange={handleUnserviceableChange}
-                          className="mr-2"
-                          disabled={readOnly && !isAdmin} // Only disable for regular users
-                        />
-                        <label htmlFor="unserviceable" className="text-sm text-gray-600">
-                          Unserviceable
-                        </label>
-                      </div>
+
+                      {/* RIGHT SIDE – BUTTON (ONLY IN READ MODE) */}
+                      {form.unserviceable && readOnly && (
+                        <button
+                          onClick={() =>
+                            window.open(
+                              `/job-orders/${jobId}/unserviceable/pdf`,
+                              "_blank"
+                            )
+                          }
+                          className="
+                            px-3 py-2
+                            bg-indigo-600
+                            text-white
+                            text-sm font-semibold
+                            rounded-xl
+                            shadow-md
+                            hover:bg-indigo-700
+                            hover:shadow-lg
+                            active:scale-95
+                            transition-all duration-200
+                          "
+                        >
+                          View Report
+                        </button>
+                      )}
+
                     </div>
                   </Field>
 
                   {/* Show Unserviceable Modal when open */}
                   <UnserviceableModal
                     isOpen={isUnserviceableModalOpen}
-                    onClose={() => setIsUnserviceableModalOpen(false)}
                     jobId={jobId}
                     showNotification={showNotification}
+                    onClose={() => {
+                      // Cancel
+                      setIsUnserviceableModalOpen(false);
+                    }}
+                    onSaved={() => {
+                      // Only when successfully saved
+                      setIsUnserviceableModalOpen(false);
+                      setForm((prev) => ({
+                        ...prev,
+                        cancel: false,
+                        unserviceable: true,
+                      }));
+                    }}
                   />
 
 

@@ -282,12 +282,8 @@ class ActionReportController extends Controller
             'noted_by_its' => $validated['noted_by_its'],
             'noted_by_pc' => $validated['noted_by_pc'],
             'unserviceable_date' => $validated['date'],
-            'status' => 'Unserviceable',
         ]);
 
-        $jobOrder->update([
-            'status' => 'Unserviceable'
-        ]);
 
         return response()->json(
             $jobOrder->fresh()->load([

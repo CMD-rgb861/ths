@@ -8,6 +8,7 @@ use App\Http\Controllers\JobOrderController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\ActionReportController;
+use App\Http\Controllers\UnserviceableReportController;
 use App\Models\JobOrder;
 
 /*
@@ -56,5 +57,12 @@ Route::middleware('auth:sanctum')->group(function () {
         abort_unless($jobOrder->final_report_pdf, 404);
         return response()->download(storage_path('app/public/' . $jobOrder->final_report_pdf));
     });
+
+    // ===============================
+    // UNERVICEABLE REPORT ROUTES
+    // ===============================
+    Route::get('/job-orders/{job}/unserviceable/view',
+        [UnserviceableReportController::class, 'view']
+    );
 
 });
