@@ -9,16 +9,24 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
   const MAX_FILES = 3;
   const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
+  const formatToManilaDate = () => {
+    const date = new Date();
+    // Get the date in Manila timezone
+    return new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Manila' })).toISOString().split('T')[0]; 
+  };
+
+  // Use this function to set the initial date value in Manila time
   const initialForm = {
-    date: new Date().toISOString().split('T')[0],
+    date: formatToManilaDate(),
     department_id: '',
     request_description: '',
     contact_no: '',
-    signature_name: '',  // For admins
+    signature_name: '',
     categories: [],
   };
 
   const [form, setForm] = useState(initialForm);
+  
 
   /* ---------------- FETCH DEPARTMENTS ---------------- */
   useEffect(() => {
@@ -50,65 +58,65 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
   }, []);
 
   /* ---------------- SUBMIT ---------------- */
-  const submit = async (e) => {
-    e.preventDefault();
+  // For example, on submit, convert the date to UTC
+const submit = async (e) => {
+  e.preventDefault();
 
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      const data = new FormData();
+    const data = new FormData();
 
-      // Append normal fields
-      data.append('date', form.date);
-      data.append('department_id', form.department_id);
-      data.append('request_description', form.request_description);
-      data.append('contact_no', form.contact_no);
-      data.append('signature_name', form.signature_name);
+    // Ensure the form date is in UTC before submitting
+    const formattedDate = new Date(form.date).toISOString();  // Convert to UTC
 
-      form.categories.forEach((cat, index) => {
-        data.append(`categories[${index}][id]`, cat.id);
-        data.append(
-          `categories[${index}][other_description]`,
-          cat.other_description ?? ''
-        );
-      });
+    data.append('date', formattedDate); // Send in UTC
+    data.append('department_id', form.department_id);
+    data.append('request_description', form.request_description);
+    data.append('contact_no', form.contact_no);
+    data.append('signature_name', form.signature_name);
 
-      attachments.forEach((file) => {
-        data.append('files[]', file);
-      });
+    form.categories.forEach((cat, index) => {
+      data.append(`categories[${index}][id]`, cat.id);
+      data.append(`categories[${index}][other_description]`, cat.other_description ?? '');
+    });
 
-      await axios.post('/job-orders', data, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+    attachments.forEach((file) => {
+      data.append('files[]', file);
+    });
 
-      // ✅ SUCCESS NOTIFICATION
-      showNotification?.(
-        'success',
-        'Job Order Submitted',
-        'Job Order submitted successfully.'
-      );
+    await axios.post('/job-orders', data, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
 
-      setForm(initialForm);
-      setAttachments([]);
+    // ✅ SUCCESS NOTIFICATION
+    showNotification?.(
+      'success',
+      'Job Order Submitted',
+      'Job Order submitted successfully.'
+    );
 
-    } catch (error) {
-      console.log(error);
-      console.log(error.response);
-      console.log(error.response?.data);
+    setForm(initialForm);
+    setAttachments([]);
 
-      // ❌ ERROR NOTIFICATION
-      showNotification?.(
-        'error',
-        'Submission Failed',
-        error.response?.data?.message || 'Failed to submit Job Order.'
-      );
+  } catch (error) {
+    console.log(error);
+    console.log(error.response);
+    console.log(error.response?.data);
 
-    } finally {
-      setLoading(false);
-    }
-  };
+    // ❌ ERROR NOTIFICATION
+    showNotification?.(
+      'error',
+      'Submission Failed',
+      error.response?.data?.message || 'Failed to submit Job Order.'
+    );
+
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="space-y-6 max-w-2xl">

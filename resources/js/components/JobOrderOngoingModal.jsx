@@ -88,30 +88,47 @@ const readOnly =
 
   // ================= FORMATTERS =================
   const formatDisplayDate = (dateString) => {
-      if (!dateString) return '—';
+    if (!dateString) return '—';
 
-      // Ensure the string is in ISO format (handle ' ' to 'T' conversion)
-      const isoString = dateString.includes(' ') ? dateString.replace(' ', 'T') : dateString;
-      const d = new Date(isoString);
+    const isoString = dateString.includes(' ')
+      ? dateString.replace(' ', 'T') + '+08:00'
+      : dateString;
 
-      // Handle invalid date case
-      if (isNaN(d)) return '—';
+    const d = new Date(isoString);
 
-      // Return a formatted string like "February 19, 2026 at 06:39 PM"
-      return d.toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true, // AM/PM format
-      });
-    };
+    if (isNaN(d.getTime())) return '—';
 
-    const formatDateTime = (value) =>
-      value ? value.replace(' ', 'T').slice(0, 16) : '';
+    return d.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  };
 
+  const formatDateTime = (value) => {
+    if (!value) return '';
+
+    const isoString = value.includes(' ')
+      ? value.replace(' ', 'T') + '+08:00'
+      : value;
+
+    const d = new Date(isoString);
+
+    if (isNaN(d.getTime())) return '';
+
+    // Convert to YYYY-MM-DDTHH:MM for datetime-local
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
 
   // ================= LOAD JOB =================
 
@@ -165,17 +182,21 @@ const readOnly =
   // ================= HANDLE UNSERVICEABLE CHANGE =================
 
   const handleUnserviceableChange = (e) => {
-    if (e.target.checked) {
-      // Only open modal
+    const { checked } = e.target;
+
+    // If trying to check → open modal FIRST
+    if (checked) {
       setIsUnserviceableModalOpen(true);
-    } else {
-      // Allow manual uncheck
+    }
+
+    // If trying to uncheck → allow unchecking directly
+    else {
       setForm((prev) => ({
         ...prev,
         unserviceable: false,
       }));
     }
-  };
+};
 
   // ================= HANDLE CHANGE =================
 
@@ -185,20 +206,21 @@ const readOnly =
     const { name, value, type, checked } = e.target;
 
     if (type === 'checkbox') {
-      // Ensure only one checkbox can be selected
-      if (name === 'cancel' && checked) {
-        setForm((prev) => ({
-          ...prev,
-          cancel: true,
-          unserviceable: false,
-        }));
-      } else if (name === 'unserviceable' && checked) {
-        setForm((prev) => ({
-          ...prev,
-          cancel: false,
-          unserviceable: true,
-        }));
-      }
+    if (name === 'cancel') {
+      setForm((prev) => ({
+        ...prev,
+        cancel: checked,
+        unserviceable: checked ? false : prev.unserviceable,
+      }));
+    }
+
+    if (name === 'unserviceable') {
+      setForm((prev) => ({
+        ...prev,
+        unserviceable: checked,
+        cancel: checked ? false : prev.cancel,
+      }));
+    }
     } else {
       setForm((prev) => ({
         ...prev,
@@ -209,16 +231,13 @@ const readOnly =
 
   // ================= SAVE ACTION REPORT =================
 
-  const handleSave = () => {
-    console.log('Form before save:', form); // Debugging form data
+  const handleSave = async () => {
+    console.log('Form before save:', form);
 
-    // Prevent saving if saving is in progress
     if (!job?.id || saving) return;
 
-    // Validate required fields (ONLY when not Cancel/Unserviceable)
     // ================= VALIDATION =================
 
-    // Always required for ALL statuses
     if (!form.serviced_by || !form.date_started || !form.date_finished) {
       showNotification(
         "error",
@@ -228,7 +247,6 @@ const readOnly =
       return;
     }
 
-    // Diagnosis & Action should also always exist
     if (!form.diagnosis || !form.action_taken) {
       showNotification(
         "error",
@@ -238,7 +256,6 @@ const readOnly =
       return;
     }
 
-    // If Cancelled → remarks required
     if (form.cancel && !form.remarks) {
       showNotification(
         "error",
@@ -248,7 +265,6 @@ const readOnly =
       return;
     }
 
-    // If Unserviceable → remarks required (optional, remove if not needed)
     if (form.unserviceable && !form.remarks) {
       showNotification(
         "error",
@@ -260,7 +276,6 @@ const readOnly =
 
     setSaving(true);
 
-    // Conditionally set 'conformed' based on form data
     const updatedForm = {
       ...form,
       conformed: form.diagnosis && form.action_taken ? true : false,
@@ -268,96 +283,88 @@ const readOnly =
 
     console.log('Updated form with conformed:', updatedForm);
 
-    // ================= STATUS LOGIC =================
     let request;
 
-    // 🔴 CANCEL
-    if (form.cancel) {
-      request = Promise.all([
-        axios.put(`/job-orders/${job.id}/action-report`, {
-          diagnosis: form.diagnosis,
-          action_taken: form.action_taken,
-          serviced_by: form.serviced_by,
-          date_started: form.date_started,
-          date_finished: form.date_finished,
-          remarks: form.remarks,
-        }),
-        axios.put(`/job-orders/${job.id}`, {
-          status: "Cancelled",
-        }),
-      ]);
-    }
+    try {
+      // 🔴 CANCEL
+      if (form.cancel) {
+        await Promise.all([
+          axios.put(`/job-orders/${job.id}/action-report`, {
+            diagnosis: form.diagnosis,
+            action_taken: form.action_taken,
+            serviced_by: form.serviced_by,
+            date_started: form.date_started,
+            date_finished: form.date_finished,
+            remarks: form.remarks,
+          }),
+          axios.put(`/job-orders/${job.id}`, {
+            status: "Cancelled",
+          }),
+        ]);
+      }
 
-    // 🟡 UNSERVICEABLE
-    else if (form.unserviceable) {
-      request = Promise.all([
-        axios.put(`/job-orders/${job.id}/action-report`, {
-          diagnosis: form.diagnosis,
-          action_taken: form.action_taken,
-          serviced_by: form.serviced_by,
-          date_started: form.date_started,
-          date_finished: form.date_finished,
-          remarks: form.remarks,
-        }),
-        axios.put(`/job-orders/${job.id}`, {
-          status: "Unserviceable",
-        }),
-      ]);
-    }
+      // 🟡 UNSERVICEABLE
+      else if (form.unserviceable) {
+        await Promise.all([
+          axios.put(`/job-orders/${job.id}/action-report`, {
+            diagnosis: form.diagnosis,
+            action_taken: form.action_taken,
+            serviced_by: form.serviced_by,
+            date_started: form.date_started,
+            date_finished: form.date_finished,
+            remarks: form.remarks,
+          }),
+          axios.put(`/job-orders/${job.id}`, {
+            status: "Unserviceable",
+          }),
+        ]);
+      }
 
-    // 🟢 NORMAL SAVE (Ongoing update)
-    else {
-      request = axios.put(
-        `/job-orders/${job.id}/action-report`,
-        updatedForm
+      // 🟢 NORMAL SAVE
+      else {
+        await axios.put(
+          `/job-orders/${job.id}/action-report`,
+          updatedForm
+        );
+      }
+
+      showNotification(
+        "success",
+        "Action Report Updated",
+        "The job order action report was saved successfully."
       );
+
+      // ✅ Fetch updated job ONLY ONCE
+      const res = await axios.get(`/job-orders/${job.id}`);
+      const updatedJob = res.data;
+
+      // ✅ Update modal state directly (NO loadJob call)
+      setJob(updatedJob);
+
+      setForm({
+        diagnosis: updatedJob.action_report?.diagnosis || '',
+        action_taken: updatedJob.action_report?.action_taken || '',
+        status: updatedJob.action_report?.status || 'Pending',
+        serviced_by: updatedJob.action_report?.serviced_by?.id || '',
+        date_accepted: formatDateTime(updatedJob.action_report?.accepted_at) || '',
+        date_started: formatDateTime(updatedJob.action_report?.date_started) || '',
+        date_finished: formatDateTime(updatedJob.action_report?.date_finished) || '',
+        cancel: updatedJob.action_report?.status === "Cancelled",
+        unserviceable: updatedJob.action_report?.status === "Unserviceable",
+        remarks: updatedJob.action_report?.remarks || '',
+      });
+
+    } catch (err) {
+      console.error(err);
+      showNotification(
+        "error",
+        "Update Failed",
+        "Something went wrong while updating the action report."
+      );
+    } finally {
+      setSaving(false);
     }
-    // =================================================
-
-    request
-      .then(() => {
-        showNotification(
-          "success",
-          "Action Report Updated",
-          "The job order action report was saved successfully."
-        );
-
-        // Lock form if status becomes Completed
-        if (updatedForm.status === "Completed") {
-          // Only if you have setReadOnly state
-          // setReadOnly(true);
-        }
-
-        // if (onStatusChange) onStatusChange();
-
-        // Preserve form state
-        setForm({
-          diagnosis: updatedForm.diagnosis || '',
-          action_taken: updatedForm.action_taken || '',
-          status: updatedForm.status || 'Pending',
-          serviced_by: updatedForm.serviced_by || '',
-          date_accepted: formatDateTime(updatedForm.date_accepted) || '',
-          date_started: formatDateTime(updatedForm.date_started) || '',
-          date_finished: formatDateTime(updatedForm.date_finished) || '',
-          cancel: form.cancel || false,
-          unserviceable: form.unserviceable || false,
-          remarks: updatedForm.remarks || '',
-        });
-
-        // Reload latest job state
-        loadJob();
-      })
-      .catch((err) => {
-        console.error(err);
-        showNotification(
-          "error",
-          "Update Failed",
-          "Something went wrong while updating the action report."
-        );
-      })
-      .finally(() => setSaving(false));
   };
-
 
   // ================= CONFIRM COMPLETION =================
 
@@ -371,7 +378,7 @@ const readOnly =
       .then(() => {
         showNotification(
           'success',
-          'Job Confirmed',
+          'Job Confirmed',  
           'You have successfully confirmed the completion of this job.'
         );
 
@@ -393,6 +400,10 @@ const readOnly =
       .finally(() => setConfirming(false));
   };
 
+  const handleClose = () => {
+    onClose();
+  };
+
   if (!isOpen || !job) return null;
 
   return (
@@ -405,7 +416,7 @@ const readOnly =
             Job Order Details
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-500 hover:text-gray-800 text-xl"
           >
             ✕
@@ -422,7 +433,7 @@ const readOnly =
             </h3>
 
             <Info label="Job Order No." value={job.job_order_no} />
-            <Info label="Date" value={formatDisplayDate(job.date)} />
+            <Info label="Date" value={formatDisplayDate(job.created_at)} />
             <Info label="Department" value={job.department?.name} />
             <Info
               label="Categories"

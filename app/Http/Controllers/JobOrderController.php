@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use setasign\Fpdi\Tcpdf\Fpdi;
 use Illuminate\Support\Facades\Storage;
 
+
 class JobOrderController extends Controller
 {
     /*

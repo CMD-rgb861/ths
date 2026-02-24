@@ -16,6 +16,7 @@ export default function JobOrderModal({
   // Format the date using toLocaleDateString
   const formattedDate = job?.date
     ? new Date(job.date).toLocaleDateString('en-US', {
+        timeZone: 'Asia/Manila', // Ensure it's in Manila's timezone
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -48,7 +49,7 @@ export default function JobOrderModal({
 
         {/* Modal Header */}
         <div className="text-center space-y-2">
-          <h3 className="text-3xl font-semibold text-gray-900">
+          <h3 className="text-2xl font-semibold text-gray-900">
             Job Order Details
           </h3>
           <p className="text-sm text-gray-500">
@@ -123,11 +124,8 @@ export default function JobOrderModal({
         </div>
 
         {/* Modal Footer */}
-        <div
-          className={`flex mt-6 ${
-            isAdmin ? 'justify-between' : 'justify-center'
-          }`}
-        >
+        <div className="flex mt-6 justify-between">
+
           {isAdmin && (
             <div className="flex space-x-4">
 

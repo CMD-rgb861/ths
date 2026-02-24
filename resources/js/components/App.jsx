@@ -131,14 +131,9 @@ export default function App() {
                         }
                       />
 
-                      {/* ✅ ADD THIS */}
                       <Route
                         path="/reports/status/:status"
-                        element={
-                          <RequireAdmin>
-                            <JobOrderStatusPage showNotification={showNotification} />
-                          </RequireAdmin>
-                        }
+                        element={<JobOrderStatusPage showNotification={showNotification} />}
                       />
 
                       {/* REPORTS */}

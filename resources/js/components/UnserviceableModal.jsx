@@ -44,15 +44,20 @@ export default function UnserviceableModal({
 
     axios
       .put(`/job-orders/${jobId}/action-report/unserviceable`, form)
-      .then(() => {
-          showNotification(
-            'success',
-            'Saved',
-            'Unserviceable details saved successfully.'
-          );
+      .then((res) => {
+        showNotification(
+          'success',
+          'Saved',
+          'Unserviceable details saved successfully.'
+        );
 
-          onSaved(); 
-        })
+        // OPTIONAL: send updated data back to parent without reload
+        if (onSaved) {
+          onSaved(res.data); 
+        }
+
+        onClose(); // just close modal
+      })
       .catch((err) => {
         console.error(err);
         showNotification(

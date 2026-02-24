@@ -3,17 +3,12 @@ import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import JobOrderModal from './JobOrderModal';
 import JobOrderOngoingModal from './JobOrderOngoingModal';
-import { Navigate } from 'react-router-dom';
 
 export default function JobOrderStatusPage({ showNotification }) {
   const { status } = useParams();
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user'));
   const isAdmin = user?.role === 'admin';
-
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
-  }
 
   const formattedStatus =
     status?.charAt(0).toUpperCase() + status?.slice(1);
@@ -34,7 +29,6 @@ export default function JobOrderStatusPage({ showNotification }) {
 
   /* ================= LOAD ORDERS ================= */
   const loadOrders = useCallback(() => {
-    console.log("LOAD ORDERS CALLED");
     setLoading(true);
 
     axios
@@ -242,14 +236,22 @@ export default function JobOrderStatusPage({ showNotification }) {
         onClose={() => {
           setShowModal(false);
           setSelectedJobId(null);
-          loadOrders();
         }}
         onStatusChange={(updatedJob) => {
-          setOrders(prev =>
-            prev.map(o =>
-              o.id === updatedJob.id ? updatedJob : o
-            )
-          );
+          if (
+            (updatedJob.action_report?.status || 'Pending') !== formattedStatus
+          ) {
+            setOrders(prev => prev.filter(o => o.id !== updatedJob.id));
+          } else {
+            setOrders(prev =>
+              prev.map(o =>
+                o.id === updatedJob.id ? updatedJob : o
+              )
+            );
+          }
+
+          setShowModal(false);
+          setSelectedJobId(null);
         }}
         showNotification={showNotification}
         isEditable={isEditable}
@@ -263,9 +265,8 @@ export default function JobOrderStatusPage({ showNotification }) {
           isOpen={showPendingModal}
           job={selectedJob}
           onClose={() => {
-            loadOrders(); // refetch NOW
-            setShowModal(false);
-            setSelectedJobId(null);
+            setShowPendingModal(false);
+            setSelectedJob(null);
           }}
           onStatusChange={loadOrders}
           showNotification={showNotification}

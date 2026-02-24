@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import JobOrderStatusSummary from './JobOrderStatusSummary';
 import JobOrderDepartmentSummary from './JobOrderDepartmentSummary';
 
-const PER_PAGE = 10;
+const PER_PAGE = 5;
 
 export default function JobOrderReports() {
   const [orders, setOrders] = useState([]);
@@ -33,6 +33,7 @@ export default function JobOrderReports() {
       .catch(() => {
         setOrders([]);
         setFiltered([]);
+        showNotification("error", "Failed to load job orders", "An error occurred while fetching the data. Please try again later.");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -62,7 +63,8 @@ export default function JobOrderReports() {
       data = data.filter(o =>
         o.job_order_no?.toLowerCase().includes(term) ||
         o.department?.name?.toLowerCase().includes(term) ||
-        o.requester?.name?.toLowerCase().includes(term)
+        o.requester?.name?.toLowerCase().includes(term) ||
+        o.action_report?.status?.toLowerCase().includes(term) // Add this line
       );
     }
 
@@ -119,25 +121,39 @@ export default function JobOrderReports() {
 
       {/* FILTER PANEL */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-700">
-          Filters
-        </h2>
+      <h2 className="text-sm font-semibold text-gray-700">
+        Filters
+      </h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
 
+        {/* From Date */}
+        <div className="flex flex-col">
+          <label htmlFor="from" className="text-sm text-gray-600 mb-1">From</label>
           <input
+            id="from"
             type="date"
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
             onChange={e => setFilters({ ...filters, from: e.target.value })}
           />
+        </div>
 
+        {/* To Date */}
+        <div className="flex flex-col">
+          <label htmlFor="to" className="text-sm text-gray-600 mb-1">To</label>
           <input
+            id="to"
             type="date"
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
             onChange={e => setFilters({ ...filters, to: e.target.value })}
           />
+        </div>
 
+        {/* Status Filter */}
+        <div className="flex flex-col">
+          <label htmlFor="status" className="text-sm text-gray-600 mb-1">Status</label>
           <select
+            id="status"
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
             onChange={e => setFilters({ ...filters, status: e.target.value })}
           >
@@ -146,8 +162,13 @@ export default function JobOrderReports() {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+        </div>
 
+        {/* Department Filter */}
+        <div className="flex flex-col">
+          <label htmlFor="department" className="text-sm text-gray-600 mb-1">Department</label>
           <select
+            id="department"
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
             onChange={e => setFilters({ ...filters, department: e.target.value })}
           >
@@ -160,9 +181,10 @@ export default function JobOrderReports() {
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
-
         </div>
+
       </div>
+    </div>
 
       {/* STATUS SUMMARY */}
       <JobOrderStatusSummary orders={filtered} />
@@ -192,11 +214,11 @@ export default function JobOrderReports() {
 
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
 
-          {loading && (
-            <div className="p-6 text-sm text-gray-500">
-              Loading job orders...
+          {loading ? (
+            <div className="flex justify-center items-center py-6">
+              <div className="animate-spin border-t-4 border-blue-600 rounded-full w-8 h-8"></div>
             </div>
-          )}
+          ) : null}
 
           {!loading && paginated.length === 0 && (
             <div className="p-6 text-sm text-gray-500">
