@@ -260,12 +260,12 @@ export default function JobOrderStatusPage({ showNotification }) {
       {/* ================= PENDING MODAL ================= */}
       {showPendingModal && selectedJob && (
         <JobOrderModal
-          isOpen={showPendingModal}
+          isOpen={showPendingModal} // Pass the showPendingModal state here
           job={selectedJob}
           onClose={() => {
             loadOrders(); // refetch NOW
-            setShowModal(false);
-            setSelectedJobId(null);
+            setShowPendingModal(false); // Set showPendingModal to false to close the modal
+            setSelectedJobId(null); // Clear selected job id
           }}
           onStatusChange={loadOrders}
           showNotification={showNotification}

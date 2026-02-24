@@ -10,30 +10,48 @@ export default function JobOrderModal({
 }) {
   const [loadingAction, setLoadingAction] = useState(null);
   const user = JSON.parse(localStorage.getItem('user')); // Get user info from localStorage
+  
+  // Early return if modal is not open or no job is passed
+  if (!isOpen || !job) {
+    console.log('Modal is closed or job is missing.');
+    return null;
+  }
 
-  if (!isOpen || !job) return null;
-
-  // Format the date using toLocaleDateString
+  // Format date for display
   const formattedDate = job?.date
     ? new Date(job.date).toLocaleDateString('en-US', {
-        timeZone: 'Asia/Manila', // Ensure it's in Manila's timezone
+        timeZone: 'Asia/Manila',
         year: 'numeric',
         month: 'long',
         day: 'numeric',
       })
     : '—';
 
+  console.log("Job Order Details: ", job);  // Log the full job object to inspect its properties
+  console.log("User Role: ", user?.role);  // Log the user role for debugging
+
   const handleAction = (status) => {
     setLoadingAction(status);
+    console.log(`Handling action: ${status} for Job Order ID: ${job.id}`);
 
     axios.put(`/job-orders/${job.id}`, { status })
       .then((response) => {
+        console.log('Job Order Update Response:', response.data);  // Log response data from API
         onStatusChange(response.data);
-        showNotification('success', 'Job Order Updated', `Job Order ${status} successfully.`);
+        showNotification(
+          'success',
+          'Job Order Updated',
+          `Job Order ${status} successfully.`
+        );
         onClose();
       })
       .catch((error) => {
-        showNotification('error', 'Error', 'Failed to update job order status.');
+        console.error('Failed to update job order status:', error);  // Log error in case of failure
+        showNotification(
+          'error',
+          'Error',
+          'Failed to update job order status.'
+        );
       })
       .finally(() => {
         setLoadingAction(null);
@@ -41,131 +59,190 @@ export default function JobOrderModal({
   };
 
   const isLoading = loadingAction !== null;
-  const isAdmin = user?.role === 'admin'; // Check if the user is an admin
+  const isAdmin = user?.role === 'admin';
+
+  // Log if attachments exist or not
+  console.log('Attachments available: ', job?.attachments?.length > 0);
+
+  const handleClose = () => {
+    console.log('Closing modal');
+    onClose();
+  };
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex justify-center items-center z-50">
-      <div className="relative bg-white rounded-xl shadow-xl w-full sm:w-96 p-8 space-y-6 max-w-3xl">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-8 space-y-8 relative">
 
-        {/* Modal Header */}
-        <div className="text-center space-y-2">
-          <h3 className="text-2xl font-semibold text-gray-900">
-            Job Order Details
+        {/* ================= HEADER ================= */}
+        <div className="flex justify-between items-start border-b pb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              Job Order Details
+            </h2>
+            <p className="text-sm text-gray-500">
+              View and manage job order information.
+            </p>
+          </div>
+
+          <span className="px-4 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">
+            {job.status}
+          </span>
+        </div>
+
+        {/* ================= BASIC INFO ================= */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
+          <Info label="Job Order No." value={job?.job_order_no} />
+          <Info label="Date" value={formattedDate} />
+          <Info label="Department" value={job?.department?.name} />
+          <Info label="Requested By" value={job?.requester?.name} />
+          <Info label="Contact Number" value={job?.contact_no} />
+          <Info label="Approved By" value={job?.approver?.name || 'ITS Director'} />
+        </div>
+
+        {/* ================= CATEGORIES ================= */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+            Categories
           </h3>
-          <p className="text-sm text-gray-500">
-            View and manage job order details below.
-          </p>
+
+          <div className="flex flex-wrap gap-2">
+            {Array.isArray(job?.categories) && job.categories.length > 0 ? (
+              job.categories.map((category) => (
+                <span
+                  key={category.id}
+                  className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium"
+                >
+                  {category.name}
+                </span>
+              ))
+            ) : (
+              <span className="text-gray-500 text-sm">
+                No categories assigned
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Modal Content */}
-        <div className="space-y-6">
+        {/* ================= DESCRIPTION ================= */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+            Request Description
+          </h3>
 
-          {/* Job Order No. */}
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-gray-700">Job Order No.</span>
-            <span className="text-gray-800">{job?.job_order_no || '—'}</span>
+          <div className="bg-gray-50 p-4 rounded-xl text-sm text-gray-700 leading-relaxed">
+            {job?.request_description || '—'}
           </div>
+        </div>
 
-          {/* Date */}
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-gray-700">Date</span>
-            <span className="text-gray-800">{formattedDate}</span>
-          </div>
+        {/* ================= ATTACHMENTS ================= */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+            Attachments
+          </h3>
 
-          {/* Department */}
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-gray-700">Department</span>
-            <span className="text-gray-800">{job?.department?.name || '—'}</span>
-          </div>
+          {job?.attachments && job.attachments.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {job.attachments.map((file) => {
+                const fileUrl = `/storage/${file.file_path}`;
 
-          {/* Categories */}
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-gray-700">Categories</span>
-            <div className="space-x-2">
-              {Array.isArray(job?.categories) && job.categories.length > 0 ? (
-                job.categories.map((category, index) => (
-                  <span
-                    key={index}
-                    className="px-3 py-1 inline-block bg-blue-100 text-blue-800 rounded-full text-xs font-medium"
+                if (file.type === 'image') {
+                  return (
+                    <a
+                      key={file.id}
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-xl overflow-hidden border hover:shadow-md transition"
+                    >
+                      <img
+                        src={fileUrl}
+                        alt={file.original_name}
+                        className="object-cover h-24 w-full"
+                      />
+                    </a>
+                  );
+                }
+
+                if (file.type === 'pdf') {
+                  return (
+                    <a
+                      key={file.id}
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center h-40 border rounded-xl bg-gray-100 hover:bg-gray-200 transition text-sm font-medium"
+                    >
+                      📄 View PDF
+                    </a>
+                  );
+                }
+
+                return (
+                  <div
+                    key={file.id}
+                    className="flex items-center justify-center h-40 border rounded-xl bg-gray-50 text-sm text-gray-500"
                   >
-                    {category.name}
-                  </span>
-                ))
-              ) : (
-                <span className="text-gray-500">No categories assigned</span>
-              )}
+                    Unsupported file
+                  </div>
+                );
+              })}
             </div>
-          </div>
-
-          {/* Request Description */}
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-gray-700">Request Description</span>
-            <span className="text-gray-800">{job?.request_description || '—'}</span>
-          </div>
-
-          {/* Requested By */}
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-gray-700">Requested By</span>
-            <span className="text-gray-800">{job?.requester?.name || '—'}</span>
-          </div>
-
-          {/* Contact Number */}
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-gray-700">Contact Number</span>
-            <span className="text-gray-800">{job?.contact_no || '—'}</span>
-          </div>
-
-          {/* Approved By */}
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-gray-700">Approved By</span>
-            <span className="text-gray-800">{job?.approver?.name || 'ITS Director'}</span>
-          </div>
-
+          ) : (
+            <div className="text-sm text-gray-500">
+              No attachments found.
+            </div>
+          )}
         </div>
 
-        {/* Modal Footer */}
-        <div className="flex mt-6 justify-between">
+        {/* ================= FOOTER ================= */}
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 pt-6 border-t mt-auto">
 
           {isAdmin && (
-            <div className="flex space-x-4">
-
-              {/* Accept → Ongoing */}
+            <div className="flex gap-4">
               <button
                 onClick={() => handleAction('Ongoing')}
                 disabled={isLoading}
-                className="px-6 py-3 bg-green-600 text-white font-medium text-sm rounded-full hover:bg-green-700 transition disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center"
+                className="px-6 py-3 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
               >
-                {loadingAction === 'Ongoing' && (
-                  <span className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
-                )}
                 Accept
               </button>
 
-              {/* Deny → Cancelled */}
               <button
                 onClick={() => handleAction('Cancelled')}
                 disabled={isLoading}
-                className="px-6 py-3 bg-red-600 text-white font-medium text-sm rounded-full hover:bg-red-700 transition disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center"
+                className="px-6 py-3 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 transition disabled:opacity-50"
               >
-                {loadingAction === 'Cancelled' && (
-                  <span className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
-                )}
                 Deny
               </button>
-
             </div>
           )}
 
-          {/* Close Button */}
+          {/* Close button always stays at the bottom-right */}
           <button
-            onClick={onClose}
+            type="button"
+            onClick={handleClose}
             disabled={isLoading}
-            className="px-6 py-3 bg-gray-900 text-white font-medium text-sm rounded-full hover:bg-black transition disabled:opacity-60 disabled:cursor-not-allowed"
+            className="px-6 py-3 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black transition disabled:opacity-50 sm:ml-auto"
           >
             Close
           </button>
         </div>
+
       </div>
+    </div>
+  );
+}
+
+/* Small reusable component for stacked label/value */
+function Info({ label, value }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-500 mb-1">
+        {label}
+      </p>
+      <p className="text-sm text-gray-800">
+        {value || '—'}
+      </p>
     </div>
   );
 }

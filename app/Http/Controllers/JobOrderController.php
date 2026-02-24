@@ -26,6 +26,7 @@ class JobOrderController extends Controller
             'department',
             'requester',
             'categories',
+            'attachments',
             'actionReport.servicedBy',
         ])->orderBy('created_at', 'desc');
 

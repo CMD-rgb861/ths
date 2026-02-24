@@ -1,277 +1,224 @@
-import { useParams, useNavigate } from 'react-router-dom';
-import { useEffect, useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
-import JobOrderModal from './JobOrderModal';
-import JobOrderOngoingModal from './JobOrderOngoingModal';
 
-export default function JobOrderStatusPage({ showNotification }) {
-  const { status } = useParams();
-  const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('user'));
+export default function JobOrderModal({
+  isOpen,
+  job,
+  onClose,
+  onStatusChange,
+  showNotification,
+}) {
+  const [loadingAction, setLoadingAction] = useState(null);
+  const user = JSON.parse(localStorage.getItem('user')); // Get user info from localStorage
+
+  if (!isOpen || !job) return null;
+
+  const formattedDate = job?.date
+    ? new Date(job.date).toLocaleDateString('en-US', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : '—';
+
+  const handleAction = (status) => {
+    setLoadingAction(status);
+
+    axios.put(`/job-orders/${job.id}`, { status })
+      .then((response) => {
+        onStatusChange(response.data);
+        showNotification(
+          'success',
+          'Job Order Updated',
+          `Job Order ${status} successfully.`
+        );
+        onClose();
+      })
+      .catch(() => {
+        showNotification(
+          'error',
+          'Error',
+          'Failed to update job order status.'
+        );
+      })
+      .finally(() => {
+        setLoadingAction(null);
+      });
+  };
+
+  const isLoading = loadingAction !== null;
   const isAdmin = user?.role === 'admin';
 
-  const formattedStatus =
-    status?.charAt(0).toUpperCase() + status?.slice(1);
-
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [lastPage, setLastPage] = useState(1);
-
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const [selectedJobId, setSelectedJobId] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [isEditable, setIsEditable] = useState(true);
-
-  const [selectedJob, setSelectedJob] = useState(null);
-  const [showPendingModal, setShowPendingModal] = useState(false);
-
-  /* ================= LOAD ORDERS ================= */
-  const loadOrders = useCallback(() => {
-    setLoading(true);
-
-    axios
-      .get('/job-orders', { params: { page, search } })
-      .then((res) => {
-        const rows = Array.isArray(res.data?.data)
-          ? res.data.data
-          : [];
-
-        const filtered = rows.filter(
-          (o) =>
-            (o.action_report?.status || 'Pending') ===
-            formattedStatus
-        );
-
-        setOrders(filtered);
-        setLastPage(res.data?.last_page || 1);
-      })
-      .catch((err) => {
-        console.error('Load orders failed:', err);
-        setOrders([]);
-      })
-      .finally(() => setLoading(false));
-  }, [page, search, formattedStatus]);
-
-  useEffect(() => {
-    loadOrders();
-  }, [page, search, formattedStatus]);
-
-  /* ================= HANDLE VIEW ================= */
-  const handleView = (job) => {
-    const jobStatus =
-      job.action_report?.status || 'Pending';
-
-    if (jobStatus === 'Pending') {
-      setSelectedJob(job);
-      setShowPendingModal(true);
-    } else {
-      setSelectedJobId(job.id);
-      setShowModal(true);
-      setIsEditable(jobStatus !== 'Completed');
-    }
-  };
-
-  /* ================= STATUS BADGES ================= */
-  const badgeStyle = {
-    Pending: 'bg-yellow-100 text-yellow-800',
-    Ongoing: 'bg-blue-100 text-blue-800',
-    Completed: 'bg-green-100 text-green-800',
-    Cancelled: 'bg-red-100 text-red-800',
-    Unserviceable: 'bg-gray-200 text-gray-800',
-  };
+  console.log("Job Order Details: ", job); // Log the job object for debugging
+  console.log("User Role: ", user?.role); // Log the user role for debugging
 
   return (
-    <div className="space-y-6">
-      {/* BACK BUTTON */}
-      <button
-        onClick={() => navigate('/reports')}
-        className="text-sm text-gray-600 hover:text-gray-900"
-      >
-        ← Back to Reports
-      </button>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl p-8 space-y-8">
 
-      {/* HEADER */}
-      <h1 className="text-xl font-semibold">
-        {formattedStatus} Job Orders
-      </h1>
-
-      {/* SEARCH */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          placeholder="Search job order no or description..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-        />
-      </div>
-
-      {/* TABLE */}
-      <div className="overflow-x-auto bg-white border rounded-xl mt-4">
-        {loading && (
-          <div className="p-6 text-sm text-gray-500">
-            Loading...
+        {/* HEADER */}
+        <div className="flex justify-between items-start border-b pb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              Job Order Details
+            </h2>
+            <p className="text-sm text-gray-500">
+              View and manage job order information.
+            </p>
           </div>
-        )}
 
-        {!loading && orders.length === 0 && (
-          <div className="p-6 text-sm text-gray-500">
-            No records found.
-          </div>
-        )}
+          <span className="px-4 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">
+            {job.status}
+          </span>
+        </div>
 
-        {!loading && orders.length > 0 && (
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr className="text-left text-gray-600">
-                <th className="px-6 py-3 font-medium">
-                  Job Order No.
-                </th>
-                <th className="px-6 py-3 font-medium">
-                  Department
-                </th>
-                <th className="px-6 py-3 font-medium">
-                  Categories
-                </th>
-                <th className="px-6 py-3 font-medium">
-                  Status
-                </th>
-                <th className="px-6 py-3 font-medium">
-                  Actions
-                </th>
-              </tr>
-            </thead>
+        {/* INFORMATION SECTION */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Info label="Job Order No." value={job?.job_order_no} />
+          <Info label="Date" value={formattedDate} />
+          <Info label="Department" value={job?.department?.name} />
+          <Info label="Requested By" value={job?.requester?.name} />
+          <Info label="Contact Number" value={job?.contact_no} />
+          <Info label="Approved By" value={job?.approver?.name || 'ITS Director'} />
+        </div>
 
-            <tbody className="divide-y">
-              {orders.map((o) => (
-                <tr
-                  key={o.id}
-                  className="hover:bg-gray-50 transition"
+        {/* CATEGORIES */}
+        <div>
+          <h3 className="text-sm font-semibold text-gray-600 mb-2">
+            Categories
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {Array.isArray(job?.categories) && job.categories.length > 0 ? (
+              job.categories.map((category, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium"
                 >
-                  <td className="px-6 py-4 font-medium text-gray-900">
-                    {o.job_order_no}
-                  </td>
+                  {category.name}
+                </span>
+              ))
+            ) : (
+              <span className="text-gray-500 text-sm">
+                No categories assigned
+              </span>
+            )}
+          </div>
+        </div>
 
-                  <td className="px-6 py-4 text-gray-700">
-                    {o.department?.name || '—'}
-                  </td>
+        {/* REQUEST DESCRIPTION */}
+        <div>
+          <h3 className="text-sm font-semibold text-gray-600 mb-2">
+            Request Description
+          </h3>
+          <div className="bg-gray-50 p-4 rounded-xl text-sm text-gray-700">
+            {job?.request_description || '—'}
+          </div>
+        </div>
 
-                  <td className="px-6 py-4">
-                    {o.categories?.length > 0 ? (
-                      o.categories.map((category, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 inline-block bg-blue-100 text-blue-800 rounded-full text-xs font-medium mr-1"
-                        >
-                          {category.name}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-gray-500">
-                        No categories assigned
-                      </span>
-                    )}
-                  </td>
+        {/* ================= ATTACHMENTS SECTION ================= */}
+        {job.attachments?.length > 0 && (
+          <div className="space-y-2 pt-4">
+            <h4 className="text-sm font-semibold text-gray-700 border-b pb-1">
+              Attachments
+            </h4>
 
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col items-center">
-                      <span
-                        className={`px-3 py-1 text-xs rounded-full ${
-                          badgeStyle[o.action_report?.status]
-                        }`}
-                      >
-                        {o.action_report?.status}
-                      </span>
-                    </div>
-                  </td>
+            <div className="grid grid-cols-2 gap-3">
+              {job.attachments.map((file) => {
+                const fileUrl = `/storage/${file.file_path}`;
+                console.log('File URL:', fileUrl); // Debugging line for file URL
+                console.log('File Type:', file.type); // Debugging line for file type
 
-                  <td className="px-6 py-4 flex gap-2">
-                    <button
-                      onClick={() => handleView(o)}
-                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                if (file.type === 'image') {
+                  return (
+                    <a
+                      key={file.id}
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
                     >
-                      View
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      <img
+                        src={fileUrl}
+                        alt={file.original_name}
+                        className="rounded-lg border hover:opacity-80 transition cursor-pointer object-cover h-32 w-full"
+                      />
+                    </a>
+                  );
+                }
+
+                if (file.type === 'pdf') {
+                  return (
+                    <a
+                      key={file.id}
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center h-32 border rounded-lg bg-gray-100 hover:bg-gray-200 transition text-sm font-medium"
+                    >
+                      📄 View PDF
+                    </a>
+                  );
+                }
+
+                return null;
+              })}
+            </div>
+          </div>
         )}
+        {/* ========================================================= */}
+
+        {/* FOOTER */}
+        <div className="flex mt-6 justify-between">
+          {isAdmin && (
+            <div className="flex gap-4">
+              <button
+                onClick={() => handleAction('Ongoing')}
+                disabled={isLoading}
+                className="px-6 py-3 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
+              >
+                {loadingAction === 'Ongoing' && (
+                  <span className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full inline-block"></span>
+                )}
+                Accept
+              </button>
+
+              <button
+                onClick={() => handleAction('Cancelled')}
+                disabled={isLoading}
+                className="px-6 py-3 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 transition disabled:opacity-50"
+              >
+                {loadingAction === 'Cancelled' && (
+                  <span className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full inline-block"></span>
+                )}
+                Deny
+              </button>
+            </div>
+          )}
+
+          <button
+            onClick={onClose}
+            disabled={isLoading}
+            className="px-6 py-3 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black transition disabled:opacity-50"
+          >
+            Close
+          </button>
+        </div>
       </div>
+    </div>
+  );
+}
 
-      {/* PAGINATION */}
-      <div className="flex justify-between items-center text-sm mt-4">
-        <button
-          disabled={page === 1}
-          onClick={() => setPage((p) => p - 1)}
-          className="px-3 py-1 border rounded disabled:opacity-40"
-        >
-          Previous
-        </button>
-
-        <span>
-          Page {page} of {lastPage}
-        </span>
-
-        <button
-          disabled={page === lastPage}
-          onClick={() => setPage((p) => p + 1)}
-          className="px-3 py-1 border rounded disabled:opacity-40"
-        >
-          Next
-        </button>
-      </div>
-
-      {/* ================= ONGOING / COMPLETED MODAL ================= */}
-    {showModal && selectedJobId && (
-      <JobOrderOngoingModal
-        jobId={selectedJobId}
-        isOpen={showModal}
-        onClose={() => {
-          setShowModal(false);
-          setSelectedJobId(null);
-        }}
-        onStatusChange={(updatedJob) => {
-          if (
-            (updatedJob.action_report?.status || 'Pending') !== formattedStatus
-          ) {
-            setOrders(prev => prev.filter(o => o.id !== updatedJob.id));
-          } else {
-            setOrders(prev =>
-              prev.map(o =>
-                o.id === updatedJob.id ? updatedJob : o
-              )
-            );
-          }
-
-          setShowModal(false);
-          setSelectedJobId(null);
-        }}
-        showNotification={showNotification}
-        isEditable={isEditable}
-        isAdmin={isAdmin}
-      />
-    )}
-
-      {/* ================= PENDING MODAL ================= */}
-      {showPendingModal && selectedJob && (
-        <JobOrderModal
-          isOpen={showPendingModal}
-          job={selectedJob}
-          onClose={() => {
-            setShowPendingModal(false);
-            setSelectedJob(null);
-          }}
-          onStatusChange={loadOrders}
-          showNotification={showNotification}
-        />
-      )}
+/* Small reusable component for stacked label/value */
+function Info({ label, value }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-500 mb-1">
+        {label}
+      </p>
+      <p className="text-sm text-gray-800">
+        {value || '—'}
+      </p>
     </div>
   );
 }
