@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use setasign\Fpdi\Tcpdf\Fpdi;
+use App\Notifications\JobOrderPendingNotification;
 
 class ActionReportController extends Controller
 {
@@ -48,6 +49,12 @@ class ActionReportController extends Controller
         $validated['conformed'] = false;
 
         $actionReport = $jobOrder->actionReport()->create($validated);
+
+        // Send notification to the admin about the new pending job order
+        $admins = User::where('role', 'admin')->get();
+        foreach ($admins as $admin) {
+            $admin->notify(new JobOrderPendingNotification($jobOrder));
+        }
 
         return $actionReport->load([
             'servicedBy',
@@ -91,11 +98,15 @@ class ActionReportController extends Controller
             }
         }
 
-        // 🔥 IMPORTANT:
-        // Status ALWAYS stays Ongoing until requester confirms
         $validated['status'] = 'Ongoing';
 
         $actionReport->update($validated);
+
+        // Send notification to the admin about the updated job order (status is Ongoing)
+        $admins = User::where('role', 'admin')->get();
+        foreach ($admins as $admin) {
+            $admin->notify(new JobOrderPendingNotification($jobOrder));
+        }
 
         return $actionReport->fresh()->load([
             'servicedBy',

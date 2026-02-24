@@ -4,14 +4,19 @@ import JobOrderModal from './JobOrderModal';
 import JobOrderOngoingModal from './JobOrderOngoingModal';
 import StatusBadge from './ui/StatusBadge';
 import StatusIndicator from './ui/StatusIndicator'; // Import StatusIndicator component
+import { FaBell } from 'react-icons/fa'; // Import Bell icon for notification
+import JobOrderForm from './JobOrderForm';
+import { useLocation } from 'react-router-dom'; // Import useLocation
 
 export default function JobOrderList({ showNotification }) {
+  const location = useLocation();  // Get current location/path
+  
   const [jobs, setJobs] = useState([]);
   const [meta, setMeta] = useState({});
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-
+  const [newPendingJobs, setNewPendingJobs] = useState([]); // Tracks new pending jobs
   const [selectedJob, setSelectedJob] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -24,6 +29,8 @@ export default function JobOrderList({ showNotification }) {
 
   /* ================= FETCH JOBS ================= */
   const fetchJobs = (searchValue = search, pageValue = page) => {
+    if (loading) return; // Prevent duplicate fetching
+
     setLoading(true);
 
     axios.get('/job-orders', {
@@ -45,6 +52,18 @@ export default function JobOrderList({ showNotification }) {
 
       setJobs(data);
       setMeta(res.data);
+
+      // Track new pending job orders (this only applies to admin)
+      if (isAdmin) {
+        const currentPendingJobs = data.filter(job => job.action_report?.status === 'Pending');
+
+        // Track only newly created pending jobs (not the ones already in the list)
+        const newPending = currentPendingJobs.filter(
+          (job) => !newPendingJobs.some(existingJob => existingJob.id === job.id)
+        );
+
+        setNewPendingJobs((prev) => [...prev, ...newPending]); // Add new pending jobs
+      }
     })
     .catch(error => {
       console.log("API ERROR:", error.response || error.message);
@@ -58,24 +77,15 @@ export default function JobOrderList({ showNotification }) {
 
   /* ================= EFFECTS ================= */
   useEffect(() => {
-    const delayDebounce = setTimeout(() => {
-      setPage(1);
-      fetchJobs(search, 1);
-    }, 500);
-
-    return () => clearTimeout(delayDebounce);
-  }, [search]);
-
-  useEffect(() => {
     fetchJobs(search, page);
-  }, [page]);
+  }, [search, page]);
 
   /* ================= MODAL LOGIC ================= */
   const openModal = (job) => {
     const status = job.action_report?.status;
 
     // 🔐 Only admin can open Ongoing dashboard modal
-     if (status === 'Ongoing') {
+    if (status === 'Ongoing') {
       setSelectedOngoingJob(job);
       setOngoingModalOpen(true);
     } else {
@@ -99,13 +109,17 @@ export default function JobOrderList({ showNotification }) {
   };
 
   /* ================= COUNTS (ADMIN ONLY) ================= */
-  const pendingCount = jobs.filter(
-    job => job.action_report?.status === 'Pending'
-  ).length;
+  const pendingCount = newPendingJobs.length; // Track only new pending jobs
 
   const ongoingCount = jobs.filter(
     job => job.action_report?.status === 'Ongoing'
   ).length;
+
+  /* ================= RESET NEW PENDING JOBS ================= */
+  const handleBellClick = () => {
+    // Reset the new pending jobs count when the admin clicks the bell icon
+    setNewPendingJobs([]); // Clear new pending jobs after bell click
+  };
 
   /* ================= UI ================= */
   return (
@@ -122,6 +136,39 @@ export default function JobOrderList({ showNotification }) {
         </p>
       </div>
 
+      {/* ================= ADMIN SUMMARY CARDS ================= */}
+      {isAdmin && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Pending Card */}
+          <div className="bg-white border border-yellow-200 rounded-xl p-5 shadow-sm relative">
+            <p className="text-sm text-gray-500">Total Pending</p>
+            <h2 className="text-2xl font-bold text-yellow-600">
+              {pendingCount}
+            </h2>
+            {/* Notification Icon */}
+            {newPendingJobs.length > 0 && (
+              <div
+                className="absolute top-0 right-0 p-2 bg-yellow-600 text-white rounded-full cursor-pointer"
+                onClick={handleBellClick} // Reset new pending jobs count on click
+              >
+                <FaBell className="w-5 h-5" />
+                <div className="absolute top-0 right-0 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">
+                  {newPendingJobs.length}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Ongoing Card */}
+          <div className="bg-white border border-blue-200 rounded-xl p-5 shadow-sm">
+            <p className="text-sm text-gray-500">Total Ongoing</p>
+            <h2 className="text-2xl font-bold text-blue-600">
+              {ongoingCount}
+            </h2>
+          </div>
+        </div>
+      )}
+
       {/* Search */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <input
@@ -131,25 +178,6 @@ export default function JobOrderList({ showNotification }) {
           className="w-full lg:w-96 border border-gray-300 rounded-xl px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
         />
       </div>
-
-      {/* ================= ADMIN SUMMARY CARDS ================= */}
-      {isAdmin && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white border border-yellow-200 rounded-xl p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Total Pending</p>
-            <h2 className="text-2xl font-bold text-yellow-600">
-              {pendingCount}
-            </h2>
-          </div>
-
-          <div className="bg-white border border-blue-200 rounded-xl p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Total Ongoing</p>
-            <h2 className="text-2xl font-bold text-blue-600">
-              {ongoingCount}
-            </h2>
-          </div>
-        </div>
-      )}
 
       {/* ================= TABLE ================= */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -222,10 +250,6 @@ export default function JobOrderList({ showNotification }) {
                         {/* If the job is Ongoing, display StatusIndicator below the badge */}
                         {j.action_report?.status === 'Ongoing' && (
                           <div className="mt-1">
-                            {console.log('Rendering StatusIndicator for Job Order:', j.job_order_no)}
-                            {console.log('Status:', j.action_report?.status)}
-                            {console.log('Conformed:', j.action_report?.conformed)}
-                            {console.log('Requester ID:', j.requested_by)}
                             <StatusIndicator
                               status={j.action_report?.status}
                               isConformed={j.action_report?.conformed}
@@ -276,6 +300,15 @@ export default function JobOrderList({ showNotification }) {
             Next
           </button>
         </div>
+      )}
+
+      {/* Render JobOrderForm only on the /create route */}
+      {location.pathname === '/create' && (
+        <JobOrderForm
+          userRole={user?.role}
+          showNotification={showNotification}
+          refreshJobs={fetchJobs}          // Pass the job-fetching function
+        />
       )}
 
       {/* ================= MODALS ================= */}

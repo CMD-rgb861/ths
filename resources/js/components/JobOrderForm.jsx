@@ -66,11 +66,9 @@ const submit = async (e) => {
     setLoading(true);
 
     const data = new FormData();
-
-    // Ensure the form date is in UTC before submitting
     const formattedDate = new Date(form.date).toISOString();  // Convert to UTC
 
-    data.append('date', formattedDate); // Send in UTC
+    data.append('date', formattedDate);
     data.append('department_id', form.department_id);
     data.append('request_description', form.request_description);
     data.append('contact_no', form.contact_no);
@@ -91,28 +89,18 @@ const submit = async (e) => {
       },
     });
 
-    // ✅ SUCCESS NOTIFICATION
-    showNotification?.(
-      'success',
-      'Job Order Submitted',
-      'Job Order submitted successfully.'
-    );
+    // Success Notification
+    showNotification?.('success', 'Job Order Submitted', 'Job Order submitted successfully.');
+
+    // Refresh job list and update notification count
+    refreshJobs();  // This updates the job list
+    updateNotificationCount();  // This updates the notification count
 
     setForm(initialForm);
     setAttachments([]);
 
   } catch (error) {
-    console.log(error);
-    console.log(error.response);
-    console.log(error.response?.data);
-
-    // ❌ ERROR NOTIFICATION
-    showNotification?.(
-      'error',
-      'Submission Failed',
-      error.response?.data?.message || 'Failed to submit Job Order.'
-    );
-
+    showNotification?.('error', 'Submission Failed', error.response?.data?.message || 'Failed to submit Job Order.');
   } finally {
     setLoading(false);
   }
