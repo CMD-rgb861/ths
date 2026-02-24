@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import CategorySelector from './CategorySelector';
 import axios from 'axios';
@@ -59,52 +60,54 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
 
   /* ---------------- SUBMIT ---------------- */
   // For example, on submit, convert the date to UTC
-const submit = async (e) => {
-  e.preventDefault();
+  const submit = async (e) => {
+    e.preventDefault();
 
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    const data = new FormData();
-    const formattedDate = new Date(form.date).toISOString();  // Convert to UTC
+      const data = new FormData();
+      const formattedDate = new Date(form.date).toISOString();  // Convert to UTC
 
-    data.append('date', formattedDate);
-    data.append('department_id', form.department_id);
-    data.append('request_description', form.request_description);
-    data.append('contact_no', form.contact_no);
-    data.append('signature_name', form.signature_name);
+      data.append('date', formattedDate);
+      data.append('department_id', form.department_id);
+      data.append('request_description', form.request_description);
+      data.append('contact_no', form.contact_no);
+      data.append('signature_name', form.signature_name);
 
-    form.categories.forEach((cat, index) => {
-      data.append(`categories[${index}][id]`, cat.id);
-      data.append(`categories[${index}][other_description]`, cat.other_description ?? '');
-    });
+      form.categories.forEach((cat, index) => {
+        data.append(`categories[${index}][id]`, cat.id);
+        data.append(`categories[${index}][other_description]`, cat.other_description ?? '');
+      });
 
-    attachments.forEach((file) => {
-      data.append('files[]', file);
-    });
+      attachments.forEach((file) => {
+        data.append('files[]', file);
+      });
 
-    await axios.post('/job-orders', data, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+      // Submit form data to the server
+      const response = await axios.post('/job-orders', data, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
 
-    // Success Notification
-    showNotification?.('success', 'Job Order Submitted', 'Job Order submitted successfully.');
+      // Show success notification
+      showNotification?.('success', 'Job Order Submitted', 'Job Order submitted successfully.');
 
-    // Refresh job list and update notification count
-    refreshJobs();  // This updates the job list
-    updateNotificationCount();  // This updates the notification count
+      // Reset form
+      setForm(initialForm);
+      setAttachments([]);
 
-    setForm(initialForm);
-    setAttachments([]);
+    } catch (error) {
+      // Log the error details to the console for further investigation
+      console.log('Submission Error:', error);
 
-  } catch (error) {
-    showNotification?.('error', 'Submission Failed', error.response?.data?.message || 'Failed to submit Job Order.');
-  } finally {
-    setLoading(false);
-  }
-};
+      // Show error notification
+      showNotification?.('error', 'Submission Failed', error.response?.data?.message || 'Failed to submit Job Order.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-2xl">

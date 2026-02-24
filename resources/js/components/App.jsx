@@ -50,9 +50,9 @@ export default function App() {
       {/* ---------------- NOTIFICATIONS ---------------- */}
       <div className="fixed top-5 right-5 z-[9999] w-full max-w-xs pointer-events-none">
         <div className="flex flex-col space-y-3 max-h-[400px] overflow-y-auto">
-          {[...notifications].reverse().map((notification) => (
+          {[...notifications].reverse().map((notification, index) => (
             <Notification
-              key={notification.id}
+              key={`${notification.id}-${index}`}  // Combine ID and index for uniqueness
               id={notification.id}
               type={notification.type}
               title={notification.title}
