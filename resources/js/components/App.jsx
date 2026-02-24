@@ -7,6 +7,7 @@ import JobOrderStatusPage from './JobOrderStatusPage'; // ✅ ADDED
 import UserList from './UserList';
 import Login from './Login';
 import Notification from './Notification';
+import UserJobHistory from './UserJobHistory';
 
 export default function App() {
   const location = useLocation();
@@ -95,7 +96,11 @@ export default function App() {
                         <NavLink to="/create" className={navLinkClass}>
                           New Request
                         </NavLink>
-
+                        {!isAdmin && (
+                          <NavLink to="/history" className={navLinkClass}>
+                            History
+                          </NavLink>
+                        )}
                         {isAdmin && (
                           <>
                             <NavLink to="/reports" className={navLinkClass}>
@@ -129,6 +134,11 @@ export default function App() {
                             userRole={user?.role}
                           />
                         }
+                      />
+
+                      <Route
+                        path="/history"
+                        element={<UserJobHistory showNotification={showNotification} />}
                       />
 
                       <Route

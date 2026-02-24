@@ -34,6 +34,15 @@ class JobOrderController extends Controller
             $query->where('requested_by', $request->user()->id);
         }
 
+        // 🔥 HISTORY FILTER (NEW)
+        if ($request->boolean('history')) {
+            $query->whereIn('status', [
+                'Completed',
+                'Cancelled',
+                'Unserviceable'
+            ]);
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
 
@@ -45,6 +54,19 @@ class JobOrderController extends Controller
             });
         }
 
+        // 🔥 STATUS FILTER
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // 🔥 DATE RANGE FILTER
+        if ($request->filled('date_from')) {
+            $query->whereDate('date', '>=', $request->date_from);
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('date', '<=', $request->date_to);
+        }
         return $query->paginate(10);
     }
 
