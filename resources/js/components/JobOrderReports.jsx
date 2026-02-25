@@ -3,6 +3,10 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import JobOrderStatusSummary from './JobOrderStatusSummary';
 import JobOrderDepartmentSummary from './JobOrderDepartmentSummary';
+import { Pie } from 'react-chartjs-2';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 const PER_PAGE = 5;
 
@@ -19,6 +23,7 @@ export default function JobOrderReports() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [selectedTab, setSelectedTab] = useState('distribution'); // Default tab is 'distribution'
 
   /* ---------------- FETCH DATA ---------------- */
   useEffect(() => {
@@ -73,6 +78,31 @@ export default function JobOrderReports() {
 
   }, [filters, orders, search]);
 
+  /* ---------------- DEPARTMENT DISTRIBUTION PIE CHART DATA ---------------- */
+  const getDepartmentPieData = () => {
+    const departmentCounts = {};
+
+    filtered.forEach(order => {
+      const departmentName = order.department?.name;
+      if (departmentName) {
+        departmentCounts[departmentName] = (departmentCounts[departmentName] || 0) + 1;
+      }
+    });
+
+    const labels = Object.keys(departmentCounts);
+    const data = Object.values(departmentCounts);
+
+    return {
+      labels,
+      datasets: [
+        {
+          data,
+          backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'],
+        },
+      ],
+    };
+  };
+
   /* ---------------- PAGINATION ---------------- */
   const paginated = filtered.slice(
     (page - 1) * PER_PAGE,
@@ -111,7 +141,7 @@ export default function JobOrderReports() {
 
       {/* HEADER */}
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">
+        <h1 className="text-2xl font-semibold text-gray-900">
           Job Order Reports
         </h1>
         <p className="text-sm text-gray-500">
@@ -121,70 +151,70 @@ export default function JobOrderReports() {
 
       {/* FILTER PANEL */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-      <h2 className="text-sm font-semibold text-gray-700">
-        Filters
-      </h2>
+        <h2 className="text-sm font-semibold text-gray-700">
+          Filters
+        </h2>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
 
-        {/* From Date */}
-        <div className="flex flex-col">
-          <label htmlFor="from" className="text-sm text-gray-600 mb-1">From</label>
-          <input
-            id="from"
-            type="date"
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
-            onChange={e => setFilters({ ...filters, from: e.target.value })}
-          />
+          {/* From Date */}
+          <div className="flex flex-col">
+            <label htmlFor="from" className="text-sm text-gray-600 mb-1">From</label>
+            <input
+              id="from"
+              type="date"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
+              onChange={e => setFilters({ ...filters, from: e.target.value })}
+            />
+          </div>
+
+          {/* To Date */}
+          <div className="flex flex-col">
+            <label htmlFor="to" className="text-sm text-gray-600 mb-1">To</label>
+            <input
+              id="to"
+              type="date"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
+              onChange={e => setFilters({ ...filters, to: e.target.value })}
+            />
+          </div>
+
+          {/* Status Filter */}
+          <div className="flex flex-col">
+            <label htmlFor="status" className="text-sm text-gray-600 mb-1">Status</label>
+            <select
+              id="status"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
+              onChange={e => setFilters({ ...filters, status: e.target.value })}
+            >
+              <option value="">All Status</option>
+              {['Pending', 'Ongoing', 'Completed', 'Cancelled'].map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Department Filter */}
+          <div className="flex flex-col">
+            <label htmlFor="department" className="text-sm text-gray-600 mb-1">Department</label>
+            <select
+              id="department"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
+              onChange={e => setFilters({ ...filters, department: e.target.value })}
+            >
+              <option value="">All Departments</option>
+              {[...new Map(
+                orders
+                  .filter(o => o.department)
+                  .map(o => [o.department.id, o.department])
+              ).values()].map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+
         </div>
-
-        {/* To Date */}
-        <div className="flex flex-col">
-          <label htmlFor="to" className="text-sm text-gray-600 mb-1">To</label>
-          <input
-            id="to"
-            type="date"
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
-            onChange={e => setFilters({ ...filters, to: e.target.value })}
-          />
-        </div>
-
-        {/* Status Filter */}
-        <div className="flex flex-col">
-          <label htmlFor="status" className="text-sm text-gray-600 mb-1">Status</label>
-          <select
-            id="status"
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
-            onChange={e => setFilters({ ...filters, status: e.target.value })}
-          >
-            <option value="">All Status</option>
-            {['Pending', 'Ongoing', 'Completed', 'Cancelled'].map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Department Filter */}
-        <div className="flex flex-col">
-          <label htmlFor="department" className="text-sm text-gray-600 mb-1">Department</label>
-          <select
-            id="department"
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
-            onChange={e => setFilters({ ...filters, department: e.target.value })}
-          >
-            <option value="">All Departments</option>
-            {[...new Map(
-              orders
-                .filter(o => o.department)
-                .map(o => [o.department.id, o.department])
-            ).values()].map(d => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-        </div>
-
       </div>
-    </div>
 
       {/* STATUS SUMMARY */}
       <JobOrderStatusSummary orders={filtered} />
@@ -333,11 +363,53 @@ export default function JobOrderReports() {
       </div>
 
       {/* DEPARTMENT DISTRIBUTION */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <div className="bg-white border border-gray-200 rounded-xl p-6 mt-8 shadow-md">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">
           Department Distribution
         </h2>
-        <JobOrderDepartmentSummary orders={filtered} />
+
+        {/* Tabs */}
+        <div className="border-b mb-4">
+          <div className="flex space-x-6">
+            <button
+              onClick={() => setSelectedTab('distribution')}
+              className={`py-2 px-4 text-sm font-medium ${selectedTab === 'distribution' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+            >
+              Distribution
+            </button>
+            <button
+              onClick={() => setSelectedTab('pie')}
+              className={`py-2 px-4 text-sm font-medium ${selectedTab === 'pie' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+            >
+              Graph
+            </button>
+          </div>
+        </div>
+
+        {/* Content based on selected tab */}
+        {selectedTab === 'distribution' && <JobOrderDepartmentSummary orders={filtered} />}
+        {selectedTab === 'pie' && (
+          <div className="p-8 flex justify-center">
+            {/* Pie Graph */}
+            <Pie
+              data={getDepartmentPieData()}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false, // Disable aspect ratio maintenance
+                plugins: {
+                  legend: {
+                    position: 'top',
+                    labels: {
+                      boxWidth: 12, // smaller box width for the legend
+                    },
+                  },
+                },
+              }}
+              // Use Tailwind utility classes for width and height
+              className="w-64 h-64" // Example: width and height of 16rem (256px)
+            />
+          </div>
+        )}
       </div>
 
     </div>

@@ -9,19 +9,20 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\ActionReportController;
 use App\Http\Controllers\UnserviceableReportController;
+use App\Http\Controllers\CompletedReportController;
 use App\Models\JobOrder;
 
 /*
-|--------------------------------------------------------------------------
-| PUBLIC ROUTES
-|--------------------------------------------------------------------------
+|-------------------------------------------------------------------------- 
+| PUBLIC ROUTES 
+|-------------------------------------------------------------------------- 
 */
 Route::post('/login', [LoginController::class, 'login']);
 
 /*
-|--------------------------------------------------------------------------
-| PROTECTED ROUTES
-|--------------------------------------------------------------------------
+|-------------------------------------------------------------------------- 
+| PROTECTED ROUTES 
+|-------------------------------------------------------------------------- 
 */
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -45,7 +46,6 @@ Route::middleware('auth:sanctum')->group(function () {
     [ActionReportController::class, 'confirm'])
     ->name('job-orders.confirm');
 
-
     // Action Reports routes
     Route::post('/job-orders/{jobOrder}/action-report', [ActionReportController::class, 'store']);
     Route::put('/job-orders/{jobOrder}/action-report', [ActionReportController::class, 'update']);
@@ -59,10 +59,17 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ===============================
-    // UNERVICEABLE REPORT ROUTES
+    // UNSERVICEABLE REPORT ROUTES
     // ===============================
     Route::get('/job-orders/{job}/unserviceable/view',
         [UnserviceableReportController::class, 'view']
+    );
+
+    // ===============================
+    // COMPLETED REPORT ROUTES
+    // ===============================
+    Route::get('/job-orders/{job}/completed/view',
+        [CompletedReportController::class, 'view']
     );
 
     // Add this new route to fetch the pending count

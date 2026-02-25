@@ -6,44 +6,48 @@ export default function UserList() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Fetch users when the component mounts (empty dependency array)
   useEffect(() => {
     fetchUsers();
-      }, []);
+  }, []);
 
-      const fetchUsers = async (query = '') => {
-      try {
-        setLoading(true);
+  // Function to fetch users with the search query (if provided)
+  const fetchUsers = async (query = '') => {
+    if (query && query.length > 100) {  // Limit query length to 100 characters
+      console.log('Search query is too long');
+      setUsers([]);
+      return;
+    }
 
-        const token = localStorage.getItem('token');
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await axios.get('/users', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: query ? { search: query, limit: 10 } : {},
+      });
 
-        
-        const res = await axios.get('/users', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          params: query ? { search: query, limit: 10 } : {}
-        });
+      const rows = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.data)
+        ? res.data.data
+        : [];
 
-        const rows = Array.isArray(res.data)
-          ? res.data
-          : Array.isArray(res.data?.data)
-            ? res.data.data
-            : [];
-
-        setUsers(rows);
-      } catch (error) {
-        console.error(error);
-        setUsers([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-
+      setUsers(rows);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+  // Handle the search input change
   const handleSearch = (e) => {
     const value = e.target.value;
     setSearch(value);
-    fetchUsers(value);
+    fetchUsers(value); // Fetch users based on the updated search value
   };
 
   return (
@@ -67,7 +71,9 @@ export default function UserList() {
 
       {/* Results */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        {loading && <div className="p-6 text-sm text-gray-500">Loading users...</div>}
+        {loading && (
+          <div className="p-6 text-sm text-gray-500">Loading users...</div>
+        )}
 
         {!loading && users.length === 0 && (
           <div className="p-6 text-sm text-gray-500">No users found.</div>

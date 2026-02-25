@@ -15,6 +15,8 @@ export default function UserJobHistory({ showNotification }) {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({});
 
+  const token = localStorage.getItem('token'); // Get the auth token
+
   // 🔥 Auto Fetch (Debounced Search)
   useEffect(() => {
     const delay = setTimeout(() => {
@@ -27,7 +29,7 @@ export default function UserJobHistory({ showNotification }) {
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/job-history', {
+      const response = await axios.get('/job-orders', {
         params: {
           search,
           status,
@@ -35,14 +37,16 @@ export default function UserJobHistory({ showNotification }) {
           dateFrom,
           dateTo,
           page,
+          history: true,  // Apply 'history' filter for Completed, Cancelled, Unserviceable
+        },
+        headers: {
+          Authorization: `Bearer ${token}`, // Send auth token for authenticated requests
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, // CSRF token from meta tag (Laravel)
         },
       });
 
-      console.log('API Response:', response.data);
-
-      // 🛡️ Defensive protection
-      const safeOrders = Array.isArray(response.data?.orders)
-        ? response.data.orders
+      const safeOrders = Array.isArray(response.data?.data)
+        ? response.data.data
         : [];
 
       const safePagination =
@@ -54,9 +58,13 @@ export default function UserJobHistory({ showNotification }) {
       setOrders(safeOrders);
       setPagination(safePagination);
 
+      // Console log to check if the user has job orders
+      console.log("Fetched Job Orders:", safeOrders);
+      console.log("User has job requests: ", safeOrders.length > 0);  // Check if there are job orders for the current user
+
     } catch (error) {
       console.error('Error fetching job history:', error);
-      setOrders([]); // prevent crash
+      setOrders([]);
       setPagination({});
       if (showNotification) {
         showNotification('error', 'Error', 'Failed to load job history.');
@@ -68,7 +76,6 @@ export default function UserJobHistory({ showNotification }) {
 
   return (
     <div className="space-y-8">
-
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -101,7 +108,6 @@ export default function UserJobHistory({ showNotification }) {
         </div>
 
         <div className="grid md:grid-cols-4 gap-6">
-
           {/* Status */}
           <div className="flex flex-col">
             <label className="text-xs font-medium text-gray-500 mb-1">Status</label>
@@ -150,7 +156,6 @@ export default function UserJobHistory({ showNotification }) {
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition"
             />
           </div>
-
         </div>
       </div>
 
@@ -230,7 +235,6 @@ export default function UserJobHistory({ showNotification }) {
           showNotification={showNotification}
         />
       )}
-
     </div>
   );
 }

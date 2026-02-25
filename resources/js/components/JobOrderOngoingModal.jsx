@@ -38,8 +38,10 @@ export default function JobOrderOngoingModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [showConfirmForAdmin, setShowConfirmForAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState(TABS[0]);
   const [isUnserviceableModalOpen, setIsUnserviceableModalOpen] = useState(false);
+  
 
   const currentUser = JSON.parse(localStorage.getItem('user'));
 
@@ -78,13 +80,22 @@ const readOnly =
   !isEditable ||
   isCompleted;
 
-  const showConfirmButton =
-  !isAdmin &&
-  isRequester &&
-  job?.action_report?.status === 'Ongoing' &&
-  form.diagnosis &&
-  form.action_taken &&
-  !isConfirmed;
+  const showConfirmButtonUser =
+    !isAdmin &&
+    isRequester &&
+    job?.action_report?.status === 'Ongoing' &&
+    form.diagnosis &&
+    form.action_taken &&
+    !isConfirmed;
+
+  const showConfirmButtonForAdmin =
+    isAdmin &&
+    isRequester &&
+    showConfirmForAdmin &&
+    job?.action_report?.status === 'Ongoing' &&
+    form.diagnosis &&
+    form.action_taken &&
+    !isConfirmed;
 
   // ================= FORMATTERS =================
   const formatDisplayDate = (dateString) => {
@@ -156,6 +167,8 @@ const readOnly =
           unserviceable: data.action_report?.status === "Unserviceable",  // Fetch unserviceable status
           remarks: data.action_report?.remarks || '',  // Populate remarks
         });
+        // Reset admin-confirm flag whenever job is (re)loaded
+        setShowConfirmForAdmin(false);
 
       })
       .catch((err) => console.error('Load job failed:', err))
@@ -353,6 +366,18 @@ const readOnly =
         unserviceable: updatedJob.action_report?.status === "Unserviceable",
         remarks: updatedJob.action_report?.remarks || '',
       });
+      // If admin saved and the report is in Ongoing + has required fields and not yet confirmed,
+      // show the confirm button beside Save Changes for the admin.
+      if (isAdmin) {
+        const ar = updatedJob.action_report || {};
+        const shouldShowConfirmForAdmin =
+          ar.status === 'Ongoing' &&
+          ar.diagnosis &&
+          ar.action_taken &&
+          !ar.confirmed_at;
+
+        setShowConfirmForAdmin(shouldShowConfirmForAdmin);
+      }
 
     } catch (err) {
       console.error(err);
@@ -368,36 +393,47 @@ const readOnly =
 
   // ================= CONFIRM COMPLETION =================
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!job?.id || confirming) return;
 
     setConfirming(true);
 
-    axios
-      .patch(`/job-orders/${job.id}/confirm-diagnosis`)
-      .then(() => {
-        showNotification(
-          'success',
-          'Job Confirmed',  
-          'You have successfully confirmed the completion of this job.'
-        );
+    try {
+      // Send confirm request
+      await axios.patch(`/job-orders/${job.id}/confirm-diagnosis`);
 
-        loadJob();
-        if (onStatusChange) {
-          axios.get(`/job-orders/${job.id}`).then(res => {
-            onStatusChange(res.data);
-          });
-        }
-      })
-      .catch((err) => {
-        console.error(err);
-        showNotification(
-          'error',
-          'Confirmation Failed',
-          'Something went wrong while confirming.'
-        );
-      })
-      .finally(() => setConfirming(false));
+      showNotification(
+        'success',
+        'Job Confirmed',
+        'You have successfully confirmed the completion of this job.'
+      );
+
+      // Optimistic UI update: mark the action_report as confirmed locally
+      const updatedJob = {
+        ...job,
+        action_report: {
+          ...job.action_report,
+          confirmed_at: new Date().toISOString(),
+        },
+      };
+
+      setJob(updatedJob);
+
+      // Notify parent immediately with optimistic data if provided
+      if (onStatusChange) onStatusChange(updatedJob);
+
+      // Refresh in background to get authoritative data, but don't await it
+      loadJob();
+    } catch (err) {
+      console.error(err);
+      showNotification(
+        'error',
+        'Confirmation Failed',
+        'Something went wrong while confirming.'
+      );
+    } finally {
+      setConfirming(false);
+    }
   };
 
   const handleClose = () => {
@@ -557,8 +593,25 @@ const readOnly =
                   </Field>
 
                   <Field title="Status:">
-                    <div className="text-sm font-medium text-gray-900">
-                      {form.status || '—'}
+                    <div className="flex items-center justify-start gap-3">
+                      <div className="text-sm font-medium text-gray-900">
+                        {form.status || '—'}
+                      </div>
+
+                      {/* Show Completed report button when status is Completed */}
+                      {isCompleted && (
+                        <button
+                          onClick={() =>
+                            window.open(
+                              `/job-orders/${jobId}/completed/pdf`,
+                              "_blank"
+                            )
+                          }
+                          className={`px-3 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl shadow-md hover:bg-indigo-700 hover:shadow-lg active:scale-95 transition-all duration-200`}
+                        >
+                          View Report
+                        </button>
+                      )}
                     </div>
                   </Field>
 
@@ -773,35 +826,49 @@ const readOnly =
         </div>
         
 
-        {!readOnly && (
-          <div className="px-8 pb-4">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className={`px-6 py-2 rounded-lg text-white ${
-                saving
-                  ? 'bg-gray-500 cursor-not-allowed'
-                  : 'bg-gray-900 hover:bg-gray-800'
-              }`}
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        )}
+        {(!readOnly || showConfirmButtonUser) && (
+          <div className="px-8 pb-4 flex justify-start items-center gap-3 border-t bg-white">
+            {showConfirmButtonForAdmin && (
+              <button
+                onClick={handleConfirm}
+                disabled={confirming}
+                className={`px-6 py-2 rounded-lg text-white ${
+                  confirming
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                {confirming ? 'Confirming...' : 'Confirm'}
+              </button>
+            )}
 
-        {showConfirmButton && (
-          <div className="px-8 pb-6">
-            <button
-              onClick={handleConfirm}
-              disabled={confirming}
-              className={`px-6 py-2 rounded-lg text-white ${
-                confirming
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-green-600 hover:bg-green-700'
-              }`}
-            >
-              {confirming ? 'Confirming...' : 'Confirm'}
-            </button>
+            {!readOnly && (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className={`px-6 py-2 rounded-lg text-white ${
+                  saving
+                    ? 'bg-gray-500 cursor-not-allowed'
+                    : 'bg-gray-900 hover:bg-gray-800'
+                }`}
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            )}
+
+            {showConfirmButtonUser && (
+              <button
+                onClick={handleConfirm}
+                disabled={confirming}
+                className={`px-6 py-2 rounded-lg text-white ${
+                  confirming
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                {confirming ? 'Confirming...' : 'Confirm'}
+              </button>
+            )}
           </div>
         )}
 
