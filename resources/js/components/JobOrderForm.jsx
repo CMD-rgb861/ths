@@ -67,7 +67,7 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
       setLoading(true);
 
       const data = new FormData();
-      const formattedDate = new Date(form.date).toISOString();  // Convert to UTC
+      const formattedDate = new Date(form.date).toISOString();
 
       data.append('date', formattedDate);
       data.append('department_id', form.department_id);

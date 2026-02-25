@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\JobOrder;
 use App\Models\ActionReport;
 use App\Models\User;
-use App\Notifications\DiagnosisPopulatedNotification; // Import notification
-use App\Notifications\DiagnosisConfirmedNotification; // Import confirmation notification
+use App\Notifications\DiagnosisPopulatedNotification; 
+use App\Notifications\DiagnosisConfirmedNotification;
+use App\Notifications\JobOrderPendingNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use setasign\Fpdi\Tcpdf\Fpdi;
 use Illuminate\Support\Facades\Storage;
+
 
 
 class JobOrderController extends Controller
@@ -20,7 +22,7 @@ class JobOrderController extends Controller
     | INDEX 
     |-------------------------------------------------------------------------- 
     */
-    public function index(Request $request)
+   public function index(Request $request)
     {
         $query = JobOrder::with([
             'department',
@@ -29,6 +31,11 @@ class JobOrderController extends Controller
             'attachments',
             'actionReport.servicedBy',
         ])->orderBy('created_at', 'desc');
+
+        // If the request is from an admin and the 'created_after' parameter is present
+        if ($request->has('created_after')) {
+            $query->where('created_at', '>', $request->input('created_after'));
+        }
 
         if (!$request->user()->isAdmin()) {
             $query->where('requested_by', $request->user()->id);
@@ -48,9 +55,9 @@ class JobOrderController extends Controller
 
             $query->where(function ($q) use ($search) {
                 $q->where('job_order_no', 'like', "%{$search}%")
-                  ->orWhereHas('department', function ($d) use ($search) {
-                      $d->where('name', 'like', "%{$search}%");
-                  });
+                ->orWhereHas('department', function ($d) use ($search) {
+                    $d->where('name', 'like', "%{$search}%");
+                });
             });
         }
 
@@ -67,6 +74,7 @@ class JobOrderController extends Controller
         if ($request->filled('date_to')) {
             $query->whereDate('date', '<=', $request->date_to);
         }
+
         return $query->paginate(10);
     }
 
@@ -129,6 +137,7 @@ class JobOrderController extends Controller
                 'contact_no' => $validated['contact_no'],
                 'signature_name' => $signatureName,
                 'status' => 'Pending',
+                'notified' => false,  // New field to mark if the job has been notified
             ]);
 
             // Attach Categories
@@ -169,6 +178,18 @@ class JobOrderController extends Controller
                 if ($requestedByUser) {
                     $requestedByUser->notify(new DiagnosisPopulatedNotification($jobOrder)); // Send notification
                 }
+            }
+
+            // Only send notification if the job order is "Pending" and has not been notified yet
+            if ($jobOrder->status === 'Pending' && !$jobOrder->notified) {
+                // Send notification to all admin users about the new pending job order
+                $admins = User::where('role', 'admin')->get(); // Get all admins
+                foreach ($admins as $admin) {
+                    $admin->notify(new JobOrderPendingNotification($jobOrder)); // Send the notification
+                }
+
+                // Mark the job as notified
+                $jobOrder->update(['notified' => true]);
             }
 
             return $jobOrder->load([
@@ -297,6 +318,23 @@ class JobOrderController extends Controller
                 200
             );
         });
+    }
+
+    public function markPendingNotified(Request $request)
+    {
+        // Check that the jobs data is provided in the request
+        $validated = $request->validate([
+            'jobs' => ['required', 'array'],
+            'jobs.*' => ['exists:job_orders,id'] // Ensure each job ID exists in the job_orders table
+        ]);
+
+        // Mark the jobs as notified
+        $jobOrders = JobOrder::whereIn('id', $validated['jobs'])->update(['notified' => true]);
+
+        return response()->json([
+            'message' => 'Pending jobs have been marked as notified.',
+            'updated' => $jobOrders
+        ], 200);
     }
 
 }

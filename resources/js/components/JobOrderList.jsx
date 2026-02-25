@@ -8,7 +8,7 @@ import { FaBell } from 'react-icons/fa'; // Import Bell icon for notification
 import JobOrderForm from './JobOrderForm';
 import { useLocation } from 'react-router-dom'; // Import useLocation
 
-export default function JobOrderList({ showNotification }) {
+export default function JobOrderList({ showNotification, setNewPendingJobs, newPendingJobs }) {
   const location = useLocation();  // Get current location/path
   
   const [jobs, setJobs] = useState([]);
@@ -16,7 +16,6 @@ export default function JobOrderList({ showNotification }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [newPendingJobs, setNewPendingJobs] = useState([]); // Tracks new pending jobs
   const [selectedJob, setSelectedJob] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -55,14 +54,15 @@ export default function JobOrderList({ showNotification }) {
 
       // Track new pending job orders (this only applies to admin)
       if (isAdmin) {
-        const currentPendingJobs = data.filter(job => job.action_report?.status === 'Pending');
+        const currentPendingJobs = data.filter(job => job.action_report?.status === 'Pending' && !job.notified);
 
         // Track only newly created pending jobs (not the ones already in the list)
         const newPending = currentPendingJobs.filter(
           (job) => !newPendingJobs.some(existingJob => existingJob.id === job.id)
         );
 
-        setNewPendingJobs((prev) => [...prev, ...newPending]); // Add new pending jobs
+        // Use the passed setNewPendingJobs to update the state from parent
+        setNewPendingJobs((prev) => [...prev, ...newPending]);
       }
     })
     .catch(error => {
@@ -119,6 +119,15 @@ export default function JobOrderList({ showNotification }) {
   const handleBellClick = () => {
     // Reset the new pending jobs count when the admin clicks the bell icon
     setNewPendingJobs([]); // Clear new pending jobs after bell click
+    // You might want to update the backend to mark notified as true for all
+    axios.post('/job-orders/mark-pending-notified', { jobs: newPendingJobs.map(job => job.id) })
+    .then(response => {
+      console.log('Jobs marked as notified:', response.data);
+      setNewPendingJobs([]); // Clear new pending jobs after they are marked
+    })
+    .catch(error => {
+      console.error('Error marking jobs as notified:', error.response || error.message);
+    });
   };
 
   /* ================= UI ================= */

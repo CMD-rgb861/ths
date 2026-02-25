@@ -65,4 +65,9 @@ Route::middleware('auth:sanctum')->group(function () {
         [UnserviceableReportController::class, 'view']
     );
 
+    // Add this new route to fetch the pending count
+    Route::middleware('auth:sanctum')->get('/job-orders/pending-count', [JobOrderController::class, 'pendingCount']);
+    // Add this route to handle marking pending jobs as notified
+    Route::post('/job-orders/mark-pending-notified', [JobOrderController::class, 'markPendingNotified']);
+
 });

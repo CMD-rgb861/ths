@@ -91,12 +91,30 @@ export default function JobOrderModal({
 
         {/* ================= BASIC INFO ================= */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
-          <Info label="Job Order No." value={job?.job_order_no} />
-          <Info label="Date" value={formattedDate} />
-          <Info label="Department" value={job?.department?.name} />
-          <Info label="Requested By" value={job?.requester?.name} />
-          <Info label="Contact Number" value={job?.contact_no} />
-          <Info label="Approved By" value={job?.approver?.name || 'ITS Director'} />
+          <div>
+            <label className="block text-sm font-semibold text-gray-600">Job Order No.</label>
+            <div className="text-sm text-gray-700">{job?.job_order_no}</div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-600">Date</label>
+            <div className="text-sm text-gray-700">{formattedDate}</div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-600">Department</label>
+            <div className="text-sm text-gray-700">{job?.department?.name}</div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-600">Requested By</label>
+            <div className="text-sm text-gray-700">{job?.requester?.name}</div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-600">Contact Number</label>
+            <div className="text-sm text-gray-700">{job?.contact_no}</div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-600">Approved By</label>
+            <div className="text-sm text-gray-700">{job?.approver?.name || 'ITS Director'}</div>
+          </div>
         </div>
 
         {/* ================= CATEGORIES ================= */}

@@ -12,6 +12,7 @@ import UserJobHistory from './UserJobHistory';
 export default function App() {
   const location = useLocation();
   const [notifications, setNotifications] = useState([]);
+  const [newPendingJobs, setNewPendingJobs] = useState([]); // Track new pending jobs globally
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user'));
 
@@ -122,7 +123,7 @@ export default function App() {
                       {/* MAIN LIST */}
                       <Route
                         path="/"
-                        element={<JobOrderList showNotification={showNotification} />}
+                        element={<JobOrderList showNotification={showNotification} setNewPendingJobs={setNewPendingJobs} newPendingJobs={newPendingJobs} />}
                       />
 
                       {/* CREATE */}
