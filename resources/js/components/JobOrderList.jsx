@@ -112,7 +112,9 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   };
 
   /* ================= COUNTS (ADMIN ONLY) ================= */
-  const pendingCount = newPendingJobs.length; // Track only new pending jobs
+  const pendingCount = jobs.filter(
+    job => job.action_report?.status === 'Pending'
+  ).length; // Total Pending job count
 
   const ongoingCount = jobs.filter(
     job => job.action_report?.status === 'Ongoing'
@@ -161,7 +163,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
           <div className="bg-white border border-yellow-200 rounded-xl p-5 shadow-sm relative">
             <p className="text-sm text-gray-500">Total Pending</p>
             <h2 className="text-2xl font-bold text-yellow-600">
-              {pendingCount}
+              {pendingCount} {/* Display the actual count of pending jobs */}
             </h2>
             {/* Notification Icon */}
             {newPendingJobs.length > 0 && (
@@ -171,7 +173,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
               >
                 <FaBell className="w-5 h-5" />
                 <div className="absolute top-0 right-0 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">
-                  {newPendingJobs.length}
+                  {newPendingJobs.length} {/* Display the count of new pending jobs */}
                 </div>
               </div>
             )}
