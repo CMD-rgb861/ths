@@ -7,6 +7,7 @@ import StatusIndicator from './ui/StatusIndicator'; // Import StatusIndicator co
 import { FaBell } from 'react-icons/fa'; // Import Bell icon for notification
 import JobOrderForm from './JobOrderForm';
 import { useLocation } from 'react-router-dom'; // Import useLocation
+import NewJobOrdersModal from './NewJobOrdersModal'; // Import NewJobOrdersModal
 
 export default function JobOrderList({ showNotification, setNewPendingJobs, newPendingJobs }) {
   const location = useLocation();  // Get current location/path
@@ -21,6 +22,8 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
 
   const [selectedOngoingJob, setSelectedOngoingJob] = useState(null);
   const [ongoingModalOpen, setOngoingModalOpen] = useState(false);
+
+  const [isNewJobsModalOpen, setIsNewJobsModalOpen] = useState(false); // State for the new job modal
 
   const user = JSON.parse(localStorage.getItem('user'));
   const userId = user?.id;
@@ -117,17 +120,23 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
 
   /* ================= RESET NEW PENDING JOBS ================= */
   const handleBellClick = () => {
-    // Reset the new pending jobs count when the admin clicks the bell icon
-    setNewPendingJobs([]); // Clear new pending jobs after bell click
-    // You might want to update the backend to mark notified as true for all
+    setIsNewJobsModalOpen(true); // Open the modal for new jobs
+    // Do not clear the state yet — we'll clear it after the modal is closed
+  };
+
+  /* ================= MARK JOBS AS VIEWED ================= */
+  const handleNewJobsModalClose = () => {
+    // Once the user closes the modal, mark the new pending jobs as viewed
+    setNewPendingJobs([]); // Clear the new pending jobs after viewing them
+    setIsNewJobsModalOpen(false); // Close the modal
+    // Optionally, update the backend here as well
     axios.post('/job-orders/mark-pending-notified', { jobs: newPendingJobs.map(job => job.id) })
-    .then(response => {
-      console.log('Jobs marked as notified:', response.data);
-      setNewPendingJobs([]); // Clear new pending jobs after they are marked
-    })
-    .catch(error => {
-      console.error('Error marking jobs as notified:', error.response || error.message);
-    });
+      .then(response => {
+        console.log('Jobs marked as notified:', response.data);
+      })
+      .catch(error => {
+        console.error('Error marking jobs as notified:', error.response || error.message);
+      });
   };
 
   /* ================= UI ================= */
@@ -158,7 +167,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
             {newPendingJobs.length > 0 && (
               <div
                 className="absolute top-0 right-0 p-2 bg-yellow-600 text-white rounded-full cursor-pointer"
-                onClick={handleBellClick} // Reset new pending jobs count on click
+                onClick={handleBellClick} // Open the new pending job modal
               >
                 <FaBell className="w-5 h-5" />
                 <div className="absolute top-0 right-0 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">
@@ -336,6 +345,13 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         onStatusChange={handleStatusChange}
         showNotification={showNotification}
         isAdmin={isAdmin}
+      />
+
+      {/* New Job Orders Modal */}
+      <NewJobOrdersModal
+        isOpen={isNewJobsModalOpen}
+        onClose={handleNewJobsModalClose} // Use the new function to handle closing the modal
+        newPendingJobs={newPendingJobs}
       />
     </div>
   );
