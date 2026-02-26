@@ -110,11 +110,7 @@ export default function JobOrderModal({
           <div>
             <label className="block text-sm font-semibold text-gray-600">Contact Number</label>
             <div className="text-sm text-gray-700">{job?.contact_no}</div>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-600">Approved By</label>
-            <div className="text-sm text-gray-700">{job?.approver?.name || 'ITS Director'}</div>
-          </div>
+          </div>  
         </div>
 
         {/* ================= CATEGORIES ================= */}

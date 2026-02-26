@@ -79,6 +79,7 @@ export default function JobOrderReports() {
   }, [filters, orders, search]);
 
   /* ---------------- DEPARTMENT DISTRIBUTION PIE CHART DATA ---------------- */
+  // Department Pie Chart Data
   const getDepartmentPieData = () => {
     const departmentCounts = {};
 
@@ -92,15 +93,72 @@ export default function JobOrderReports() {
     const labels = Object.keys(departmentCounts);
     const data = Object.values(departmentCounts);
 
+    if (labels.length === 0 || data.length === 0) {
+      // Handle the case where no data is found
+      return {
+        labels: ['No Data'],
+        datasets: [{
+          data: [100],
+          backgroundColor: ['#FF6384'],
+        }],
+      };
+    }
+
     return {
       labels,
-      datasets: [
-        {
-          data,
-          backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'],
-        },
-      ],
+      datasets: [{
+        data,
+        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'],
+      }],
     };
+  };
+  // Compute pie data once so we can check for empty/no-data case before rendering
+  const pieData = getDepartmentPieData();
+  // Pie chart options with percentage in tooltips and custom legend
+  const pieChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      tooltip: {
+        callbacks: {
+          label: function (tooltipItem) {
+            const dataset = tooltipItem.dataset;
+            const total = dataset.data.reduce((sum, value) => sum + value, 0);
+            const value = dataset.data[tooltipItem.dataIndex];
+            const percentage = ((value / total) * 100).toFixed(2);
+            return `${tooltipItem.label}: ${value} (${percentage}%)`;
+          },
+        },
+      },
+      legend: {
+        position: 'top',
+        labels: {
+          generateLabels: function (chart) {
+            const dataset = chart.data.datasets && chart.data.datasets[0];
+            const labels = Array.isArray(chart.data.labels) ? chart.data.labels : [];
+
+            // Safeguard for valid data
+            const data = Array.isArray(dataset?.data) ? dataset.data : [];
+            const total = data.reduce((sum, value) => sum + (typeof value === 'number' ? value : 0), 0) || 1;
+
+            // Build legend items from labels so each slice has its own legend entry and color
+            return labels.map((lbl, index) => {
+              const value = data[index] ?? 0;
+              const percentage = ((value / total) * 100).toFixed(2);
+              const bg = Array.isArray(dataset?.backgroundColor) ? dataset.backgroundColor[index] : dataset?.backgroundColor;
+
+              return {
+                text: `${lbl ?? `#${index + 1}`} (${percentage}%)`,
+                fillStyle: bg,
+                hidden: false,
+                index,
+              };
+            });
+          },
+          boxWidth: 12, // smaller box width for the legend
+        },
+      },
+    },
   };
 
   /* ---------------- PAGINATION ---------------- */
@@ -264,7 +322,7 @@ export default function JobOrderReports() {
 
                 const requestedBy = o.requester?.name;
                 const acceptedBy = o.action_report?.accepted_by_user?.name;
-                const servicedBy = o.action_report?.serviced_by_user?.name;
+                const servicedBy = o.action_report?.serviced_by?.name || o.action_report?.serviced_by;
                 const cancelledBy = o.action_report?.cancelled_by_user?.name;
 
                 return (
@@ -390,24 +448,62 @@ export default function JobOrderReports() {
         {selectedTab === 'distribution' && <JobOrderDepartmentSummary orders={filtered} />}
         {selectedTab === 'pie' && (
           <div className="p-8 flex justify-center">
-            {/* Pie Graph */}
-            <Pie
-              data={getDepartmentPieData()}
-              options={{
+            {/* Pie Graph or No-data message */}
+            {Array.isArray(pieData.labels) && pieData.labels.length === 1 && pieData.labels[0] === 'No Data' ? (
+              <div className="text-center text-sm text-gray-500">
+                No department data to display for the current filters.
+                <div className="mt-2">Try clearing filters or adjusting the date range.</div>
+              </div>
+            ) : (
+              <Pie
+                data={pieData} // Your custom data function
+                options={{
                 responsive: true,
                 maintainAspectRatio: false, // Disable aspect ratio maintenance
                 plugins: {
+                  tooltip: {
+                    callbacks: {
+                      label: function (tooltipItem) {
+                        const dataset = tooltipItem.dataset;
+                        const total = dataset.data.reduce((sum, value) => sum + value, 0);
+                        const value = dataset.data[tooltipItem.dataIndex];
+                        const percentage = ((value / total) * 100).toFixed(2);
+                        return `${tooltipItem.label}: ${value} (${percentage}%)`; // Tooltip shows percentage
+                      },
+                    },
+                  },
                   legend: {
                     position: 'top',
                     labels: {
+                      generateLabels: function (chart) {
+                        const dataset = chart.data.datasets && chart.data.datasets[0];
+                        const labels = Array.isArray(chart.data.labels) ? chart.data.labels : [];
+
+                        const data = Array.isArray(dataset?.data) ? dataset.data : [];
+                        const total = data.reduce((sum, value) => sum + (typeof value === 'number' ? value : 0), 0) || 1;
+
+                        return labels.map((lbl, index) => {
+                          const value = data[index] ?? 0;
+                          const percentage = ((value / total) * 100).toFixed(2);
+                          const bg = Array.isArray(dataset?.backgroundColor) ? dataset.backgroundColor[index] : dataset?.backgroundColor;
+
+                          return {
+                            text: `${lbl ?? `#${index + 1}`} (${percentage}%)`,
+                            fillStyle: bg,
+                            hidden: false,
+                            index,
+                          };
+                        });
+                      },
                       boxWidth: 12, // smaller box width for the legend
                     },
                   },
                 },
               }}
-              // Use Tailwind utility classes for width and height
-              className="w-64 h-64" // Example: width and height of 16rem (256px)
-            />
+                // Use Tailwind utility classes for width and height
+                className="w-64 h-64" // Example: width and height of 16rem (256px)
+              />
+            )}
           </div>
         )}
       </div>

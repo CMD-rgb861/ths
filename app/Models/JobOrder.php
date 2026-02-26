@@ -55,7 +55,7 @@ class JobOrder extends Model
 
     public function approver()
     {
-        return $this->belongsTo(User::class, 'approved_by');
+        return $this->belongsTo(Signatory::class, 'approved_by');
     }
 
     public function conformer()

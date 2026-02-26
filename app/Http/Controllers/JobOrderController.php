@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\JobOrder;
 use App\Models\ActionReport;
 use App\Models\User;
+use App\Models\Signatory;
 use App\Notifications\DiagnosisPopulatedNotification; 
 use App\Notifications\DiagnosisConfirmedNotification;
 use App\Notifications\JobOrderPendingNotification;
@@ -303,6 +304,17 @@ class JobOrderController extends Controller
                 ]);
             }
 
+            // If an admin changed the status to Ongoing or Cancelled, apply the configured IT Director signatory
+            if ($request->user()->isAdmin() && in_array($validated['status'], ['Ongoing', 'Cancelled'])) {
+                $signatory = Signatory::where('role', 'it_director')->first();
+                if ($signatory) {
+                    $jobOrder->update([
+                        'approved_by' => $signatory->id,
+                        'approval_date' => now(),
+                    ]);
+                }
+            }
+
 
             // ✅ RETURN RESPONSE (FIX)
             return response()->json(
@@ -335,6 +347,44 @@ class JobOrderController extends Controller
             'message' => 'Pending jobs have been marked as notified.',
             'updated' => $jobOrders
         ], 200);
+    }
+
+    /**
+     * Approve a job order by setting approved_by and approval_date.
+     * Expects: approved_by (signatory id) and optional approval_date (date string). If approval_date is omitted, now() is used.
+     */
+    public function approve(Request $request, JobOrder $jobOrder)
+    {
+        // Only admins can perform approval via this endpoint
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Unauthorized.');
+        }
+        $validated = $request->validate([
+            'approved_by' => ['required', 'exists:signatories,id'],
+            'approval_date' => ['nullable', 'date'],
+        ]);
+
+        $approvedBy = $validated['approved_by'];
+        $approvalDate = $validated['approval_date'] ?? now();
+
+        $jobOrder->update([
+            'approved_by' => $approvedBy,
+            'approval_date' => $approvalDate,
+        ]);
+
+        return response()->json(
+            $jobOrder->fresh()->load([
+                'department',
+                'requester',
+                'creator',
+                'approver',
+                'conformer',
+                'categories',
+                'attachments',
+                'actionReport.servicedBy',
+            ]),
+            200
+        );
     }
 
 }

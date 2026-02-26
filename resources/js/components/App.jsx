@@ -5,6 +5,7 @@ import JobOrderList from './JobOrderList';
 import JobOrderReports from './JobOrderReports';
 import JobOrderStatusPage from './JobOrderStatusPage'; // ✅ ADDED
 import UserList from './UserList';
+import Signatories from './Signatories';
 import Login from './Login';
 import Notification from './Notification';
 import UserJobHistory from './UserJobHistory';
@@ -110,6 +111,9 @@ export default function App() {
                             <NavLink to="/users" className={navLinkClass}>
                               Users
                             </NavLink>
+                            <NavLink to="/signatories" className={navLinkClass}>
+                              Signatories
+                            </NavLink>
                           </>
                         )}
                       </nav>
@@ -163,6 +167,16 @@ export default function App() {
                         element={
                           <RequireAdmin>
                             <UserList />
+                          </RequireAdmin>
+                        }
+                      />
+
+                      {/* SIGNATORIES */}
+                      <Route
+                        path="/signatories"
+                        element={
+                          <RequireAdmin>
+                            <Signatories />
                           </RequireAdmin>
                         }
                       />

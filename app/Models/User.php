@@ -64,10 +64,6 @@ class User extends Authenticatable
         return $this->hasMany(JobOrder::class, 'created_by');
     }
 
-    public function approvedJobOrders()
-    {
-        return $this->hasMany(JobOrder::class, 'approved_by');
-    }
 
     public function conformedJobOrders()
     {

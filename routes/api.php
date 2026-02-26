@@ -7,6 +7,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\JobOrderController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\SignatoryController;
 use App\Http\Controllers\ActionReportController;
 use App\Http\Controllers\UnserviceableReportController;
 use App\Http\Controllers\CompletedReportController;
@@ -76,5 +77,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('auth:sanctum')->get('/job-orders/pending-count', [JobOrderController::class, 'pendingCount']);
     // Add this route to handle marking pending jobs as notified
     Route::post('/job-orders/mark-pending-notified', [JobOrderController::class, 'markPendingNotified']);
+
+    // Signatory endpoints (IT Director)
+    Route::get('/signatory/it-director', [SignatoryController::class, 'show']);
+    Route::post('/signatory/it-director', [SignatoryController::class, 'update']);
+
+    // Approve a job order (set approved_by and approval_date)
+    Route::post('/job-orders/{jobOrder}/approve', [JobOrderController::class, 'approve']);
 
 });
