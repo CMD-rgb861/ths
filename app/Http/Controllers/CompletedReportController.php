@@ -112,29 +112,88 @@ class CompletedReportController extends Controller
             $pdf->Cell($coords['jo']['w'], 6, $jobOrder->job_order_no, 0, 1, 'R');
         }
 
-        // Date & Department
-        $pdf->SetXY($coords['date_dept']['x'], $coords['date_dept']['y']);
+        // Date & Department - use labelled underlines similar to the ACTION REPORT fields
+        $leftColLabelX = $coords['date_dept']['x'];
+        $leftColFullWidth = $coords['date_dept']['w'];
+        $leftFixedUnderlineWidth = 70;
+        $leftFieldsWithExtra = ['Date:', 'Department:'];
+        $leftExtra = 0; // no extra by default; can increase if needed
+
+        $leftFields = [
+            'Date:',
+            'Department:',
+        ];
+
+        // -------------------------
+        // Date & Department underlines
+        // - Variables below (X/Y/width) control placement and can be adjusted
+        // - $dateLabelX / $deptLabelX: where the label starts
+        // - $dateLineStartX / $deptLineStartX: where the underline starts
+        // - $dateLineY / $deptLineY: vertical positions of the lines
+        // -------------------------
+        $dateLabelX = $leftColLabelX;
+        $deptLabelX = $leftColLabelX;
+        $dateLabelY = $coords['date_dept']['y'];
+        $deptLabelY = $coords['date_dept']['y'] + 7;
+
+        // desired underline lengths and right boundary
+        $dateDesiredWidth = $leftFixedUnderlineWidth; // adjustable
+        $deptDesiredWidth = $leftFixedUnderlineWidth; // adjustable
+        $colInnerRightX = $leftColLabelX + $leftColFullWidth;
+
+        // --- Date line ---
         $pdf->SetFont($arialNB, '', 10);
-        $pdf->Cell($coords['date_dept']['w'], 6, 'Date: ____________________________________', 0, 1, 'L');
-        $pdf->SetX($coords['date_dept']['x']);
-        $pdf->Cell($coords['date_dept']['w'], 6, 'Department: ______________________________', 0, 1, 'L');
+        $dateLabelW = $pdf->GetStringWidth('Date:');
+        $pdf->SetXY($dateLabelX, $dateLabelY);
+        $pdf->Cell($dateLabelW + 2, 6, 'Date:', 0, 0, 'L');
 
-        // overlay date and department values while keeping the underscores
-        if (!empty($jobOrder)) {
-            // overlay date (left-aligned inside the same cell area)
-            $dateText = $jobOrder->date ? Carbon::parse($jobOrder->date)->format('m/d/Y') : '';
-            if ($dateText) {
-                $pdf->SetXY($coords['date_dept']['x'] + 10, $coords['date_dept']['y']); // Shift left by 10 units
-                $pdf->Cell($coords['date_dept']['w'], 6, $dateText, 0, 1, 'L'); // Align text to the left
-            }
+        $dateMinStartX = $dateLabelX + $dateLabelW + 4;
+        $dateRightAlignedStart = $colInnerRightX - $dateDesiredWidth;
+        if ($dateRightAlignedStart >= $dateMinStartX) {
+            $dateLineStartX = $dateRightAlignedStart;
+            $dateLineW = $dateDesiredWidth;
+        } else {
+            $dateLineStartX = $dateMinStartX;
+            $dateLineW = max(0, $colInnerRightX - $dateMinStartX);
+        }
+        $dateLineY = $dateLabelY + 4; // adjustable vertical offset
+        $pdf->SetLineWidth(0.3);
+        if ($dateLineW > 0) {
+            $pdf->Line($dateLineStartX, $dateLineY, $dateLineStartX + $dateLineW, $dateLineY);
+        }
 
-            // overlay department
-            $dept = $jobOrder->department->name ?? '';
-            if ($dept) {
-                $pdf->SetX($coords['date_dept']['x'] + 20); // Shift left by 10 units
-                // department is placed on the next line
-                $pdf->Cell($coords['date_dept']['w'], 6, $dept, 0, 1, 'L'); // Align text to the left
-            }
+        // overlay date value
+        if (!empty($jobOrder->date)) {
+            $pdf->SetFont($arialN, '', 9);
+            $pdf->SetXY($dateLineStartX, $dateLabelY - 0.5);
+            $pdf->Cell($dateLineW, 6, Carbon::parse($jobOrder->date)->format('m/d/Y'), 0, 0, 'L');
+        }
+
+        // --- Department line ---
+        $pdf->SetFont($arialNB, '', 10);
+        $deptLabelW = $pdf->GetStringWidth('Department:');
+        $pdf->SetXY($deptLabelX, $deptLabelY);
+        $pdf->Cell($deptLabelW + 2, 6, 'Department:', 0, 0, 'L');
+
+        $deptMinStartX = $deptLabelX + $deptLabelW + 4;
+        $deptRightAlignedStart = $colInnerRightX - $deptDesiredWidth;
+        if ($deptRightAlignedStart >= $deptMinStartX) {
+            $deptLineStartX = $deptRightAlignedStart;
+            $deptLineW = $deptDesiredWidth;
+        } else {
+            $deptLineStartX = $deptMinStartX;
+            $deptLineW = max(0, $colInnerRightX - $deptMinStartX);
+        }
+        $deptLineY = $deptLabelY + 4; // adjustable vertical offset
+        if ($deptLineW > 0) {
+            $pdf->Line($deptLineStartX, $deptLineY, $deptLineStartX + $deptLineW, $deptLineY);
+        }
+
+        // overlay department value
+        if (!empty($jobOrder->department->name ?? null)) {
+            $pdf->SetFont($arialN, '', 9);
+            $pdf->SetXY($deptLineStartX, $deptLabelY - 0.5);
+            $pdf->Cell($deptLineW, 6, $jobOrder->department->name, 0, 0, 'L');
         }
 
         // Category
@@ -235,83 +294,187 @@ class CompletedReportController extends Controller
         // --------------------------
         // REQUEST BLOCK
         // --------------------------
-        $pdf->SetXY($coords['request']['x'], $coords['request']['y'] - 13);
-        $pdf->SetFont($arialNB, '', 10);
-        // Keep the underline fields intact, then overlay the actual request description
-        $pdf->MultiCell(
-            $coords['request']['w'],
-            6,
-            "Request:\n___________________________________________________\n___________________________________________________\n___________________________________________________",
-            0
-        );
+        // REQUEST BLOCK - label + multiple underlines (so it visually matches the other fields)
+        $reqX = $coords['request']['x'];
+        $reqW = $coords['request']['w'];
 
+        // define a single Y offset (adjust to move the whole block)
+        $yOffset = 1; // increase to move block lower, decrease to move up
+
+        $pdf->SetFont($arialNB, '', 10);
+        $pdf->SetXY($reqX, $coords['request']['y'] - 15 + $yOffset);
+        $pdf->Cell(0, 6, 'Request:', 0, 1, 'L');
+
+        // -------------------------
+        // Request description underlines
+        // - Adjustable variables:
+        //   $requestLabelX / $requestLabelY: label position
+        //   $requestUnderlineStartX / $requestUnderlineEndX: horizontal extents
+        //   $requestLineY1..3: individual Y positions for each underline
+        // -------------------------
+        $requestLabelX = $reqX;
+        $requestLabelY = $coords['request']['y'] - 14 + $yOffset;
+        $requestUnderlineStartX = $reqX + 2; // left padding
+        $requestUnderlineEndX = $reqX + $reqW - 2; // right padding
+
+        $yOffset = 3.5; // increase to move block downward
+
+        $requestLineY1 = $coords['request']['y'] - 7 + $yOffset;
+        $requestLineY2 = $coords['request']['y'] - 1 + $yOffset;
+        $requestLineY3 = $coords['request']['y'] + 5 + $yOffset;
+
+        $pdf->SetXY($reqX + 2, $requestLineY1 - 4.5 + $yOffset); // moves the MultiCell text down
+
+        $pdf->SetLineWidth(0.3);
+        $pdf->Line($requestUnderlineStartX, $requestLineY1, $requestUnderlineEndX, $requestLineY1);
+        $pdf->Line($requestUnderlineStartX, $requestLineY2, $requestUnderlineEndX, $requestLineY2);
+        $pdf->Line($requestUnderlineStartX, $requestLineY3, $requestUnderlineEndX, $requestLineY3);
+
+        // overlay request description
         if (!empty($jobOrder->request_description)) {
-            // overlay request description on top of the underscores area
-            $pdf->SetXY($coords['request']['x'] + 2, $coords['request']['y'] - 9);
+            $pdf->SetXY($reqX + 2, $requestLineY1 - 4.5);
             $pdf->SetFont($arialN, '', 10);
-            // wrap within same width
-            $pdf->MultiCell($coords['request']['w'] - 4, 6, $jobOrder->request_description, 0);
+            $pdf->MultiCell($reqW - 4, 6, $jobOrder->request_description, 0);
         }
 
         $pdf->Ln(5);
 
-        /* =========================
-           REQUESTER BLOCK
-        ========================== */
+       /* =========================
+            REQUESTER BLOCK
+            ========================== */
 
-        $pdf->SetXY($coords['requester']['x'], $coords['requester']['y'] - 13);
-        $totalWidth = $coords['requester']['w'];
-        $labelWidth = $pdf->GetStringWidth('Requested by:') + 2;
-        $lineWidth  = $totalWidth - $labelWidth;
+            // REQUESTER BLOCK - Requested by / Contact No. / Approved by as labelled underlines
+            $reqrX = $coords['requester']['x'];
+            $reqrW = $coords['requester']['w'];
+            $labelList = ['Requested by:', 'Contact No.:', 'Approved by:'];
+            $lineH = 6;
+            $fixedUnderline = 50; // wide underline for names/contact
 
-        $pdf->SetFont($arialNB, '', 10); // bold label
-        $pdf->Cell($labelWidth, 6, 'Requested by:', 0, 0, 'L');
-        $pdf->SetFont($arialNB, '', 10);
-        $pdf->Cell($lineWidth, 6, '_____________________________', 0, 1, 'L');
+            // -------------------------
+            // Requester block offset
+            // - Adjust this variable to move the entire requester block up/down
+            //   Positive value moves down, negative moves up
+            // -------------------------
+            $yOffset = 2;
 
-        // Overlay requester name while keeping underline
-        if (!empty($jobOrder->requester->name ?? null)) {
-            $pdf->SetXY($coords['requester']['x'] + $labelWidth + 10, $coords['requester']['y'] - 13);
-            $pdf->SetFont($arialN, '', 10);
-            $pdf->Cell($lineWidth, 6, $jobOrder->requester->name, 0, 1, 'L');
-        }
+            // -------------------------
+            // Requester block underlines (Requested by / Contact No. / Approved by)
+            // - Original Y coordinates with $yOffset applied
+            // -------------------------
+            $requestedByLabelX = $reqrX;
+            $requestedByLabelY = $coords['requester']['y'] - 10 + $yOffset;
 
-        $pdf->Ln(6);
-        $pdf->SetFont($arialNB, '', 10);
-        $pdf->Cell($labelWidth, 6, 'Contact No.:', 0, 0, 'L');
-        $pdf->Cell($lineWidth, 6, '_____________________________', 0, 1, 'L');
+            //Overall Contact No. label position (adjust Y as needed)
+            $contactLabelX = $reqrX;
+            $contactLabelY = $coords['requester']['y'] + $yOffset;
 
-        // Overlay contact number
-        if (!empty($jobOrder->contact_no ?? null)) {
-            $pdf->SetXY($coords['requester']['x'] + $labelWidth, $coords['requester']['y'] - 2);
-            $pdf->SetFont($arialN, '', 10);
-            $pdf->Cell($lineWidth, 6, $jobOrder->contact_no, 0, 1, 'L');
-        }
+            $approvedLabelX = $reqrX;
+            $approvedLabelY = $coords['requester']['y'] + 6 + $yOffset;
 
-        $pdf->Ln(3);
-        $pdf->SetFont($arialNB, '', 10);
-        $pdf->Cell($labelWidth, 6, 'Approved by:', 0, 0, 'L');
-        $pdf->Cell($lineWidth, 6, '_____________________________', 0, 1, 'L');
+            // compute line extents (start X/end X will be computed so that the underline is as wide as possible but does not overlap the label)
+            $colInnerRightX_req = $reqrX + $reqrW;
 
-        // Overlay approved by name
-        if (!empty($jobOrder->approver->name ?? null)) {
-            $pdf->SetXY($coords['requester']['x'] + $labelWidth, $coords['requester']['y'] + 6);
-            $pdf->SetFont($arialN, '', 10);
-            $pdf->Cell($lineWidth, 6, $jobOrder->approver->name, 0, 1, 'L');
-        }
+            // -------------------------
+            // Requested by
+            $pdf->SetFont($arialNB, '', 10);
+            $reqLblW = $pdf->GetStringWidth('Requested by:');
+            $pdf->SetXY($requestedByLabelX, $requestedByLabelY);
+            $pdf->Cell($reqLblW + 2, $lineH, 'Requested by:', 0, 0, 'L');
 
-        // Signature labels
+            $reqMinStartX = $requestedByLabelX + $reqLblW + 4;
+            $reqRightAlignedStart = $colInnerRightX_req - $fixedUnderline;
+            if ($reqRightAlignedStart >= $reqMinStartX) {
+                $requestedByLineStartX = $reqRightAlignedStart;
+                $requestedByLineW = $fixedUnderline;
+            } else {
+                $requestedByLineStartX = $reqMinStartX;
+                $requestedByLineW = max(0, $colInnerRightX_req - $reqMinStartX);
+            }
+            $requestedByLineY = $requestedByLabelY + 4;
+            if ($requestedByLineW > 0) {
+                $pdf->Line($requestedByLineStartX, $requestedByLineY, $requestedByLineStartX + $requestedByLineW, $requestedByLineY);
+            }
+
+            // overlay requested by value
+            if (!empty($jobOrder->requester->name ?? null)) {
+                $pdf->SetFont($arialN, '', 10);
+                $pdf->SetXY($requestedByLineStartX, $requestedByLabelY - 1);
+                $pdf->Cell($requestedByLineW, $lineH, $jobOrder->requester->name, 0, 0, 'L');
+            }
+            
+            // -------------------------
+            // Contact No.
+            $pdf->SetFont($arialNB, '', 10);
+            $contactLblW = $pdf->GetStringWidth('Contact No.:');
+            $pdf->SetXY($contactLabelX, $contactLabelY);
+            $pdf->Cell($contactLblW + 2, $lineH, 'Contact No.:', 0, 0, 'L');
+
+            $contactMinStartX = $contactLabelX + $contactLblW + 4;
+            $contactRightAlignedStart = $colInnerRightX_req - $fixedUnderline;
+            if ($contactRightAlignedStart >= $contactMinStartX) {
+                $contactLineStartX = $contactRightAlignedStart;
+                $contactLineW = $fixedUnderline;
+            } else {
+                $contactLineStartX = $contactMinStartX;
+                $contactLineW = max(0, $colInnerRightX_req - $contactMinStartX);
+            }
+            $contactLineY = $contactLabelY + 4;
+            if ($contactLineW > 0) {
+                $pdf->Line($contactLineStartX, $contactLineY, $contactLineStartX + $contactLineW, $contactLineY);
+            }
+
+            // overlay contact value
+            if (!empty($jobOrder->contact_no ?? null)) {
+                $pdf->SetFont($arialN, '', 10);
+                $pdf->SetXY($contactLineStartX, $contactLabelY - 1);
+                $pdf->Cell($contactLineW, $lineH, $jobOrder->contact_no, 0, 0, 'L');
+            }
+
+            // -------------------------
+            // Approved by
+            $pdf->SetFont($arialNB, '', 10);
+            $approvedLblW = $pdf->GetStringWidth('Approved by:');
+            $pdf->SetXY($approvedLabelX, $approvedLabelY);
+            $pdf->Cell($approvedLblW + 2, $lineH, 'Approved by:', 0, 0, 'L');
+
+            $approvedMinStartX = $approvedLabelX + $approvedLblW + 4;
+            $approvedRightAlignedStart = $colInnerRightX_req - $fixedUnderline;
+            if ($approvedRightAlignedStart >= $approvedMinStartX) {
+                $approvedLineStartX = $approvedRightAlignedStart;
+                $approvedLineW = $fixedUnderline;
+            } else {
+                $approvedLineStartX = $approvedMinStartX;
+                $approvedLineW = max(0, $colInnerRightX_req - $approvedMinStartX);
+            }
+            $approvedLineY = $approvedLabelY + 4;
+            if ($approvedLineW > 0) {
+                $pdf->Line($approvedLineStartX, $approvedLineY, $approvedLineStartX + $approvedLineW, $approvedLineY);
+            }
+
+            // overlay approved by value
+            if (!empty($jobOrder->approver->name ?? null)) {
+                $pdf->SetFont($arialN, '', 10);
+                $pdf->SetXY($approvedLineStartX, $approvedLabelY - 1);
+                $pdf->Cell($approvedLineW, $lineH, $jobOrder->approver->name, 0, 0, 'L');
+            }
+
+        // Signature labels (keep near the same position as before)
         $pdf->SetFont($arialN, '', 10);
-        $pdf->SetXY($coords['requester']['x'] + $labelWidth - 8, $coords['requester']['y'] - 8);
-        $pdf->Cell($lineWidth, 5, 'Signature Over Printed Name', 0, 0, 'C');
+        $pdf->SetXY($coords['requester']['x'] + 20, $coords['requester']['y'] - 4  );
+        $pdf->Cell($reqrW - 40, 5, 'Signature Over Printed Name', 0, 0, 'C');
 
-        $pdf->SetXY($coords['requester']['x'] + $labelWidth - 8, $coords['requester']['y'] + 14);
-        $pdf->Cell($lineWidth, 5, 'ITS Director', 0, 1, 'C');
+        $pdf->SetXY($coords['requester']['x'] + 20, $coords['requester']['y'] + 13);
+        $pdf->Cell($reqrW - 40, 5, 'ITS Director', 0, 1, 'C');
 
-        // Small document code below the ITS Director label at the bottom of left column
-        $pdf->SetFont($arialNB, '', 11);
-        $pdf->SetXY($coords['requester']['x'] - 4.5, $coords['requester']['y'] + 18);
-        $pdf->Cell($lineWidth, 5, 'F-ITS-001 Rev.01(01-23-2021)', 0, 1, 'L');
+    // Small document code below the ITS Director label at the bottom of left column
+    // compute $lineWidth to match the requester area (was removed during refactor)
+    $pdf->SetFont($arialNB, '', 10);
+    $labelW = $pdf->GetStringWidth('Requested by:') + 2;
+    $lineWidth = ($reqrW ?? $coords['requester']['w']) - $labelW;
+
+    $pdf->SetFont($arialNB, '', 11);
+    $pdf->SetXY($coords['requester']['x'] - 4.5, $coords['requester']['y'] + 18);
+    $pdf->Cell($lineWidth, 5, 'F-ITS-001 Rev.01(01-23-2021)', 0, 1, 'L');
 
         $pdf->SetFont($arialN, '', 10);
 
@@ -337,12 +500,33 @@ class CompletedReportController extends Controller
 
         $pdf->SetX($rightCol['x'] + 2);
         $diagStartY = $pdf->GetY();
-        $pdf->MultiCell($rightCol['width'], 6,
-            "*Diagnosis:\n______________________________________________\n______________________________________________\n______________________________________________\n______________________________________________", 0);
 
-        // overlay diagnosis text (if available) while keeping underscores
+        // Diagnosis - draw label then a set of horizontal lines to act as underlines
+        $pdf->SetFont($arialNB, '', 10);
+        $pdf->Cell(0, 6, '*Diagnosis:', 0, 1, 'L');
+
+        // -------------------------
+        // Diagnosis underlines
+        // - Adjustable variables:
+        //   $diagLabelX/Y, $diagLineStartX, $diagLineY1..4
+        // -------------------------
+        $diagLabelX = $rightCol['x'] + 2;
+        $diagLabelY = $diagStartY;
+        $diagLineStartX = $rightCol['x'] + 4;
+        $diagLineEndX = $rightCol['x'] + $rightCol['width'] - 4;
+        $diagLineY1 = $diagStartY + 5;
+        $diagLineY2 = $diagStartY + 11;
+        $diagLineY3 = $diagStartY + 17;
+        $diagLineY4 = $diagStartY + 23;
+        $pdf->SetLineWidth(0.3);
+        $pdf->Line($diagLineStartX, $diagLineY1, $diagLineEndX, $diagLineY1);
+        $pdf->Line($diagLineStartX, $diagLineY2, $diagLineEndX, $diagLineY2);
+        $pdf->Line($diagLineStartX, $diagLineY3, $diagLineEndX, $diagLineY3);
+        $pdf->Line($diagLineStartX, $diagLineY4, $diagLineEndX, $diagLineY4);
+
+        // overlay diagnosis text (if available)
         if (!empty($jobOrder->actionReport->diagnosis ?? null)) {
-            $pdf->SetXY($rightCol['x'] + 4, $diagStartY + 5);
+            $pdf->SetXY($diagLineStartX, $diagLineY1 - 0.5);
             $pdf->SetFont($arialN, '', 9);
             $pdf->MultiCell($rightCol['width'] - 6, 5, $jobOrder->actionReport->diagnosis, 0);
         }
@@ -352,12 +536,33 @@ class CompletedReportController extends Controller
 
         $pdf->SetX($rightCol['x'] + 2);
         $actionStartY = $pdf->GetY();
-        $pdf->MultiCell($rightCol['width'], 6,
-            "*Action Taken:\n______________________________________________\n______________________________________________\n______________________________________________\n______________________________________________", 0);
 
-        // overlay action taken text while keeping underscores
+        // Action Taken - label + horizontal underlines
+        $pdf->SetFont($arialNB, '', 10);
+        $pdf->Cell(0, 6, '*Action Taken:', 0, 1, 'L');
+
+        // -------------------------
+        // Action Taken underlines
+        // - Adjustable variables:
+        //   $actionLabelX/Y, $actionLineStartX, $actionLineY1..4
+        // -------------------------
+        $actionLabelX = $rightCol['x'] + 2;
+        $actionLabelY = $actionStartY;
+        $actionLineStartX = $rightCol['x'] + 4;
+        $actionLineEndX = $rightCol['x'] + $rightCol['width'] - 4;
+        $actionLineY1 = $actionStartY + 5;
+        $actionLineY2 = $actionStartY + 11;
+        $actionLineY3 = $actionStartY + 17;
+        $actionLineY4 = $actionStartY + 23;
+        $pdf->SetLineWidth(0.3);
+        $pdf->Line($actionLineStartX, $actionLineY1, $actionLineEndX, $actionLineY1);
+        $pdf->Line($actionLineStartX, $actionLineY2, $actionLineEndX, $actionLineY2);
+        $pdf->Line($actionLineStartX, $actionLineY3, $actionLineEndX, $actionLineY3);
+        $pdf->Line($actionLineStartX, $actionLineY4, $actionLineEndX, $actionLineY4);
+
+        // overlay action taken text while keeping underlines
         if (!empty($jobOrder->actionReport->action_taken ?? null)) {
-            $pdf->SetXY($rightCol['x'] + 4, $actionStartY + 5);
+            $pdf->SetXY($actionLineStartX, $actionLineY1 - 0.5);
             $pdf->SetFont($arialN, '', 9);
             $pdf->MultiCell($rightCol['width'] - 6, 5, $jobOrder->actionReport->action_taken, 0);
         }
