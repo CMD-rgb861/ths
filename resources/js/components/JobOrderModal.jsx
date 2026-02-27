@@ -37,7 +37,20 @@ export default function JobOrderModal({
     axios.put(`/job-orders/${job.id}`, { status })
       .then((response) => {
         console.log('Job Order Update Response:', response.data);  // Log response data from API
-        onStatusChange(response.data);
+
+        // If an admin accepted the job (status -> Ongoing), suppress the
+        // "Waiting for your confirmation" indicator immediately by clearing
+        // the client-side conformed flag. The waiting indicator should only
+        // appear after the admin explicitly saves changes in the Ongoing
+        // modal (which will set the confirmation flag properly).
+        const updatedJob = response.data;
+        if (status === 'Ongoing' && user?.role === 'admin') {
+          if (updatedJob.action_report) {
+            updatedJob.action_report.conformed = undefined;
+          }
+        }
+
+        onStatusChange(updatedJob);
         showNotification(
           'success',
           'Job Order Updated',
@@ -105,7 +118,17 @@ export default function JobOrderModal({
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-600">Requested By</label>
-            <div className="text-sm text-gray-700">{job?.requester?.name}</div>
+            <div className="text-sm text-gray-700">
+              {job?.signature_name && job?.requester?.role === 'admin' ? (
+                <div className="">Signatory: <span className="font-medium">{job.signature_name}</span></div>
+              ) : null}
+
+              <div>
+                Requested by: {job?.requester?.name ? (
+                  job?.signature_name && job?.requester?.role === 'admin' ? `(${job.requester.name})` : job.requester.name
+                ) : '—'}
+              </div>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-600">Contact Number</label>

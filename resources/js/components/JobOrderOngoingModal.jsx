@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, memo } from 'react';
 import axios from 'axios';
 import UnserviceableModal from './UnserviceableModal';
+import CSMModal from './CSMModal';
 
 const STATUS_OPTIONS = ['Pending', 'Ongoing', 'Cancelled'];
 const TABS = ['Details', 'Dates'];
@@ -56,6 +57,12 @@ export default function JobOrderOngoingModal({
     cancel: false,
     unserviceable: false,
   });
+
+  // CSM (Client Satisfaction Measurement) states
+  const [csmChecked, setCsmChecked] = useState(false);
+  const [csmCompleted, setCsmCompleted] = useState(false);
+  const [isCsmModalOpen, setIsCsmModalOpen] = useState(false);
+  
 
   // ================= COMPUTED STATES =================
 
@@ -169,6 +176,10 @@ const readOnly =
         });
         // Reset admin-confirm flag whenever job is (re)loaded
         setShowConfirmForAdmin(false);
+  // CSM: if action_report indicates CSM was completed, reflect it
+  const csmDone = !!data.action_report?.csm_completed;
+  setCsmCompleted(csmDone);
+  setCsmChecked(csmDone);
 
       })
       .catch((err) => console.error('Load job failed:', err))
@@ -291,7 +302,9 @@ const readOnly =
 
     const updatedForm = {
       ...form,
-      conformed: form.diagnosis && form.action_taken ? true : false,
+      // Explicitly set to false so the admin-side shows "Waiting for confirmation"
+      // immediately after Save Changes.
+      conformed: false,
     };
 
     console.log('Updated form with conformed:', updatedForm);
@@ -366,6 +379,19 @@ const readOnly =
         unserviceable: updatedJob.action_report?.status === "Unserviceable",
         remarks: updatedJob.action_report?.remarks || '',
       });
+      // Ensure parent list gets updated immediately. If the job is Ongoing,
+      // explicitly set a client-side `conformed` flag to false so the
+      // `StatusIndicator` will render the "Waiting for confirmation" state
+      // right after Save Changes.
+      try {
+        const notifyJob = { ...updatedJob };
+        if (notifyJob.action_report && notifyJob.action_report.status === 'Ongoing') {
+          notifyJob.action_report.conformed = false;
+        }
+        if (onStatusChange) onStatusChange(notifyJob);
+      } catch (e) {
+        // ignore notify errors
+      }
       // If admin saved and the report is in Ongoing + has required fields and not yet confirmed,
       // show the confirm button beside Save Changes for the admin.
       if (isAdmin) {
@@ -436,6 +462,99 @@ const readOnly =
     }
   };
 
+  // ================= CSM (Client Satisfaction Measurement) =================
+  const requesterIsUser = job?.requester?.role === 'user';
+
+  const handleCsmCheckboxChange = (e) => {
+    const checked = e.target.checked;
+    // If checking and CSM not yet completed -> open modal to fill it
+    if (checked) {
+      if (csmCompleted) {
+        setCsmChecked(true);
+      } else {
+        setCsmChecked(true);
+        setIsCsmModalOpen(true);
+      }
+    } else {
+      // Unchecking disables completion
+      setCsmChecked(false);
+      setCsmCompleted(false);
+    }
+  };
+
+  
+
+  const handleCsmCancel = () => {
+    setIsCsmModalOpen(false);
+    setCsmChecked(false);
+    // don't mark completed
+  };
+
+  const handleCsmSave = async (formData) => {
+    // form validation is handled by the CSM modal; just submit payload
+
+    try {
+      // Normalize payload: convert numeric-string fields to integers and
+      // convert datetime-local into a format Laravel accepts reliably.
+      const payload = { ...formData };
+
+      // Integer fields expected by backend
+      const intFields = [
+        'cc1','cc2','cc3',
+        'sqd0','sqd1','sqd2','sqd3','sqd4','sqd5','sqd6','sqd7','sqd8',
+        'age'
+      ];
+
+      intFields.forEach((k) => {
+        if (payload[k] !== undefined && payload[k] !== null && payload[k] !== '') {
+          // parseInt on radio/string values
+          const v = parseInt(payload[k], 10);
+          payload[k] = Number.isNaN(v) ? payload[k] : v;
+        } else {
+          // remove empty strings to let server handle nullable vs required_if
+          delete payload[k];
+        }
+      });
+
+      // Normalize date_time_visited from `YYYY-MM-DDTHH:MM` to `YYYY-MM-DD HH:MM:00`
+      if (payload.date_time_visited) {
+        const dt = payload.date_time_visited;
+        if (dt.includes('T')) {
+          payload.date_time_visited = dt.replace('T', ' ') + ':00';
+        }
+      }
+
+      // Save CSM to backend - endpoint should be implemented server-side
+      await axios.post(`/job-orders/${job.id}/action-report/csm`, payload);
+
+      showNotification('success', 'Saved', 'CSM saved successfully.');
+
+      setCsmCompleted(true);
+      setCsmChecked(true);
+      setIsCsmModalOpen(false);
+
+      // Refresh job and notify parent
+      const res = await axios.get(`/job-orders/${job.id}`);
+      const updatedJob = res.data;
+      setJob(updatedJob);
+      if (onStatusChange) onStatusChange(updatedJob);
+    } catch (err) {
+      console.error('CSM save failed', err);
+
+      // Surface server validation messages when available
+      if (err?.response?.status === 422 && err.response.data) {
+        const data = err.response.data;
+        // Laravel returns errors in `errors` key; show concise message
+        const validationErrors = data.errors ? Object.entries(data.errors).map(([k, v]) => `${k}: ${v.join(', ')}`).join('\n') : data.message || 'Validation failed';
+        showNotification('error', 'Save Failed', validationErrors);
+        console.error('Validation details:', data);
+        return;
+      }
+
+      showNotification('error', 'Save Failed', 'Failed to save CSM.');
+    }
+  };
+
   const handleClose = () => {
     onClose();
   };
@@ -479,9 +598,17 @@ const readOnly =
               label="Request Description"
               value={job.request_description}
             />
+            {job?.signature_name && job.requester?.role === 'admin' && (
+              <Info label="Signatory" value={job.signature_name} />
+            )}
+
             <Info
               label="Requested By"
-              value={job.requester?.name}
+              value={
+                job?.requester?.name
+                  ? (job?.signature_name && job.requester?.role === 'admin' ? `(${job.requester.name})` : job.requester.name)
+                  : '—'
+              }
             />
             <Info label="Contact No." value={job.contact_no} />
 
@@ -827,50 +954,76 @@ const readOnly =
         
 
         {(!readOnly || showConfirmButtonUser) && (
-          <div className="px-8 pb-4 flex justify-start items-center gap-3 border-t bg-white">
-            {showConfirmButtonForAdmin && (
-              <button
-                onClick={handleConfirm}
-                disabled={confirming}
-                className={`px-6 py-2 rounded-lg text-white ${
-                  confirming
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-700'
-                }`}
-              >
-                {confirming ? 'Confirming...' : 'Confirm'}
-              </button>
-            )}
+          <div className="px-8 pb-4 flex flex-col sm:flex-row sm:items-center gap-3 border-t bg-white">
+            <div className="flex items-center gap-3">
+              {showConfirmButtonForAdmin && (
+                <button
+                  onClick={handleConfirm}
+                  disabled={confirming}
+                  className={`px-6 py-2 rounded-lg text-white ${
+                    confirming
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                >
+                  {confirming ? 'Confirming...' : 'Confirm'}
+                </button>
+              )}
 
-            {!readOnly && (
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className={`px-6 py-2 rounded-lg text-white ${
-                  saving
-                    ? 'bg-gray-500 cursor-not-allowed'
-                    : 'bg-gray-900 hover:bg-gray-800'
-                }`}
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            )}
+              {!readOnly && (
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className={`px-6 py-2 rounded-lg text-white ${
+                    saving
+                      ? 'bg-gray-500 cursor-not-allowed'
+                      : 'bg-gray-900 hover:bg-gray-800'
+                  }`}
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              )}
+            </div>
 
             {showConfirmButtonUser && (
-              <button
-                onClick={handleConfirm}
-                disabled={confirming}
-                className={`px-6 py-2 rounded-lg text-white ${
-                  confirming
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-700'
-                }`}
-              >
-                {confirming ? 'Confirming...' : 'Confirm'}
-              </button>
+              <div className="flex items-center gap-4 ml-auto">
+                {/* CSM checkbox for requester when requester is a regular user */}
+                {requesterIsUser && isRequester && (
+                  <label className="inline-flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={csmChecked}
+                      onChange={handleCsmCheckboxChange}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm">Client Satisfaction Measurement (CSM)</span>
+                  </label>
+                )}
+
+                <button
+                  onClick={handleConfirm}
+                  disabled={confirming || (requesterIsUser && !csmCompleted)}
+                  className={`px-6 py-2 rounded-lg text-white ${
+                    confirming || (requesterIsUser && !csmCompleted)
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                >
+                  {confirming ? 'Confirming...' : 'Confirm'}
+                </button>
+              </div>
             )}
           </div>
         )}
+
+        {/* CSM modal — delegate to reusable component */}
+        <CSMModal
+          isOpen={isCsmModalOpen}
+          initialData={{ rating: '', comments: '' }}
+          onSave={handleCsmSave}
+          onCancel={handleCsmCancel}
+          showNotification={showNotification}
+        />
 
       </div>
     </div>

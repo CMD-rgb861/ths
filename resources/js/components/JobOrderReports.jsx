@@ -21,6 +21,7 @@ export default function JobOrderReports() {
   });
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [itDirector, setItDirector] = useState(null);
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [selectedTab, setSelectedTab] = useState('distribution'); // Default tab is 'distribution'
@@ -41,6 +42,13 @@ export default function JobOrderReports() {
         showNotification("error", "Failed to load job orders", "An error occurred while fetching the data. Please try again later.");
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  // Fetch current IT Director signatory to use as a fallback for accepted-by display
+  useEffect(() => {
+    axios.get('/signatory/it-director')
+      .then(res => setItDirector(res.data))
+      .catch(() => setItDirector(null));
   }, []);
 
   /* ---------------- APPLY FILTERS ---------------- */
@@ -321,7 +329,8 @@ export default function JobOrderReports() {
                 const status = o.action_report?.status || 'Pending';
 
                 const requestedBy = o.requester?.name;
-                const acceptedBy = o.action_report?.accepted_by_user?.name;
+                // Use accepted_by_user if present; otherwise fall back to configured IT Director
+                const acceptedBy = o.action_report?.accepted_by_user?.name || itDirector?.user?.name || itDirector?.name;
                 const servicedBy = o.action_report?.serviced_by?.name || o.action_report?.serviced_by;
                 const cancelledBy = o.action_report?.cancelled_by_user?.name;
 
@@ -341,8 +350,16 @@ export default function JobOrderReports() {
                           {o.department?.name}
                         </div>
 
-                        <div className="text-sm text-gray-500">
-                          Requested by: {requestedBy || '—'}
+                        <div className="text-sm text-gray-500 space-y-0">
+                          {o.signature_name && o.requester?.role === 'admin' ? (
+                            <div className="">Signatory: <span className="font-medium">{o.signature_name}</span></div>
+                          ) : null}
+
+                          <div>
+                            Requested by: {requestedBy ? (
+                              o.signature_name && o.requester?.role === 'admin' ? `(${requestedBy})` : requestedBy
+                            ) : '—'}
+                          </div>
                         </div>
 
                         {status === 'Ongoing' && (
@@ -445,64 +462,93 @@ export default function JobOrderReports() {
         </div>
 
         {/* Content based on selected tab */}
-        {selectedTab === 'distribution' && <JobOrderDepartmentSummary orders={filtered} />}
+        {selectedTab === 'distribution' && (
+          <JobOrderDepartmentSummary orders={filtered} />
+        )}
         {selectedTab === 'pie' && (
-          <div className="p-8 flex justify-center">
+          <div className="p-8 flex flex-col items-center">
+
+            {/* ✅ Title */}
+            <h3 className="text-lg font-semibold text-gray-800 mb-6 text-center">
+              Department Distribution
+            </h3>
+
             {/* Pie Graph or No-data message */}
-            {Array.isArray(pieData.labels) && pieData.labels.length === 1 && pieData.labels[0] === 'No Data' ? (
+            {Array.isArray(pieData.labels) &&
+            pieData.labels.length === 1 &&
+            pieData.labels[0] === 'No Data' ? (
+
               <div className="text-center text-sm text-gray-500">
                 No department data to display for the current filters.
-                <div className="mt-2">Try clearing filters or adjusting the date range.</div>
+                <div className="mt-2">
+                  Try clearing filters or adjusting the date range.
+                </div>
               </div>
+
             ) : (
-              <Pie
-                data={pieData} // Your custom data function
-                options={{
-                responsive: true,
-                maintainAspectRatio: false, // Disable aspect ratio maintenance
-                plugins: {
-                  tooltip: {
-                    callbacks: {
-                      label: function (tooltipItem) {
-                        const dataset = tooltipItem.dataset;
-                        const total = dataset.data.reduce((sum, value) => sum + value, 0);
-                        const value = dataset.data[tooltipItem.dataIndex];
-                        const percentage = ((value / total) * 100).toFixed(2);
-                        return `${tooltipItem.label}: ${value} (${percentage}%)`; // Tooltip shows percentage
+
+              <div className="w-80 h-80">
+                <Pie
+                  data={pieData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      tooltip: {
+                        callbacks: {
+                          label: function (tooltipItem) {
+                            const dataset = tooltipItem.dataset;
+                            const total = dataset.data.reduce((sum, value) => sum + value, 0);
+                            const value = dataset.data[tooltipItem.dataIndex];
+                            const percentage = ((value / total) * 100).toFixed(2);
+                            return `${tooltipItem.label}: ${value} (${percentage}%)`;
+                          },
+                        },
+                      },
+                      legend: {
+                        position: 'bottom', // ✅ legend moved to bottom
+                        labels: {
+                          generateLabels: function (chart) {
+                            const dataset = chart.data.datasets && chart.data.datasets[0];
+                            const labels = Array.isArray(chart.data.labels)
+                              ? chart.data.labels
+                              : [];
+
+                            const data = Array.isArray(dataset?.data)
+                              ? dataset.data
+                              : [];
+
+                            const total =
+                              data.reduce(
+                                (sum, value) =>
+                                  sum + (typeof value === 'number' ? value : 0),
+                                0
+                              ) || 1;
+
+                            return labels.map((lbl, index) => {
+                              const value = data[index] ?? 0;
+                              const percentage = ((value / total) * 100).toFixed(2);
+                              const bg = Array.isArray(dataset?.backgroundColor)
+                                ? dataset.backgroundColor[index]
+                                : dataset?.backgroundColor;
+
+                              return {
+                                text: `${lbl ?? `#${index + 1}`} (${percentage}%)`,
+                                fillStyle: bg,
+                                hidden: false,
+                                index,
+                              };
+                            });
+                          },
+                          boxWidth: 14,
+                          padding: 15,
+                        },
                       },
                     },
-                  },
-                  legend: {
-                    position: 'top',
-                    labels: {
-                      generateLabels: function (chart) {
-                        const dataset = chart.data.datasets && chart.data.datasets[0];
-                        const labels = Array.isArray(chart.data.labels) ? chart.data.labels : [];
+                  }}
+                />
+              </div>
 
-                        const data = Array.isArray(dataset?.data) ? dataset.data : [];
-                        const total = data.reduce((sum, value) => sum + (typeof value === 'number' ? value : 0), 0) || 1;
-
-                        return labels.map((lbl, index) => {
-                          const value = data[index] ?? 0;
-                          const percentage = ((value / total) * 100).toFixed(2);
-                          const bg = Array.isArray(dataset?.backgroundColor) ? dataset.backgroundColor[index] : dataset?.backgroundColor;
-
-                          return {
-                            text: `${lbl ?? `#${index + 1}`} (${percentage}%)`,
-                            fillStyle: bg,
-                            hidden: false,
-                            index,
-                          };
-                        });
-                      },
-                      boxWidth: 12, // smaller box width for the legend
-                    },
-                  },
-                },
-              }}
-                // Use Tailwind utility classes for width and height
-                className="w-64 h-64" // Example: width and height of 16rem (256px)
-              />
             )}
           </div>
         )}

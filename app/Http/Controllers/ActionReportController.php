@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use setasign\Fpdi\Tcpdf\Fpdi;
 use App\Notifications\JobOrderPendingNotification;
+use App\Models\ClientSatisfactionMeasurement;
 
 class ActionReportController extends Controller
 {
@@ -308,5 +309,69 @@ class ActionReportController extends Controller
             ]),
             200
         );
+    }
+
+    /**
+     * Store Client Satisfaction Measurement (CSM) for a job order's action report
+     */
+    public function storeCsm(Request $request, JobOrder $jobOrder)
+    {
+        $actionReport = $jobOrder->actionReport;
+
+        if (!$actionReport) {
+            return response()->json(['message' => 'Action Report not found.'], 404);
+        }
+
+        // Only requester can submit CSM for their job
+        if ($jobOrder->requested_by !== Auth::id()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $validated = $request->validate([
+            'client_type' => ['required', 'string'],
+            'client_category' => ['required', 'string'],
+            'name' => ['nullable', 'string'],
+            'sex' => ['required', 'string'],
+            'age' => ['required', 'integer'],
+            'date_time_visited' => ['required', 'date'],
+            'region_of_residence' => ['required', 'string'],
+            'services_availed' => ['required', 'string'],
+            'service_provider_name' => ['nullable', 'string'],
+            'who_to_evaluate' => ['required', 'string'],
+            'office_or_faculty_unit_transacted' => ['nullable', 'string'],
+            'student_program' => ['nullable', 'string'],
+
+            'cc1' => ['required', 'integer'],
+            // cc2/cc3 are required only if cc1 indicates awareness (values 1-3)
+            'cc2' => ['required_if:cc1,1,2,3', 'integer'],
+            'cc3' => ['required_if:cc1,1,2,3', 'integer'],
+
+            'sqd0' => ['required', 'integer'],
+            'sqd1' => ['required', 'integer'],
+            'sqd2' => ['required', 'integer'],
+            'sqd3' => ['required', 'integer'],
+            'sqd4' => ['required', 'integer'],
+            'sqd5' => ['required', 'integer'],
+            'sqd6' => ['required', 'integer'],
+            'sqd7' => ['required', 'integer'],
+            'sqd8' => ['required', 'integer'],
+
+            'suggestions' => ['nullable', 'string'],
+            'email_address' => ['nullable', 'email'],
+            'client_category_other' => ['nullable', 'string'],
+            'who_to_evaluate_other' => ['nullable', 'string'],
+        ]);
+
+        $csm = ClientSatisfactionMeasurement::create(array_merge($validated, [
+            'job_order_id' => $jobOrder->id,
+        ]));
+
+        // mark action report csm_completed
+        $actionReport->update(['csm_completed' => true]);
+
+        return response()->json([
+            'message' => 'CSM saved',
+            'data' => $csm,
+        ], 201);
     }
 }

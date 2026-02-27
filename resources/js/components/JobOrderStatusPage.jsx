@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import JobOrderModal from './JobOrderModal';
 import JobOrderOngoingModal from './JobOrderOngoingModal';
+import StatusIndicator from './ui/StatusIndicator';
 import { Navigate } from 'react-router-dom';
 
 export default function JobOrderStatusPage({ showNotification }) {
@@ -193,6 +194,17 @@ export default function JobOrderStatusPage({ showNotification }) {
                       >
                         {o.action_report?.status}
                       </span>
+
+                      {/* Show waiting/confirmation indicator when an action report exists */}
+                      {o.action_report && (
+                        <div className="mt-1">
+                          <StatusIndicator
+                            status={o.action_report?.status}
+                            actionReport={o.action_report}
+                            requesterId={o.requester?.id}
+                          />
+                        </div>
+                      )}
                     </div>
                   </td>
 

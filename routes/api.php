@@ -50,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Action Reports routes
     Route::post('/job-orders/{jobOrder}/action-report', [ActionReportController::class, 'store']);
     Route::put('/job-orders/{jobOrder}/action-report', [ActionReportController::class, 'update']);
+    Route::post('/job-orders/{jobOrder}/action-report/csm', [ActionReportController::class, 'storeCsm']);
     Route::put('/job-orders/{jobOrder}/action-report/unserviceable', [ActionReportController::class, 'updateUnserviceable']);  
 
     // Upload supporting files

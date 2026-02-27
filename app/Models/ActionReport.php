@@ -28,6 +28,7 @@ class ActionReport extends Model
         'confirmed_at',
         'confirmed_by',
         'remarks',
+    'csm_completed',
 
         // ADD THESE FIELDS
         'item',               // Item field
@@ -45,6 +46,7 @@ class ActionReport extends Model
         'date_finished' => 'datetime',
         'confirmed_at' => 'datetime',
         'conformed' => 'boolean',
+        'csm_completed' => 'boolean',
     ];
 
     /*

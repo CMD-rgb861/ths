@@ -31,6 +31,7 @@ class JobOrderController extends Controller
             'categories',
             'attachments',
             'actionReport.servicedBy',
+            'clientSatisfactionMeasurements',
         ])->orderBy('created_at', 'desc');
 
         // If the request is from an admin and the 'created_after' parameter is present
@@ -97,6 +98,7 @@ class JobOrderController extends Controller
             'actionReport.servicedBy',
             'actionReport.acceptedBy',
             'actionReport.cancelledBy',
+            'clientSatisfactionMeasurements',
         ]);
     }
 
@@ -199,6 +201,7 @@ class JobOrderController extends Controller
                 'categories',
                 'attachments',
                 'actionReport',
+                'clientSatisfactionMeasurements',
             ]);
         });
     }
@@ -323,7 +326,8 @@ class JobOrderController extends Controller
                     'requester',
                     'categories',
                     'attachments',
-                    'actionReport.servicedBy',
+                        'actionReport.servicedBy',
+                        'clientSatisfactionMeasurements',
                     'actionReport.acceptedBy',
                     'actionReport.cancelledBy',
                 ]),

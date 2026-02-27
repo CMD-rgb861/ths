@@ -270,11 +270,11 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                         {/* If the job is Ongoing, display StatusIndicator below the badge */}
                         {j.action_report?.status === 'Ongoing' && (
                           <div className="mt-1">
-                            <StatusIndicator
-                              status={j.action_report?.status}
-                              isConformed={j.action_report?.conformed}
-                              requesterId={j.requested_by} // Pass the requester ID
-                            />
+                                <StatusIndicator
+                                  status={j.action_report?.status}
+                                  actionReport={j.action_report}
+                                  requesterId={j.requester?.id} // Pass the requester ID
+                                />
                           </div>
                         )}
                       </div>

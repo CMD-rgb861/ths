@@ -295,7 +295,7 @@ class CompletedReportController extends Controller
 
         // Overlay approved by name
         if (!empty($jobOrder->approver->name ?? null)) {
-            $pdf->SetXY($coords['requester']['x'] + $labelWidth, $coords['requester']['y'] + 2);
+            $pdf->SetXY($coords['requester']['x'] + $labelWidth, $coords['requester']['y'] + 6);
             $pdf->SetFont($arialN, '', 10);
             $pdf->Cell($lineWidth, 6, $jobOrder->approver->name, 0, 1, 'L');
         }
