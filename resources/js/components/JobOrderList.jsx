@@ -280,7 +280,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                   {isAdmin && (
                     <th className="px-6 py-3 font-medium">Requester</th>
                   )}
-                  <th className="px-6 py-3 font-medium">Status</th>
+                  <th className="px-6 py-3 font-medium text-center">Status</th>
                   <th className="px-6 py-3 font-medium">Actions</th>
                 </tr>
               </thead>

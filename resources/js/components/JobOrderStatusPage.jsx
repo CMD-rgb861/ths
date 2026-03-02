@@ -35,28 +35,21 @@ export default function JobOrderStatusPage({ showNotification }) {
 
   /* ================= LOAD ORDERS ================= */
   const loadOrders = useCallback(() => {
-    console.log("LOAD ORDERS CALLED");
     setLoading(true);
 
     axios
-      .get('/job-orders', { params: { page, search } })
+      .get('/job-orders', {
+        params: { page, search, status: formattedStatus }
+      })
       .then((res) => {
-        const rows = Array.isArray(res.data?.data)
-          ? res.data.data
-          : [];
-
-        const filtered = rows.filter(
-          (o) =>
-            (o.action_report?.status || 'Pending') ===
-            formattedStatus
-        );
-
-        setOrders(filtered);
-        setLastPage(res.data?.last_page || 1);
+        const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+        setOrders(rows);
+        setLastPage(res.data?.meta?.last_page || 1);
       })
       .catch((err) => {
         console.error('Load orders failed:', err);
         setOrders([]);
+        setLastPage(1);
       })
       .finally(() => setLoading(false));
   }, [page, search, formattedStatus]);

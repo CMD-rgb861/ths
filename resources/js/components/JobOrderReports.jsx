@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import JobOrderStatusSummary from './JobOrderStatusSummary';
@@ -19,6 +19,7 @@ export default function JobOrderReports() {
     from: '',
     to: '',
   });
+  const [totals, setTotals] = useState({});
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [itDirector, setItDirector] = useState(null);
@@ -27,29 +28,37 @@ export default function JobOrderReports() {
   const [selectedTab, setSelectedTab] = useState('distribution'); // Default tab is 'distribution'
 
   /* ---------------- FETCH DATA ---------------- */
-  useEffect(() => {
-    setLoading(true);
+useEffect(() => {
+  setLoading(true);
 
-    axios.get('/job-orders')
-      .then(res => {
-        const rows = Array.isArray(res.data?.data) ? res.data.data : [];
-        setOrders(rows);
-        setFiltered(rows);
-      })
-      .catch(() => {
-        setOrders([]);
-        setFiltered([]);
-        showNotification("error", "Failed to load job orders", "An error occurred while fetching the data. Please try again later.");
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  axios.get('/job-orders')
+  .then(res => {
+    const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+    setOrders(rows);
+    setFiltered(rows);
 
-  // Fetch current IT Director signatory to use as a fallback for accepted-by display
-  useEffect(() => {
-    axios.get('/signatory/it-director')
-      .then(res => setItDirector(res.data))
-      .catch(() => setItDirector(null));
-  }, []);
+      setTotals(res.data.totals || {});
+
+    })
+    .catch(() => {
+      setOrders([]);
+      setFiltered([]);
+      setTotals({});
+      showNotification(
+        "error",
+        "Failed to load job orders",
+        "An error occurred while fetching the data. Please try again later."
+      );
+    })
+    .finally(() => setLoading(false));
+}, []);
+
+/* ---------------- FETCH IT DIRECTOR ---------------- */
+useEffect(() => {
+  axios.get('/signatory/it-director')
+    .then(res => setItDirector(res.data))
+    .catch(() => setItDirector(null));
+}, []);
 
   /* ---------------- APPLY FILTERS ---------------- */
   useEffect(() => {
@@ -64,11 +73,13 @@ export default function JobOrderReports() {
     }
 
     if (filters.from) {
-      data = data.filter(o => o.created_at >= filters.from);
+      const fromDate = new Date(filters.from + 'T00:00:00'); // start of day
+      data = data.filter(o => new Date(o.created_at) >= fromDate);
     }
 
     if (filters.to) {
-      data = data.filter(o => o.created_at <= filters.to);
+      const toDate = new Date(filters.to + 'T23:59:59'); // end of day
+      data = data.filter(o => new Date(o.created_at) <= toDate);
     }
 
     if (search) {
@@ -88,10 +99,9 @@ export default function JobOrderReports() {
 
   /* ---------------- DEPARTMENT DISTRIBUTION PIE CHART DATA ---------------- */
   // Department Pie Chart Data
-  const getDepartmentPieData = () => {
+  const getDepartmentPieData = (data) => {
     const departmentCounts = {};
-
-    filtered.forEach(order => {
+    data.forEach(order => {
       const departmentName = order.department?.name;
       if (departmentName) {
         departmentCounts[departmentName] = (departmentCounts[departmentName] || 0) + 1;
@@ -99,29 +109,22 @@ export default function JobOrderReports() {
     });
 
     const labels = Object.keys(departmentCounts);
-    const data = Object.values(departmentCounts);
+    const values = Object.values(departmentCounts);
 
-    if (labels.length === 0 || data.length === 0) {
-      // Handle the case where no data is found
-      return {
-        labels: ['No Data'],
-        datasets: [{
-          data: [100],
-          backgroundColor: ['#FF6384'],
-        }],
-      };
+    if (!labels.length) {
+      return { labels: ['No Data'], datasets: [{ data: [100], backgroundColor: ['#FF6384'] }] };
     }
 
     return {
       labels,
       datasets: [{
-        data,
+        data: values,
         backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'],
       }],
     };
   };
   // Compute pie data once so we can check for empty/no-data case before rendering
-  const pieData = getDepartmentPieData();
+  const pieData = useMemo(() => getDepartmentPieData(filtered), [filtered]);
   // Pie chart options with percentage in tooltips and custom legend
   const pieChartOptions = {
     responsive: true,
@@ -283,7 +286,7 @@ export default function JobOrderReports() {
       </div>
 
       {/* STATUS SUMMARY */}
-      <JobOrderStatusSummary orders={filtered} />
+      <JobOrderStatusSummary totals={totals} />
 
       {/* SEARCH BAR */}
       <div className="bg-white border border-gray-200 rounded-xl p-4">

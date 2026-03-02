@@ -2,25 +2,16 @@
 
 import { useNavigate } from 'react-router-dom';
 
-export default function JobOrderStatusSummary({ orders = [] }) {
+export default function JobOrderStatusSummary({ totals = {} }) {
   const navigate = useNavigate();
 
   const counts = {
-    Pending: 0,
-    Ongoing: 0,
-    Completed: 0,
-    Cancelled: 0,
-    Unserviceable: 0, // ✅ ADDED
+    Pending: totals.Pending || 0,
+    Ongoing: totals.Ongoing || 0,
+    Completed: totals.Completed || 0,
+    Cancelled: totals.Cancelled || 0,
+    Unserviceable: totals.Unserviceable || 0,
   };
-
-  // COUNT STATUSES
-  orders.forEach(o => {
-    const status = o.action_report?.status || 'Pending';
-
-    if (counts[status] !== undefined) {
-      counts[status]++;
-    }
-  });
 
   const styles = {
     Pending: {
@@ -63,20 +54,10 @@ export default function JobOrderStatusSummary({ orders = [] }) {
             }
             className={`rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition text-left ${style.bg}`}
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-gray-500">
-                  {status}
-                </div>
-
-                <div className={`mt-2 text-3xl font-semibold ${style.text}`}>
-                  {count}
-                </div>
-              </div>
-
-              <div
-                className={`px-3 py-1 text-xs font-medium rounded-full ${style.badge}`}
-              >
+            <div className="flex flex-col items-center text-center">
+              <div className="text-sm font-medium text-gray-500">{status}</div>
+              <div className={`mt-2 text-3xl font-semibold ${style.text}`}>{count}</div>
+              <div className={`mt-2 px-3 py-1 text-xs font-medium rounded-full ${style.badge}`}>
                 {status}
               </div>
             </div>

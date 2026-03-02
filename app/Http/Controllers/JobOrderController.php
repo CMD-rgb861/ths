@@ -21,7 +21,7 @@ class JobOrderController extends Controller
     /*
     |-------------------------------------------------------------------------- 
     | INDEX 
-    |-------------------------------------------------------------------------- 
+    |--------------------------------------------------------------------------     
     */
    public function index(Request $request)
     {
@@ -77,9 +77,32 @@ class JobOrderController extends Controller
             $query->whereDate('date', '<=', $request->date_to);
         }
 
-        return $query->paginate(10);
-    }
+        // Clone query to compute totals without affecting pagination
+        $totalsQuery = clone $query;
 
+        // Compute totals for each status
+        $totals = [
+            'Pending' => (clone $totalsQuery)->where('status', 'Pending')->count(),
+            'Ongoing' => (clone $totalsQuery)->where('status', 'Ongoing')->count(),
+            'Completed' => (clone $totalsQuery)->where('status', 'Completed')->count(),
+            'Cancelled' => (clone $totalsQuery)->where('status', 'Cancelled')->count(),
+            'Unserviceable' => (clone $totalsQuery)->where('status', 'Unserviceable')->count(),
+        ];
+
+        // Paginated data
+        $jobs = $query->paginate(10);
+
+        return response()->json([
+            'data' => $jobs->items(),
+            'meta' => [
+                'current_page' => $jobs->currentPage(),
+                'last_page' => $jobs->lastPage(),
+                'per_page' => $jobs->perPage(),
+                'total' => $jobs->total(),
+            ],
+            'totals' => $totals, // ✅ Added totals for frontend cards
+        ]);
+    }
     /*
     |-------------------------------------------------------------------------- 
     | SHOW 
