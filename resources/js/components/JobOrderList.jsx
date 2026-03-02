@@ -32,24 +32,25 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   const isAdmin = user?.role === 'admin';
 
   /* ================= FETCH JOBS ================= */
-  const fetchJobs = (searchValue = search, pageValue = page) => {
-    if (loading) return;
+  const fetchJobs = async (searchValue = search, pageValue = page) => {
+    if (loading) return; // Prevent duplicate fetches
 
     setLoading(true);
 
-    axios.get('/job-orders', {
-      params: { search: searchValue }
-    })
-    .then(res => {
+    try {
+      const res = await axios.get('/job-orders', {
+        params: { search: searchValue } // send search param to backend
+      });
+
       let data = res.data.data || [];
 
       // ================= FILTER =================
+      // Keep only Pending & Ongoing
       data = data.filter(job =>
-        ['Pending', 'Ongoing'].includes(
-          job.action_report?.status || 'Pending'
-        )
+        ['Pending', 'Ongoing'].includes(job.action_report?.status || 'Pending')
       );
 
+      // For non-admin, show only their own jobs
       if (!isAdmin) {
         data = data.filter(job => job.requested_by === userId);
       }
@@ -77,7 +78,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         next_page_url: pageValue < totalPages
       });
 
-      // ================= TRACK NEW PENDING (ADMIN) =================
+      // ================= TRACK NEW PENDING JOBS (ADMIN ONLY) =================
       if (isAdmin) {
         const currentPendingJobs = data.filter(
           job => job.action_report?.status === 'Pending' && !job.notified
@@ -89,15 +90,14 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
 
         setNewPendingJobs(prev => [...prev, ...newPending]);
       }
-    })
-    .catch(error => {
+
+    } catch (error) {
       console.log("API ERROR:", error.response || error.message);
       setJobs([]);
       setMeta({});
-    })
-    .finally(() => {
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   /* ================= EFFECTS ================= */
@@ -150,16 +150,50 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
 
   /* ================= MARK JOBS AS VIEWED ================= */
   const handleNewJobsModalClose = () => {
-    // Once the user closes the modal, mark the new pending jobs as viewed
-    setNewPendingJobs([]); // Clear the new pending jobs after viewing them
-    setIsNewJobsModalOpen(false); // Close the modal
-    // Optionally, update the backend here as well
-    axios.post('/job-orders/mark-pending-notified', { jobs: newPendingJobs.map(job => job.id) })
-      .then(response => {
-        console.log('Jobs marked as notified:', response.data);
+    setIsNewJobsModalOpen(false);
+
+    // Update backend so that these jobs are no longer new
+    if (newPendingJobs.length > 0) {
+      axios.post('/job-orders/mark-pending-notified', {
+        jobs: newPendingJobs.map(job => job.id)
+      })
+      .then(() => {
+        // After marking as notified, remove from local state
+        // setNewPendingJobs([]);
+        fetchJobs(search, page); // refresh list
+      })
+      .catch(err => console.error(err));
+    }
+  };
+
+  // New Notification Modal HANDLERS
+
+  const isJobNew = (jobId) => {
+    return newPendingJobs.some(job => job.id === jobId);
+  };
+
+  const handleViewFromNotification = (job) => {
+    setIsNewJobsModalOpen(false);
+
+    if (job.action_report?.status === 'Ongoing') {
+      setSelectedOngoingJob(job);
+      setOngoingModalOpen(true);
+    } else {
+      setSelectedJob(job);
+      setModalOpen(true);
+    }
+  };
+
+  const handleMarkAllViewed = () => {
+    const jobIds = newPendingJobs.map(job => job.id);
+
+    axios.post('/job-orders/mark-pending-notified', { jobs: jobIds })
+      .then(() => {
+        setNewPendingJobs([]);
+        setIsNewJobsModalOpen(false);
       })
       .catch(error => {
-        console.error('Error marking jobs as notified:', error.response || error.message);
+        console.error('Error marking jobs as notified:', error);
       });
   };
 
@@ -255,7 +289,20 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                 {jobs.map((j) => (
                   <tr key={j.id} className="hover:bg-gray-50 transition">
                     <td className="px-6 py-4 font-medium text-gray-900">
-                      {j.job_order_no}
+                      <div className="flex items-center gap-2">
+                        {isJobNew(j.id) && (
+                          <span className="relative flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+                          </span>
+                        )}
+                        {j.job_order_no}
+                        {isJobNew(j.id) && (
+                          <span className="px-2 py-1 text-xs bg-red-600 text-white rounded-full">
+                            NEW
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     <td className="px-6 py-4 text-gray-700">
@@ -376,6 +423,8 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         isOpen={isNewJobsModalOpen}
         onClose={handleNewJobsModalClose} // Use the new function to handle closing the modal
         newPendingJobs={newPendingJobs}
+        onViewJob={handleViewFromNotification}
+        onMarkAllViewed={handleMarkAllViewed}
       />
     </div>
   );
