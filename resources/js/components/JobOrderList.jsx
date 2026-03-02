@@ -9,6 +9,8 @@ import JobOrderForm from './JobOrderForm';
 import { useLocation } from 'react-router-dom'; // Import useLocation
 import NewJobOrdersModal from './NewJobOrdersModal'; // Import NewJobOrdersModal
 
+const PER_PAGE = 10; // or whatever you prefer
+
 export default function JobOrderList({ showNotification, setNewPendingJobs, newPendingJobs }) {
   const location = useLocation();  // Get current location/path
   
@@ -31,17 +33,17 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
 
   /* ================= FETCH JOBS ================= */
   const fetchJobs = (searchValue = search, pageValue = page) => {
-    if (loading) return; // Prevent duplicate fetching
+    if (loading) return;
 
     setLoading(true);
 
     axios.get('/job-orders', {
-      params: { search: searchValue, page: pageValue }
+      params: { search: searchValue }
     })
     .then(res => {
-      let data = res.data.data;
+      let data = res.data.data || [];
 
-      // Only show Pending & Ongoing
+      // ================= FILTER =================
       data = data.filter(job =>
         ['Pending', 'Ongoing'].includes(
           job.action_report?.status || 'Pending'
@@ -52,20 +54,40 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         data = data.filter(job => job.requested_by === userId);
       }
 
-      setJobs(data);
-      setMeta(res.data);
+      // ================= OPTION 3 (Auto Go Back if Empty Page) =================
+      const totalPages = Math.ceil(data.length / PER_PAGE) || 1;
 
-      // Track new pending job orders (this only applies to admin)
+      if (pageValue > totalPages) {
+        setPage(totalPages);
+        setLoading(false);
+        return;
+      }
+
+      // ================= OPTION 2 (Manual Pagination) =================
+      const start = (pageValue - 1) * PER_PAGE;
+      const end = start + PER_PAGE;
+      const paginatedData = data.slice(start, end);
+
+      setJobs(paginatedData);
+
+      setMeta({
+        current_page: pageValue,
+        last_page: totalPages,
+        prev_page_url: pageValue > 1,
+        next_page_url: pageValue < totalPages
+      });
+
+      // ================= TRACK NEW PENDING (ADMIN) =================
       if (isAdmin) {
-        const currentPendingJobs = data.filter(job => job.action_report?.status === 'Pending' && !job.notified);
-
-        // Track only newly created pending jobs (not the ones already in the list)
-        const newPending = currentPendingJobs.filter(
-          (job) => !newPendingJobs.some(existingJob => existingJob.id === job.id)
+        const currentPendingJobs = data.filter(
+          job => job.action_report?.status === 'Pending' && !job.notified
         );
 
-        // Use the passed setNewPendingJobs to update the state from parent
-        setNewPendingJobs((prev) => [...prev, ...newPending]);
+        const newPending = currentPendingJobs.filter(
+          job => !newPendingJobs.some(existingJob => existingJob.id === job.id)
+        );
+
+        setNewPendingJobs(prev => [...prev, ...newPending]);
       }
     })
     .catch(error => {

@@ -243,36 +243,43 @@ class CompletedReportController extends Controller
             }
         }
 
-        // --------------------------
-        // REQUEST BLOCK (Dynamic Height)
-        // --------------------------
-        $reqX = $coords['request']['x'];
-        $reqW = $coords['request']['w'];
+        
+        // =========================
+        // REQUEST BLOCK
+        // =========================
+
+        // Label "Request:"
         $pdf->SetFont($arialNB, '', 9);
-        $pdf->SetXY($reqX, $coords['request']['y'] - 23);
+        $pdf->SetXY($coords['request']['x'], $coords['request']['y'] - 23);
         $pdf->Cell(0, 6, 'Request:', 0, 1, 'L');
 
-        $pdf->SetFont($arialN, '', 9);
-        $reqText = $jobOrder->request_description ?? '';
-        $reqStartX = $reqX + 2;
-        $reqWidth = $reqW - 4;
-        $reqStartY = $pdf->GetY();
+        // Set text font (underlined)
+        $pdf->SetFont($arialN, 'U', 9);
+        $reqText = $jobOrder->request_description ?? ''; // text from DB
 
-        if (!empty($reqText)) {
-            $pdf->SetXY($reqStartX, $reqStartY);
-            $pdf->SetFont($arialN, 'U', 9);
-            $pdf->MultiCell($reqWidth, 6, $reqText, 0, 'L');
-            $pdf->SetFont($arialN, '', 9);
-            $requestEndY = $pdf->GetY();
-        } else {
-            // 3 blank lines
-            for ($i=0; $i<3; $i++) {
-                $pdf->Line($reqStartX, $reqStartY + ($i*6), $reqStartX + $reqWidth, $reqStartY + ($i*6));
-            }
-            $requestEndY = $reqStartY + 3*6;
+        $reqWidth = $coords['request']['w'] - 4;  // text block width
+        $lineHeight = 4;                           // height per line
+        $minLines = 4;                              // minimum lines to show
+
+        // 1️⃣ Print the text
+        $startY = $pdf->GetY();
+        $pdf->SetXY($coords['request']['x'] + 2, $startY -0.5);
+        $pdf->MultiCell($reqWidth, $lineHeight, $reqText, 0, 'L');
+
+        // 2️⃣ Count how many lines the text actually used
+        $usedLines = ceil($pdf->getNumLines($reqText, $reqWidth));
+        $usedLines = max(1, $usedLines);
+
+        // 3️⃣ Draw extra underlines for remaining lines
+        for ($i = 0; $i < $minLines; $i++) {
+            $lineY = $startY + ($i * $lineHeight) + ($lineHeight - 1); // adjust for underline
+            $pdf->SetLineWidth(0.3);
+            $pdf->Line($coords['request']['x'] + 2, $lineY, $coords['request']['x'] + $reqWidth, $lineY);
         }
 
-        $pdf->Ln($requestEndY - $pdf->GetY() + 2); // Dynamic spacing
+        // 4️⃣ Move cursor below the block for next field
+        $requestEndY = $startY + ($minLines * $lineHeight);
+        $pdf->SetY($requestEndY + 2);
 
         // --------------------------
         // REQUESTER BLOCK
@@ -400,24 +407,30 @@ class CompletedReportController extends Controller
         $pdf->SetX($rightCol['x'] + 2);
         $pdf->SetFont($arialNB, '', 10);
         $pdf->Cell(0, 6, '*Diagnosis:', 0, 1, 'L');
-        $diagStartY = $pdf->GetY();
-        $diagText = $jobOrder->actionReport->diagnosis ?? '';
-        $diagStartX = $rightCol['x'] + 4;
-        $diagWidth = $rightCol['width'] - 8;
 
-        if (!empty($diagText)) {
-            $pdf->SetXY($diagStartX, $diagStartY);
-            $pdf->SetFont($arialN, 'U', 9);
-            $pdf->MultiCell($diagWidth, 6, $diagText, 0, 'L');
-            $diagEndY = $pdf->GetY();
-        } else {
-            for ($i=0; $i<4; $i++) {
-                $pdf->Line($diagStartX, $diagStartY + ($i*6), $diagStartX + $diagWidth, $diagStartY + ($i*6));
-            }
-            $diagEndY = $diagStartY + 4*6;
+        $diagText = $jobOrder->actionReport->diagnosis ?? '';
+        $diagWidth = $rightCol['width'] - 8;
+        $lineHeight = 4;
+        $minLines = 4; // minimum lines to show
+
+        $startY = $pdf->GetY();
+        $pdf->SetXY($rightCol['x'] + 4, $startY - 0.5);
+        $pdf->SetFont($arialN, 'U', 9);
+        $pdf->MultiCell($diagWidth, $lineHeight, $diagText, 0, 'L');
+
+        $usedLines = ceil($pdf->getNumLines($diagText, $diagWidth));
+        $usedLines = max(1, $usedLines);
+
+        // Draw extra underlines
+        for ($i = 0; $i < $minLines; $i++) {
+            $lineY = $startY + ($i * $lineHeight) + ($lineHeight - 1);
+            $pdf->SetLineWidth(0.3);
+            $pdf->Line($rightCol['x'] + 4, $lineY, $rightCol['x'] + 6 + $diagWidth, $lineY);
         }
 
-        $pdf->Ln($diagEndY - $pdf->GetY() + 2);
+        // Move cursor below the block
+        $diagEndY = $startY + ($minLines * $lineHeight);
+        $pdf->SetY($diagEndY + 2);
 
         // --------------------------
         // ACTION TAKEN
@@ -425,25 +438,30 @@ class CompletedReportController extends Controller
         $pdf->SetX($rightCol['x'] + 2);
         $pdf->SetFont($arialNB, '', 10);
         $pdf->Cell(0, 6, '*Action Taken:', 0, 1, 'L');
-        $actionStartY = $pdf->GetY();
-        $actText = $jobOrder->actionReport->action_taken ?? '';
-        $actStartX = $rightCol['x'] + 4;
-        $actWidth = $rightCol['width'] - 8;
 
-        if (!empty($actText)) {
-            $pdf->SetXY($actStartX, $actionStartY);
-            $pdf->SetFont($arialN, 'U', 9);
-            $pdf->MultiCell($actWidth, 6, $actText, 0, 'L');
-            $actEndY = $pdf->GetY();
-        } else {
-            for ($i=0; $i<4; $i++) {
-                $pdf->Line($actStartX, $actionStartY + ($i*6), $actStartX + $actWidth, $actionStartY + ($i*6));
-            }
-            $actEndY = $actionStartY + 4*6;
+        $actText = $jobOrder->actionReport->action_taken ?? '';
+        $actWidth = $rightCol['width'] - 8;
+        $lineHeight = 4;
+        $minLines = 4; // minimum lines to show
+
+        $startY = $pdf->GetY();
+        $pdf->SetXY($rightCol['x'] + 4, $startY - 0.5);
+        $pdf->SetFont($arialN, 'U', 9);
+        $pdf->MultiCell($actWidth, $lineHeight, $actText, 0, 'L');
+
+        $usedLines = ceil($pdf->getNumLines($actText, $actWidth));
+        $usedLines = max(1, $usedLines);
+
+        // Draw extra underlines
+        for ($i = 0; $i < $minLines; $i++) {
+            $lineY = $startY + ($i * $lineHeight) + ($lineHeight - 1);
+            $pdf->SetLineWidth(0.3);
+            $pdf->Line($rightCol['x'] + 4, $lineY, $rightCol['x'] + 6 + $actWidth, $lineY);
         }
 
-        $pdf->Ln($actEndY - $pdf->GetY() + 2);
-
+        // Move cursor below the block
+        $actEndY = $startY + ($minLines * $lineHeight);
+        $pdf->SetY($actEndY + 2);
         // --------------------------
         // FINAL FIELDS (STATUS / SERVICED BY / DATES / CONFORME)
         // --------------------------
@@ -537,5 +555,29 @@ class CompletedReportController extends Controller
         $pdf->MultiCell($fullLineWidth, 5, $noteBody, 0, 'L', false);
 
         return $pdf->Output('Job_Order_Report.pdf', 'I');
+        /**
+         * Print a text block with at least $minLines lines.
+         */
+        function printTextBlock($pdf, $x, $y, $width, $text, $lineHeight = 6, $arialFont, $minLines = 4) {
+            $pdf->SetXY($x, $y);
+            if (!empty($text)) {
+                $pdf->SetFont($arialFont, 'U', 9);
+                $pdf->MultiCell($width, $lineHeight, $text, 0, 'L');
+                $usedHeight = $pdf->GetY() - $y;
+                $usedLines = ceil($usedHeight / $lineHeight);
+            } else {
+                $usedLines = 0;
+            }
+            
+            // Add empty lines if less than $minLines
+            $remainingLines = max(0, $minLines - $usedLines);
+            for ($i = 0; $i < $remainingLines; $i++) {
+                $lineY = $pdf->GetY() + ($i * $lineHeight);
+                $pdf->Line($x, $lineY, $x + $width, $lineY);
+            }
+
+            // Move the cursor to the end of the block
+            $pdf->SetY($y + max($minLines, $usedLines) * $lineHeight);
+        }
     }
 }
