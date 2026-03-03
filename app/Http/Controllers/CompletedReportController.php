@@ -6,6 +6,7 @@ use TCPDF;
 use TCPDF_FONTS;
 use Carbon\Carbon;
 use App\Models\JobOrder;
+use App\PDF\CSMPageBuilder;
 
 class CompletedReportController extends Controller
 {
@@ -553,6 +554,9 @@ class CompletedReportController extends Controller
         $pdf->SetFont($arialN, '', 8);
         $pdf->SetX($labelX);
         $pdf->MultiCell($fullLineWidth, 5, $noteBody, 0, 'L', false);
+
+        // PAGE 2 content (Client Satisfaction Measurement)
+        CSMPageBuilder::build($pdf, $jobOrder);
 
         return $pdf->Output('Job_Order_Report.pdf', 'I');
         /**

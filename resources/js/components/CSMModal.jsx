@@ -235,7 +235,7 @@ export default function CSMModal({
         <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-lg shadow-sm">
           <h4 className="text-sm font-semibold text-blue-700">HELP US SERVE YOU BETTER!</h4>
           <p className="mt-2 text-sm text-blue-800">
-            This Client Satisfaction Measurement (CSM) tracks the customer experiences of government offices. Your feedback will help improve service. Personal info is confidential.
+            This Client Satisfaction Measurement (CSM) tracks the customer experiences of government offices. Your feedback will help this office provide a better service. Personal information shared will be kept confidential and you always have the option to not answer this form.
           </p>
         </div>
       </div>

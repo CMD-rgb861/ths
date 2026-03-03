@@ -83,6 +83,9 @@ class JobOrder extends Model
     {
         return $this->hasMany(ClientSatisfactionMeasurement::class);
     }
-
+    public function csm()
+    {
+        return $this->hasOne(ClientSatisfactionMeasurement::class);
+    }
 
 }
