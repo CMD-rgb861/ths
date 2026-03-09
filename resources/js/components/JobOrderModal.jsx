@@ -48,9 +48,17 @@ export default function JobOrderModal({
           if (updatedJob.action_report) {
             updatedJob.action_report.conformed = undefined;
           }
+          
+          // Mark notifications for this job order as read when accepted
+          axios.post(`/job-orders/${job.id}/mark-notifications-read`)
+            .catch(err => console.error('Failed to mark notifications as read:', err));
+          
+          // Mark the job as notified to remove "NEW" badge
+          axios.post('/job-orders/mark-pending-notified', { jobs: [job.id] })
+            .catch(err => console.error('Failed to mark as notified:', err));
         }
 
-        onStatusChange(updatedJob);
+        onStatusChange(updatedJob, status === 'Ongoing');
         showNotification(
           'success',
           'Job Order Updated',

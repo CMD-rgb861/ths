@@ -434,6 +434,11 @@ const readOnly =
         'You have successfully confirmed the completion of this job.'
       );
 
+      // Mark notifications as read for this job order after confirmation
+      // Don't await - let it run in background without blocking
+      axios.post(`/job-orders/${job.id}/mark-notifications-read`)
+        .catch(err => console.error('Failed to mark notifications as read:', err));
+
       // Optimistic UI update: mark the action_report as confirmed locally
       const updatedJob = {
         ...job,
@@ -451,11 +456,16 @@ const readOnly =
       // Refresh in background to get authoritative data, but don't await it
       loadJob();
     } catch (err) {
-      console.error(err);
+      console.error('Confirmation error details:', err);
+      console.error('Error response:', err.response?.data);
+      console.error('Error status:', err.response?.status);
+      
+      const errorMessage = err.response?.data?.message || 'Something went wrong while confirming.';
+      
       showNotification(
         'error',
         'Confirmation Failed',
-        'Something went wrong while confirming.'
+        errorMessage
       );
     } finally {
       setConfirming(false);

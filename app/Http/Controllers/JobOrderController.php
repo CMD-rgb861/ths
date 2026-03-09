@@ -377,6 +377,23 @@ class JobOrderController extends Controller
     }
 
     /**
+     * Mark all unread notifications for a specific job order as read
+     */
+    public function markNotificationsRead(Request $request, JobOrder $jobOrder)
+    {
+        $user = $request->user();
+        
+        // Mark all unread notifications related to this job order as read
+        $user->unreadNotifications()
+            ->whereJsonContains('data->job_order_id', $jobOrder->id)
+            ->update(['read_at' => now()]);
+
+        return response()->json([
+            'message' => 'Notifications marked as read.'
+        ], 200);
+    }
+
+    /**
      * Approve a job order by setting approved_by and approval_date.
      * Expects: approved_by (signatory id) and optional approval_date (date string). If approval_date is omitted, now() is used.
      */

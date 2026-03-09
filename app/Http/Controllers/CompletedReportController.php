@@ -271,15 +271,16 @@ class CompletedReportController extends Controller
         $usedLines = ceil($pdf->getNumLines($reqText, $reqWidth));
         $usedLines = max(1, $usedLines);
 
-        // 3️⃣ Draw extra underlines for remaining lines
-        for ($i = 0; $i < $minLines; $i++) {
+        // 3️⃣ Draw underlines for all lines (use the greater of minLines or usedLines)
+        $totalLines = max($minLines, $usedLines);
+        for ($i = 0; $i < $totalLines; $i++) {
             $lineY = $startY + ($i * $lineHeight) + ($lineHeight - 1); // adjust for underline
             $pdf->SetLineWidth(0.3);
             $pdf->Line($coords['request']['x'] + 2, $lineY, $coords['request']['x'] + $reqWidth, $lineY);
         }
 
         // 4️⃣ Move cursor below the block for next field
-        $requestEndY = $startY + ($minLines * $lineHeight);
+        $requestEndY = $startY + ($totalLines * $lineHeight);
         $pdf->SetY($requestEndY + 2);
 
         // --------------------------
@@ -422,15 +423,16 @@ class CompletedReportController extends Controller
         $usedLines = ceil($pdf->getNumLines($diagText, $diagWidth));
         $usedLines = max(1, $usedLines);
 
-        // Draw extra underlines
-        for ($i = 0; $i < $minLines; $i++) {
+        // Draw underlines for all lines (use the greater of minLines or usedLines)
+        $totalLines = max($minLines, $usedLines);
+        for ($i = 0; $i < $totalLines; $i++) {
             $lineY = $startY + ($i * $lineHeight) + ($lineHeight - 1);
             $pdf->SetLineWidth(0.3);
             $pdf->Line($rightCol['x'] + 4, $lineY, $rightCol['x'] + 6 + $diagWidth, $lineY);
         }
 
         // Move cursor below the block
-        $diagEndY = $startY + ($minLines * $lineHeight);
+        $diagEndY = $startY + ($totalLines * $lineHeight);
         $pdf->SetY($diagEndY + 2);
 
         // --------------------------
@@ -447,21 +449,22 @@ class CompletedReportController extends Controller
 
         $startY = $pdf->GetY();
         $pdf->SetXY($rightCol['x'] + 4, $startY - 0.5);
-        $pdf->SetFont($arialN, 'U', 9);
+        $pdf->SetFont($arialN, '', 9);
         $pdf->MultiCell($actWidth, $lineHeight, $actText, 0, 'L');
 
         $usedLines = ceil($pdf->getNumLines($actText, $actWidth));
         $usedLines = max(1, $usedLines);
 
-        // Draw extra underlines
-        for ($i = 0; $i < $minLines; $i++) {
+        // Draw underlines for all lines (use the greater of minLines or usedLines)
+        $totalLines = max($minLines, $usedLines);
+        for ($i = 0; $i < $totalLines; $i++) {
             $lineY = $startY + ($i * $lineHeight) + ($lineHeight - 1);
             $pdf->SetLineWidth(0.3);
             $pdf->Line($rightCol['x'] + 4, $lineY, $rightCol['x'] + 6 + $actWidth, $lineY);
         }
 
         // Move cursor below the block
-        $actEndY = $startY + ($minLines * $lineHeight);
+        $actEndY = $startY + ($totalLines * $lineHeight);
         $pdf->SetY($actEndY + 2);
         // --------------------------
         // FINAL FIELDS (STATUS / SERVICED BY / DATES / CONFORME)

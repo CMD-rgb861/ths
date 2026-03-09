@@ -209,9 +209,9 @@ export default function CSMModal({
     { key: "sqd3", text: "SQD3. The steps (including payment) I needed to do for my transaction were easy and simple." },
     { key: "sqd4", text: "SQD4. I easily found information about my transaction from the office or its website." },
     { key: "sqd5", text: "SQD5. I paid a reasonable amount of fees for my transaction." },
-    { key: "sqd6", text: "SQD6. I feel the office was fair to everyone." },
-    { key: "sqd7", text: "SQD7. I was treated courteously by the staff." },
-    { key: "sqd8", text: "SQD8. I got what I needed from the government office." },
+    { key: "sqd6", text: "SQD6. I feel the office was fair to everyone, or 'walang palakasan', during my transaction." },
+    { key: "sqd7", text: "SQD7. I was treated courteously by the staff, and (if asked for help) the staff was helpful." },
+    { key: "sqd8", text: "SQD8. I got what I needed from the government office, or (if denied) denial of request was sufficiently explained to me." },
   ];
 
   // Render

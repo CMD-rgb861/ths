@@ -246,8 +246,15 @@ class ActionReportController extends Controller
         }
 
         $fileName = "job_orders/{$jobOrder->id}/final_report.pdf";
+        $fullPath = storage_path("app/public/{$fileName}");
+        
+        // Create directory if it doesn't exist
+        $directory = dirname($fullPath);
+        if (!is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
 
-        $pdf->Output(storage_path("app/public/{$fileName}"), 'F');
+        $pdf->Output($fullPath, 'F');
 
         $jobOrder->update([
             'final_report_path' => $fileName

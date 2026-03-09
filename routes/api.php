@@ -78,6 +78,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('auth:sanctum')->get('/job-orders/pending-count', [JobOrderController::class, 'pendingCount']);
     // Add this route to handle marking pending jobs as notified
     Route::post('/job-orders/mark-pending-notified', [JobOrderController::class, 'markPendingNotified']);
+    // Mark notifications as read for a specific job order
+    Route::post('/job-orders/{jobOrder}/mark-notifications-read', [JobOrderController::class, 'markNotificationsRead']);
 
     // Signatory endpoints (IT Director)
     Route::get('/signatory/it-director', [SignatoryController::class, 'show']);

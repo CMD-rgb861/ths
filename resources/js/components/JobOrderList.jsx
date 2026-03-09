@@ -129,7 +129,13 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
     setSelectedOngoingJob(null);
   };
 
-  const handleStatusChange = () => {
+  const handleStatusChange = (updatedJob = null, wasAccepted = false) => {
+    // If the job was just accepted, remove it from newPendingJobs
+    if (wasAccepted && updatedJob) {
+      setNewPendingJobs(prev => prev.filter(job => job.id !== updatedJob.id));
+    }
+    
+    // Refresh the entire list
     fetchJobs();
   };
 
