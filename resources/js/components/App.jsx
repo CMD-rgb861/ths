@@ -1,29 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import JobOrderForm from './JobOrderForm';
 import JobOrderList from './JobOrderList';
 import JobOrderReports from './JobOrderReports';
-import JobOrderStatusPage from './JobOrderStatusPage'; // ✅ ADDED
+import JobOrderStatusPage from './JobOrderStatusPage';
 import UserList from './UserList';
 import Signatories from './Signatories';
 import Login from './Login';
+import ForgotPassword from './ForgotPassword';
 import Notification from './Notification';
 import UserJobHistory from './UserJobHistory';
 
 export default function App() {
   const location = useLocation();
   const [notifications, setNotifications] = useState([]);
-  const [newPendingJobs, setNewPendingJobs] = useState([]); // Track new pending jobs globally
+  const [newPendingJobs, setNewPendingJobs] = useState([]);
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user'));
 
-  const isAuthPage = location.pathname === '/login';
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/forgot_pass';
   const isAdmin = user?.role === 'admin';
 
-  /* ---------------- GLOBAL NOTIFICATION ---------------- */
-  const showNotification = (type, title, message) => {
+  const showNotification = useCallback((type, title, message) => {
     const id = Date.now();
-
     const newNotification = { id, type, title, message };
 
     setNotifications((prev) => [...prev, newNotification]);
@@ -33,11 +32,12 @@ export default function App() {
         prev.filter((notification) => notification.id !== id)
       );
     }, 5000);
-  };
+  }, []);
 
   const navLinkClass = ({ isActive }) =>
-    `px-4 py-2 rounded-lg text-sm font-medium transition
-     ${isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`;
+    isActive
+      ? 'px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white shadow-sm transition-all duration-200'
+      : 'px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200';
 
   const RequireAdmin = ({ children }) => {
     if (!isAdmin) {
@@ -46,15 +46,219 @@ export default function App() {
     return children;
   };
 
-  return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-50 to-gray-100">
+  // Memoize the main content to prevent re-renders when notifications change
+  const mainContent = useMemo(() => (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/forgot_pass" element={<ForgotPassword />} />
 
-      {/* ---------------- NOTIFICATIONS ---------------- */}
-      <div className="fixed top-5 right-5 z-[9999] w-full max-w-xs pointer-events-none">
-        <div className="flex flex-col space-y-3 max-h-[400px] overflow-y-auto">
+      <Route
+        path="/*"
+        element={
+          !token ? (
+            <Navigate to="/login" replace />
+          ) : (
+            <>
+              {!isAuthPage && (
+                <header className="sticky top-0 z-40 bg-white shadow-sm">
+                  <div className="px-6 sm:px-8 lg:px-12">
+                    <div className="flex items-center justify-between h-16">
+                      {/* Logo & Title */}
+                      <div className="flex items-center space-x-4">
+                        <img
+                          src="/images/cmt-logo.png"
+                          alt="CMT Logo"
+                          className="w-10 h-10 object-contain"
+                        />
+                        <div>
+                          <h1 className="text-lg font-semibold text-gray-900 leading-tight">
+                            Technical Hardware System
+                          </h1>
+                          <p className="text-xs text-gray-500 leading-tight">
+                            Job Order Management Portal
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* User Info & Logout */}
+                      <div className="flex items-center space-x-4">
+                        <div className="hidden sm:flex items-center space-x-3 px-3 py-2 bg-gray-50 rounded-lg">
+                          <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
+                            <span className="text-sm font-semibold text-blue-700">
+                              {user?.name?.charAt(0).toUpperCase() || 'U'}
+                            </span>
+                          </div>
+                          <div className="text-left">
+                            <p className="text-sm font-medium text-gray-900 leading-tight">
+                              {user?.name || 'User'}
+                            </p>
+                            <p className="text-xs text-gray-500 leading-tight capitalize">
+                              {user?.role || 'Staff'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            localStorage.removeItem('token');
+                            localStorage.removeItem('user');
+                            window.location.href = '/login';
+                          }}
+                          className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                          title="Logout"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Navigation */}
+                    <div className="border-t border-gray-200">
+                      <nav className="flex space-x-1 py-2 overflow-x-auto">
+                        <NavLink to="/" end className={navLinkClass}>
+                          <span className="flex items-center space-x-2">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <span>Job Orders</span>
+                          </span>
+                        </NavLink>
+                        <NavLink to="/create" className={navLinkClass}>
+                          <span className="flex items-center space-x-2">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            <span>New Request</span>
+                          </span>
+                        </NavLink>
+                        {!isAdmin && (
+                          <NavLink to="/history" className={navLinkClass}>
+                            <span className="flex items-center space-x-2">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span>History</span>
+                            </span>
+                          </NavLink>
+                        )}
+                        {isAdmin && (
+                          <>
+                            <NavLink to="/reports" className={navLinkClass}>
+                              <span className="flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
+                                <span>Reports</span>
+                              </span>
+                            </NavLink>
+                            <NavLink to="/users" className={navLinkClass}>
+                              <span className="flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                </svg>
+                                <span>Users</span>
+                              </span>
+                            </NavLink>
+                            <NavLink to="/signatories" className={navLinkClass}>
+                              <span className="flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                <span>Signatories</span>
+                              </span>
+                            </NavLink>
+                          </>
+                        )}
+                      </nav>
+                    </div>
+                  </div>
+                </header>
+              )}
+
+              <main className="flex-1 bg-gray-50">
+                <div className="px-6 sm:px-8 lg:px-12 py-8">
+                  <Routes>
+                    <Route
+                      path="/"
+                      element={<JobOrderList showNotification={showNotification} setNewPendingJobs={setNewPendingJobs} newPendingJobs={newPendingJobs} />}
+                    />
+                    <Route
+                      path="/create"
+                      element={
+                        <JobOrderForm
+                          showNotification={showNotification}
+                          userRole={user?.role}
+                        />
+                      }
+                    />
+                    <Route
+                      path="/history"
+                      element={<UserJobHistory showNotification={showNotification} />}
+                    />
+                    <Route
+                      path="/reports/status/:status"
+                      element={<JobOrderStatusPage showNotification={showNotification} />}
+                    />
+                    <Route
+                      path="/reports"
+                      element={
+                        <RequireAdmin>
+                          <JobOrderReports />
+                        </RequireAdmin>
+                      }
+                    />
+                    <Route
+                      path="/users"
+                      element={
+                        <RequireAdmin>
+                          <UserList />
+                        </RequireAdmin>
+                      }
+                    />
+                    <Route
+                      path="/signatories"
+                      element={
+                        <RequireAdmin>
+                          <Signatories showNotification={showNotification} />
+                        </RequireAdmin>
+                      }
+                    />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </div>
+              </main>
+
+              {!isAuthPage && (
+                <footer className="bg-white border-t border-gray-200">
+                  <div className="px-6 sm:px-8 lg:px-12 py-4">
+                    <div className="flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 space-y-2 sm:space-y-0">
+                      <p>© {new Date().getFullYear()} IT Support Office. All rights reserved.</p>
+                      <p className="flex items-center space-x-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                        </svg>
+                        <span>Internal Use Only</span>
+                      </p>
+                    </div>
+                  </div>
+                </footer>
+              )}
+            </>
+          )
+        }
+      />
+    </Routes>
+  ), [token, isAuthPage, isAdmin, user, navLinkClass, showNotification, newPendingJobs]);
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* Notifications Container */}
+      <div className="fixed top-4 right-4 z-[9999] w-full max-w-sm pointer-events-none">
+        <div className="flex flex-col space-y-2">
           {[...notifications].reverse().map((notification, index) => (
             <Notification
-              key={`${notification.id}-${index}`}  // Combine ID and index for uniqueness
+              key={`${notification.id}-${index}`}
               id={notification.id}
               type={notification.type}
               title={notification.title}
@@ -69,147 +273,7 @@ export default function App() {
         </div>
       </div>
 
-      <Routes>
-        <Route path="/login" element={<Login />} />
-
-        <Route
-          path="/*"
-          element={
-            !token ? (
-              <Navigate to="/login" replace />
-            ) : (
-              <>
-                {!isAuthPage && (
-                  <header className="sticky top-0 z-40 bg-white border-b border-gray-200">
-                    <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-                      <div>
-                        <h1 className="text-lg font-semibold text-gray-900">
-                          Technical Hardware System
-                        </h1>
-                        <p className="text-xs text-gray-500">
-                          Job Order for Technical Request
-                        </p>
-                      </div>
-
-                      <nav className="flex gap-2 bg-gray-100 p-1.5 rounded-xl">
-                        <NavLink to="/" end className={navLinkClass}>
-                          Job Orders
-                        </NavLink>
-                        <NavLink to="/create" className={navLinkClass}>
-                          New Request
-                        </NavLink>
-                        {!isAdmin && (
-                          <NavLink to="/history" className={navLinkClass}>
-                            History
-                          </NavLink>
-                        )}
-                        {isAdmin && (
-                          <>
-                            <NavLink to="/reports" className={navLinkClass}>
-                              Reports
-                            </NavLink>
-                            <NavLink to="/users" className={navLinkClass}>
-                              Users
-                            </NavLink>
-                            <NavLink to="/signatories" className={navLinkClass}>
-                              Signatories
-                            </NavLink>
-                          </>
-                        )}
-                      </nav>
-                    </div>
-                  </header>
-                )}
-
-                <main className="flex-1">
-                  <div className="max-w-6xl mx-auto px-6 py-10">
-                    <Routes>
-                      {/* MAIN LIST */}
-                      <Route
-                        path="/"
-                        element={<JobOrderList showNotification={showNotification} setNewPendingJobs={setNewPendingJobs} newPendingJobs={newPendingJobs} />}
-                      />
-
-                      {/* CREATE */}
-                      <Route
-                        path="/create"
-                        element={
-                          <JobOrderForm
-                            showNotification={showNotification}
-                            userRole={user?.role}
-                          />
-                        }
-                      />
-
-                      <Route
-                        path="/history"
-                        element={<UserJobHistory showNotification={showNotification} />}
-                      />
-
-                      <Route
-                        path="/reports/status/:status"
-                        element={<JobOrderStatusPage showNotification={showNotification} />}
-                      />
-
-                      {/* REPORTS */}
-                      <Route
-                        path="/reports"
-                        element={
-                          <RequireAdmin>
-                            <JobOrderReports />
-                          </RequireAdmin>
-                        }
-                      />
-
-                      {/* USERS */}
-                      <Route
-                        path="/users"
-                        element={
-                          <RequireAdmin>
-                            <UserList />
-                          </RequireAdmin>
-                        }
-                      />
-
-                      {/* SIGNATORIES */}
-                      <Route
-                        path="/signatories"
-                        element={
-                          <RequireAdmin>
-                            <Signatories />
-                          </RequireAdmin>
-                        }
-                      />
-
-                      {/* FALLBACK */}
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                  </div>
-                </main>
-
-                <div className="text-center py-3">
-                  <button
-                    onClick={() => {
-                      localStorage.removeItem('token');
-                      localStorage.removeItem('user');
-                      window.location.href = '/login';
-                    }}
-                    className="text-sm text-red-600 hover:underline"
-                  >
-                    Logout
-                  </button>
-                </div>
-
-                {!isAuthPage && (
-                  <footer className="bg-white border-t border-gray-200 py-4 text-center text-xs text-gray-500">
-                    © {new Date().getFullYear()} IT Support Office • Internal Use Only
-                  </footer>
-                )}
-              </>
-            )
-          }
-        />
-      </Routes>
+      {mainContent}
     </div>
   );
 }

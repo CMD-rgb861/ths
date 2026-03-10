@@ -65,77 +65,116 @@ export default function CategorySelector({ value = [], onChange }) {
   /* ---------------- RENDER ---------------- */
   return (
     <div className="space-y-4">
-      {/* Section Label */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-900">
-          Categories
-        </h3>
-        <p className="text-xs text-gray-500">
-          Select one or more categories applicable to this request.
-        </p>
-      </div>
-
       {/* Loading State */}
       {loading && (
-        <div className="text-sm text-gray-500">
+        <div className="flex items-center justify-center py-8 text-sm text-gray-500">
+          <svg className="animate-spin h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
           Loading categories...
         </div>
       )}
 
-      {/* Categories List */}
+      {/* Categories List - Two Column Layout */}
       {!loading && mergedCategories.length > 0 && (
-        <div className="space-y-3">
-          {mergedCategories.map(cat => {
-            const selected = value.find(v => v.id === cat.id);
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left Column: Computer Hardware to IP/VoIP Phone */}
+          <div className="space-y-3">
+            {mergedCategories
+              .filter(cat => 
+                ['Computer Hardware', 'Information System', 'Internet Connection', 'Laptop', 'IP/VoIP Phone'].includes(cat.name)
+              )
+              .map(cat => {
+                const selected = value.find(v => v.id === cat.id);
 
-            return (
-              <div
-                key={cat.id}
-                className={`border rounded-lg p-3 transition
-                  ${selected
-                    ? 'border-gray-900 bg-gray-50'
-                    : 'border-gray-200 bg-white'
-                  }`}
-              >
-
-                {/* Checkbox Row */}
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={!!selected}
-                    onChange={() => toggleCategory(cat)}
-                    className="h-4 w-4 text-gray-900 border-gray-300 rounded focus:ring-gray-300"
-                  />
-                  <span className="text-sm text-gray-800">
-                    {cat.name}
-                  </span>
-                </label>
-
-                {/* Others Input */}
-                {cat.name === 'Others' && selected && (
-                  <div className="mt-3">
-                    <input
-                      type="text"
-                      placeholder="Please specify"
-                      value={selected.other_description}
-                      onChange={e =>
-                        updateOther(cat.id, e.target.value)
-                      }
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
-                    />
+                return (
+                  <div
+                    key={cat.id}
+                    className={`border rounded-lg p-4 transition-all ${
+                      selected
+                        ? 'border-blue-500 bg-blue-50 shadow-sm'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!selected}
+                        onChange={() => toggleCategory(cat)}
+                        className="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className={`text-sm font-medium ${
+                        selected ? 'text-blue-900' : 'text-gray-700'
+                      }`}>
+                        {cat.name}
+                      </span>
+                    </label>
                   </div>
-                )}
+                );
+              })}
+          </div>
 
-              </div>
-            );
-          })}
+          {/* Right Column: Rest of categories */}
+          <div className="space-y-3">
+            {mergedCategories
+              .filter(cat => 
+                !['Computer Hardware', 'Information System', 'Internet Connection', 'Laptop', 'IP/VoIP Phone'].includes(cat.name)
+              )
+              .map(cat => {
+                const selected = value.find(v => v.id === cat.id);
+
+                return (
+                  <div
+                    key={cat.id}
+                    className={`border rounded-lg p-4 transition-all ${
+                      selected
+                        ? 'border-blue-500 bg-blue-50 shadow-sm'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!selected}
+                        onChange={() => toggleCategory(cat)}
+                        className="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className={`text-sm font-medium ${
+                        selected ? 'text-blue-900' : 'text-gray-700'
+                      }`}>
+                        {cat.name}
+                      </span>
+                    </label>
+
+                    {/* Others Input */}
+                    {cat.name === 'Others' && selected && (
+                      <div className="mt-3 pl-8">
+                        <input
+                          type="text"
+                          placeholder="Please specify the service needed..."
+                          value={selected.other_description}
+                          onChange={e =>
+                            updateOther(cat.id, e.target.value)
+                          }
+                          className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
         </div>
       )}
 
       {/* Empty State */}
       {!loading && mergedCategories.length === 0 && (
-        <div className="text-sm text-gray-500 border border-gray-200 rounded-lg p-3 bg-gray-50">
-          No categories available.
+        <div className="text-center py-8">
+          <svg className="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+          </svg>
+          <p className="text-sm text-gray-500">No categories available</p>
         </div>
       )}
 

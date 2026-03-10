@@ -3,7 +3,6 @@ import axios from 'axios';
 import UnserviceableModal from './UnserviceableModal';
 import CSMModal from './CSMModal';
 
-const STATUS_OPTIONS = ['Pending', 'Ongoing', 'Cancelled'];
 const TABS = ['Details', 'Dates'];
 
 const Info = memo(({ label, value }) => (
@@ -15,6 +14,8 @@ const Info = memo(({ label, value }) => (
   </div>
 ));
 
+Info.displayName = 'Info';
+
 const Field = memo(({ title, description, children }) => (
   <div className="space-y-1">
     <label className="text-sm font-semibold">{title}</label>
@@ -25,6 +26,8 @@ const Field = memo(({ title, description, children }) => (
   </div>
 ));
 
+Field.displayName = 'Field';
+
 export default function JobOrderOngoingModal({
   jobId,
   isOpen,
@@ -34,6 +37,8 @@ export default function JobOrderOngoingModal({
   isAdmin,
   isEditable = true
 }) {
+  const currentUser = JSON.parse(localStorage.getItem('user'));
+
   const [job, setJob] = useState(null);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -42,9 +47,9 @@ export default function JobOrderOngoingModal({
   const [showConfirmForAdmin, setShowConfirmForAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState(TABS[0]);
   const [isUnserviceableModalOpen, setIsUnserviceableModalOpen] = useState(false);
-  
-
-  const currentUser = JSON.parse(localStorage.getItem('user'));
+  const [csmChecked, setCsmChecked] = useState(false);
+  const [csmCompleted, setCsmCompleted] = useState(false);
+  const [isCsmModalOpen, setIsCsmModalOpen] = useState(false);
 
   const [form, setForm] = useState({
     diagnosis: '',
@@ -56,36 +61,18 @@ export default function JobOrderOngoingModal({
     date_finished: '',
     cancel: false,
     unserviceable: false,
+    remarks: '',
   });
 
-  // CSM (Client Satisfaction Measurement) states
-  const [csmChecked, setCsmChecked] = useState(false);
-  const [csmCompleted, setCsmCompleted] = useState(false);
-  const [isCsmModalOpen, setIsCsmModalOpen] = useState(false);
-  
+  // Computed states
+  const isCompleted = job?.action_report?.status === 'Completed';
+  const isUnserviceable = job?.action_report?.status === 'Unserviceable';
+  const isCancelled = job?.action_report?.status === 'Cancelled';
+  const isConfirmed = !!job?.action_report?.confirmed_at;
+  const isRequester = job?.requester?.id === currentUser?.id;
+  const requesterIsUser = job?.requester?.role === 'user';
 
-  // ================= COMPUTED STATES =================
-
-  const isCompleted =
-    job?.action_report?.status === 'Completed';
-  
-  const isUnserviceable =
-    job?.action_report?.status === 'Unserviceable';
-
-  const isCancelled =
-    job?.action_report?.status === 'Cancelled';
-
-  const isConfirmed =
-    !!job?.action_report?.confirmed_at;
-
-  const isRequester =
-    job?.requester?.id === currentUser?.id;
-    
-
-const readOnly =
-  !isAdmin ||
-  !isEditable ||
-  isCompleted;
+  const readOnly = !isAdmin || !isEditable || isCompleted;
 
   const showConfirmButtonUser =
     !isAdmin &&
@@ -104,7 +91,7 @@ const readOnly =
     form.action_taken &&
     !isConfirmed;
 
-  // ================= FORMATTERS =================
+  // Date formatting utilities
   const formatDisplayDate = (dateString) => {
     if (!dateString) return '—';
 
@@ -113,7 +100,6 @@ const readOnly =
       : dateString;
 
     const d = new Date(isoString);
-
     if (isNaN(d.getTime())) return '—';
 
     return d.toLocaleString('en-US', {
@@ -135,10 +121,8 @@ const readOnly =
       : value;
 
     const d = new Date(isoString);
-
     if (isNaN(d.getTime())) return '';
 
-    // Convert to YYYY-MM-DDTHH:MM for datetime-local
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -148,8 +132,7 @@ const readOnly =
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
-  // ================= LOAD JOB =================
-
+  // Load job order data
   const loadJob = useCallback(() => {
     if (!jobId) return;
 
@@ -161,33 +144,31 @@ const readOnly =
         const data = res.data;
         setJob(data);
 
-        // Update the form state based on the fetched job data
+        const ar = data.action_report;
         setForm({
-          diagnosis: data.action_report?.diagnosis || '',
-          action_taken: data.action_report?.action_taken || '',
-          status: data.action_report?.status || 'Pending',
-          serviced_by: data.action_report?.serviced_by?.id || '',  // Default to empty string
-          date_accepted: formatDateTime(data.action_report?.accepted_at) || '',
-          date_started: formatDateTime(data.action_report?.date_started) || '',  // Default to empty string
-          date_finished: formatDateTime(data.action_report?.date_finished) || '',  // Default to empty string
-          cancel: data.action_report?.status === "Cancelled",  // Fetch cancel status
-          unserviceable: data.action_report?.status === "Unserviceable",  // Fetch unserviceable status
-          remarks: data.action_report?.remarks || '',  // Populate remarks
+          diagnosis: ar?.diagnosis || '',
+          action_taken: ar?.action_taken || '',
+          status: ar?.status || 'Pending',
+          serviced_by: ar?.serviced_by?.id || '',
+          date_accepted: formatDateTime(ar?.accepted_at) || '',
+          date_started: formatDateTime(ar?.date_started) || '',
+          date_finished: formatDateTime(ar?.date_finished) || '',
+          cancel: ar?.status === 'Cancelled',
+          unserviceable: ar?.status === 'Unserviceable',
+          remarks: ar?.remarks || '',
         });
-        // Reset admin-confirm flag whenever job is (re)loaded
-        setShowConfirmForAdmin(false);
-  // CSM: if action_report indicates CSM was completed, reflect it
-  const csmDone = !!data.action_report?.csm_completed;
-  setCsmCompleted(csmDone);
-  setCsmChecked(csmDone);
 
+        setShowConfirmForAdmin(false);
+
+        const csmDone = !!ar?.csm_completed;
+        setCsmCompleted(csmDone);
+        setCsmChecked(csmDone);
       })
       .catch((err) => console.error('Load job failed:', err))
       .finally(() => setLoading(false));
   }, [jobId]);
 
-  // ================= LOAD TECHNICIANS =================
-
+  // Load technicians list
   useEffect(() => {
     axios
       .get('/technicians')
@@ -195,73 +176,56 @@ const readOnly =
       .catch(() => setUsers([]));
   }, []);
 
-  // ================= RELOAD WHEN OPEN =================
-
+  // Reload job data when modal opens
   useEffect(() => {
     if (isOpen) {
       loadJob();
     }
   }, [isOpen, jobId, loadJob]);
 
-  // ================= HANDLE UNSERVICEABLE CHANGE =================
-
+  // Handle unserviceable checkbox change
   const handleUnserviceableChange = (e) => {
     const { checked } = e.target;
 
-    // If trying to check → open modal FIRST
     if (checked) {
       setIsUnserviceableModalOpen(true);
+    } else {
+      setForm((prev) => ({ ...prev, unserviceable: false }));
     }
+  };
 
-    // If trying to uncheck → allow unchecking directly
-    else {
-      setForm((prev) => ({
-        ...prev,
-        unserviceable: false,
-      }));
-    }
-};
-
-  // ================= HANDLE CHANGE =================
-
+  // Handle form field changes
   const handleChange = (e) => {
-    if (readOnly && !isAdmin) return; // Allow only admins to make changes
+    if (readOnly && !isAdmin) return;
 
     const { name, value, type, checked } = e.target;
 
     if (type === 'checkbox') {
-    if (name === 'cancel') {
-      setForm((prev) => ({
-        ...prev,
-        cancel: checked,
-        unserviceable: checked ? false : prev.unserviceable,
-      }));
-    }
+      if (name === 'cancel') {
+        setForm((prev) => ({
+          ...prev,
+          cancel: checked,
+          unserviceable: checked ? false : prev.unserviceable,
+        }));
+      }
 
-    if (name === 'unserviceable') {
-      setForm((prev) => ({
-        ...prev,
-        unserviceable: checked,
-        cancel: checked ? false : prev.cancel,
-      }));
-    }
+      if (name === 'unserviceable') {
+        setForm((prev) => ({
+          ...prev,
+          unserviceable: checked,
+          cancel: checked ? false : prev.cancel,
+        }));
+      }
     } else {
-      setForm((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+      setForm((prev) => ({ ...prev, [name]: value }));
     }
   };
 
-  // ================= SAVE ACTION REPORT =================
-
+  // Save action report
   const handleSave = async () => {
-    console.log('Form before save:', form);
-
     if (!job?.id || saving) return;
 
-    // ================= VALIDATION =================
-
+    // Validation
     if (!form.serviced_by || !form.date_started || !form.date_finished) {
       showNotification(
         "error",
@@ -300,58 +264,35 @@ const readOnly =
 
     setSaving(true);
 
-    const updatedForm = {
-      ...form,
-      // Explicitly set to false so the admin-side shows "Waiting for confirmation"
-      // immediately after Save Changes.
-      conformed: false,
-    };
-
-    console.log('Updated form with conformed:', updatedForm);
-
-    let request;
+    const updatedForm = { ...form, conformed: false };
 
     try {
-      // 🔴 CANCEL
+      const actionReportData = {
+        diagnosis: form.diagnosis,
+        action_taken: form.action_taken,
+        serviced_by: form.serviced_by,
+        date_started: form.date_started,
+        date_finished: form.date_finished,
+        remarks: form.remarks,
+      };
+
+      // Handle cancel
       if (form.cancel) {
         await Promise.all([
-          axios.put(`/job-orders/${job.id}/action-report`, {
-            diagnosis: form.diagnosis,
-            action_taken: form.action_taken,
-            serviced_by: form.serviced_by,
-            date_started: form.date_started,
-            date_finished: form.date_finished,
-            remarks: form.remarks,
-          }),
-          axios.put(`/job-orders/${job.id}`, {
-            status: "Cancelled",
-          }),
+          axios.put(`/job-orders/${job.id}/action-report`, actionReportData),
+          axios.put(`/job-orders/${job.id}`, { status: "Cancelled" }),
         ]);
       }
-
-      // 🟡 UNSERVICEABLE
+      // Handle unserviceable
       else if (form.unserviceable) {
         await Promise.all([
-          axios.put(`/job-orders/${job.id}/action-report`, {
-            diagnosis: form.diagnosis,
-            action_taken: form.action_taken,
-            serviced_by: form.serviced_by,
-            date_started: form.date_started,
-            date_finished: form.date_finished,
-            remarks: form.remarks,
-          }),
-          axios.put(`/job-orders/${job.id}`, {
-            status: "Unserviceable",
-          }),
+          axios.put(`/job-orders/${job.id}/action-report`, actionReportData),
+          axios.put(`/job-orders/${job.id}`, { status: "Unserviceable" }),
         ]);
       }
-
-      // 🟢 NORMAL SAVE
+      // Normal save
       else {
-        await axios.put(
-          `/job-orders/${job.id}/action-report`,
-          updatedForm
-        );
+        await axios.put(`/job-orders/${job.id}/action-report`, updatedForm);
       }
 
       showNotification(
@@ -360,29 +301,28 @@ const readOnly =
         "The job order action report was saved successfully."
       );
 
-      // ✅ Fetch updated job ONLY ONCE
+      // Fetch updated job
       const res = await axios.get(`/job-orders/${job.id}`);
       const updatedJob = res.data;
 
-      // ✅ Update modal state directly (NO loadJob call)
+      // Update modal state
       setJob(updatedJob);
 
+      const ar = updatedJob.action_report;
       setForm({
-        diagnosis: updatedJob.action_report?.diagnosis || '',
-        action_taken: updatedJob.action_report?.action_taken || '',
-        status: updatedJob.action_report?.status || 'Pending',
-        serviced_by: updatedJob.action_report?.serviced_by?.id || '',
-        date_accepted: formatDateTime(updatedJob.action_report?.accepted_at) || '',
-        date_started: formatDateTime(updatedJob.action_report?.date_started) || '',
-        date_finished: formatDateTime(updatedJob.action_report?.date_finished) || '',
-        cancel: updatedJob.action_report?.status === "Cancelled",
-        unserviceable: updatedJob.action_report?.status === "Unserviceable",
-        remarks: updatedJob.action_report?.remarks || '',
+        diagnosis: ar?.diagnosis || '',
+        action_taken: ar?.action_taken || '',
+        status: ar?.status || 'Pending',
+        serviced_by: ar?.serviced_by?.id || '',
+        date_accepted: formatDateTime(ar?.accepted_at) || '',
+        date_started: formatDateTime(ar?.date_started) || '',
+        date_finished: formatDateTime(ar?.date_finished) || '',
+        cancel: ar?.status === "Cancelled",
+        unserviceable: ar?.status === "Unserviceable",
+        remarks: ar?.remarks || '',
       });
-      // Ensure parent list gets updated immediately. If the job is Ongoing,
-      // explicitly set a client-side `conformed` flag to false so the
-      // `StatusIndicator` will render the "Waiting for confirmation" state
-      // right after Save Changes.
+
+      // Notify parent
       try {
         const notifyJob = { ...updatedJob };
         if (notifyJob.action_report && notifyJob.action_report.status === 'Ongoing') {
@@ -390,21 +330,19 @@ const readOnly =
         }
         if (onStatusChange) onStatusChange(notifyJob);
       } catch (e) {
-        // ignore notify errors
+        console.error('Notify error:', e);
       }
-      // If admin saved and the report is in Ongoing + has required fields and not yet confirmed,
-      // show the confirm button beside Save Changes for the admin.
+
+      // Show confirm button for admin if applicable
       if (isAdmin) {
-        const ar = updatedJob.action_report || {};
         const shouldShowConfirmForAdmin =
-          ar.status === 'Ongoing' &&
-          ar.diagnosis &&
-          ar.action_taken &&
-          !ar.confirmed_at;
+          ar?.status === 'Ongoing' &&
+          ar?.diagnosis &&
+          ar?.action_taken &&
+          !ar?.confirmed_at;
 
         setShowConfirmForAdmin(shouldShowConfirmForAdmin);
       }
-
     } catch (err) {
       console.error(err);
       showNotification(
@@ -417,15 +355,13 @@ const readOnly =
     }
   };
 
-  // ================= CONFIRM COMPLETION =================
-
+  // Confirm job completion
   const handleConfirm = async () => {
     if (!job?.id || confirming) return;
 
     setConfirming(true);
 
     try {
-      // Send confirm request
       await axios.patch(`/job-orders/${job.id}/confirm-diagnosis`);
 
       showNotification(
@@ -434,12 +370,11 @@ const readOnly =
         'You have successfully confirmed the completion of this job.'
       );
 
-      // Mark notifications as read for this job order after confirmation
-      // Don't await - let it run in background without blocking
+      // Mark notifications as read (non-blocking)
       axios.post(`/job-orders/${job.id}/mark-notifications-read`)
         .catch(err => console.error('Failed to mark notifications as read:', err));
 
-      // Optimistic UI update: mark the action_report as confirmed locally
+      // Optimistic UI update
       const updatedJob = {
         ...job,
         action_report: {
@@ -450,15 +385,12 @@ const readOnly =
 
       setJob(updatedJob);
 
-      // Notify parent immediately with optimistic data if provided
       if (onStatusChange) onStatusChange(updatedJob);
 
-      // Refresh in background to get authoritative data, but don't await it
+      // Refresh in background
       loadJob();
     } catch (err) {
-      console.error('Confirmation error details:', err);
-      console.error('Error response:', err.response?.data);
-      console.error('Error status:', err.response?.status);
+      console.error('Confirmation error:', err);
       
       const errorMessage = err.response?.data?.message || 'Something went wrong while confirming.';
       
@@ -472,12 +404,10 @@ const readOnly =
     }
   };
 
-  // ================= CSM (Client Satisfaction Measurement) =================
-  const requesterIsUser = job?.requester?.role === 'user';
-
+  // CSM (Client Satisfaction Measurement) handlers
   const handleCsmCheckboxChange = (e) => {
     const checked = e.target.checked;
-    // If checking and CSM not yet completed -> open modal to fill it
+
     if (checked) {
       if (csmCompleted) {
         setCsmChecked(true);
@@ -486,29 +416,21 @@ const readOnly =
         setIsCsmModalOpen(true);
       }
     } else {
-      // Unchecking disables completion
       setCsmChecked(false);
       setCsmCompleted(false);
     }
   };
 
-  
-
   const handleCsmCancel = () => {
     setIsCsmModalOpen(false);
     setCsmChecked(false);
-    // don't mark completed
   };
 
   const handleCsmSave = async (formData) => {
-    // form validation is handled by the CSM modal; just submit payload
-
     try {
-      // Normalize payload: convert numeric-string fields to integers and
-      // convert datetime-local into a format Laravel accepts reliably.
       const payload = { ...formData };
 
-      // Integer fields expected by backend
+      // Convert numeric fields to integers
       const intFields = [
         'cc1','cc2','cc3',
         'sqd0','sqd1','sqd2','sqd3','sqd4','sqd5','sqd6','sqd7','sqd8',
@@ -517,24 +439,18 @@ const readOnly =
 
       intFields.forEach((k) => {
         if (payload[k] !== undefined && payload[k] !== null && payload[k] !== '') {
-          // parseInt on radio/string values
           const v = parseInt(payload[k], 10);
           payload[k] = Number.isNaN(v) ? payload[k] : v;
         } else {
-          // remove empty strings to let server handle nullable vs required_if
           delete payload[k];
         }
       });
 
-      // Normalize date_time_visited from `YYYY-MM-DDTHH:MM` to `YYYY-MM-DD HH:MM:00`
-      if (payload.date_time_visited) {
-        const dt = payload.date_time_visited;
-        if (dt.includes('T')) {
-          payload.date_time_visited = dt.replace('T', ' ') + ':00';
-        }
+      // Normalize datetime format
+      if (payload.date_time_visited && payload.date_time_visited.includes('T')) {
+        payload.date_time_visited = payload.date_time_visited.replace('T', ' ') + ':00';
       }
 
-      // Save CSM to backend - endpoint should be implemented server-side
       await axios.post(`/job-orders/${job.id}/action-report/csm`, payload);
 
       showNotification('success', 'Saved', 'CSM saved successfully.');
@@ -551,13 +467,12 @@ const readOnly =
     } catch (err) {
       console.error('CSM save failed', err);
 
-      // Surface server validation messages when available
       if (err?.response?.status === 422 && err.response.data) {
         const data = err.response.data;
-        // Laravel returns errors in `errors` key; show concise message
-        const validationErrors = data.errors ? Object.entries(data.errors).map(([k, v]) => `${k}: ${v.join(', ')}`).join('\n') : data.message || 'Validation failed';
+        const validationErrors = data.errors 
+          ? Object.entries(data.errors).map(([k, v]) => `${k}: ${v.join(', ')}`).join('\n') 
+          : data.message || 'Validation failed';
         showNotification('error', 'Save Failed', validationErrors);
-        console.error('Validation details:', data);
         return;
       }
 
@@ -572,411 +487,467 @@ const readOnly =
   if (!isOpen || !job) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]">
-
-        {/* ================= HEADER ================= */}
-        <div className="flex justify-between items-center px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold">
-            Job Order Details
-          </h2>
-          <button
-            onClick={handleClose}
-            className="text-gray-500 hover:text-gray-800 text-xl"
-          >
-            ✕
-          </button>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white w-full max-w-7xl rounded-lg shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="bg-white px-8 py-6 border-b border-gray-200">
+          <h2 className="text-2xl font-bold text-gray-900">Job Order - Action Report</h2>
+          <p className="text-gray-600 mt-1">Review and update job order details and action report</p>
         </div>
 
-        {/* ================= CONTENT ================= */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8 overflow-y-auto">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-8">
+            {/* Left Side - Job Information */}
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Job Information
+                </h3>
+                <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Job Order No.</p>
+                      <p className="text-sm font-medium text-gray-900">{job.job_order_no || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Date Created</p>
+                      <p className="text-sm font-medium text-gray-900">{formatDisplayDate(job.created_at)}</p>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Department</p>
+                    <p className="text-sm text-gray-900">{job.department?.name || '—'}</p>
+                  </div>
 
-          {/* LEFT SIDE */}
-          <div className="space-y-4">
-            <h3 className="font-semibold border-b pb-2">
-              Job Information
-            </h3>
-
-            <Info label="Job Order No." value={job.job_order_no} />
-            <Info label="Date" value={formatDisplayDate(job.created_at)} />
-            <Info label="Department" value={job.department?.name} />
-            <Info
-              label="Categories"
-              value={job.categories?.map(c => c.name).join(', ')}
-            />
-            <Info
-              label="Request Description"
-              value={job.request_description}
-            />
-            {job?.signature_name && job.requester?.role === 'admin' && (
-              <Info label="Signatory" value={job.signature_name} />
-            )}
-
-            <Info
-              label="Requested By"
-              value={
-                job?.requester?.name
-                  ? (job?.signature_name && job.requester?.role === 'admin' ? `(${job.requester.name})` : job.requester.name)
-                  : '—'
-              }
-            />
-            <Info label="Contact No." value={job.contact_no} />
-
-            {/* ================= ATTACHMENTS SECTION ================= */}
-            {job.attachments?.length > 0 && (
-              <div className="space-y-2 pt-4">
-                <h4 className="text-sm font-semibold text-gray-700 border-b pb-1">
-                  Attachments
-                </h4>
-
-                <div className="grid grid-cols-2 gap-3">
-                  {job.attachments.map((file) => {
-                    const fileUrl = `/storage/${file.file_path}`;
-
-                    if (file.type === 'image') {
-                      return (
-                        <a
-                          key={file.id}
-                          href={fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block"
-                        >
-                          <img
-                            src={fileUrl}
-                            alt={file.original_name}
-                            className="rounded-lg border hover:opacity-80 transition cursor-pointer object-cover h-32 w-full"
-                          />
-                        </a>
-                      );
-                    }
-
-                    if (file.type === 'pdf') {
-                      return (
-                        <a
-                          key={file.id}
-                          href={fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center h-32 border rounded-lg bg-gray-100 hover:bg-gray-200 transition text-sm font-medium"
-                        >
-                          📄 View PDF
-                        </a>
-                      );
-                    }
-
-                    return null;
-                  })}
-                </div>
-              </div>
-            )}
-            {/* ========================================================= */}
-          </div>
-
-          {/* RIGHT SIDE (UNCHANGED) */}
-          <div className="space-y-4 flex flex-col">
-            <h3 className="font-semibold border-b pb-2">
-              Action Report
-            </h3>
-
-            <div className="flex space-x-2 border-b">
-              {TABS.map((tab) => (
-                <button
-                  key={tab}
-                  className={`px-3 py-1 text-sm font-medium ${
-                    activeTab === tab
-                      ? 'border-b-2 border-gray-900'
-                      : 'text-gray-500'
-                  }`}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-4 space-y-4 overflow-y-auto max-h-[60vh]">
-
-              {activeTab === 'Details' && (
-                <>
-                  <Field title="Diagnosis">
-                    {readOnly ? (
-                      <div className="text-sm font-medium text-gray-900">{form.diagnosis || '—'}</div>
-                    ) : (
-                      <textarea
-                        name="diagnosis"
-                        value={form.diagnosis}
-                        onChange={handleChange}
-                        className="w-full border rounded-lg p-2 text-sm"
-                        rows="3"
-                        disabled={readOnly}
-                      />
-                    )}
-                  </Field>
-
-                  <Field title="Action Taken">
-                    {readOnly ? (
-                      <div className="text-sm font-medium text-gray-900">{form.action_taken || '—'}</div>
-                    ) : (
-                      <textarea
-                        name="action_taken"
-                        value={form.action_taken}
-                        onChange={handleChange}
-                        className="w-full border rounded-lg p-2 text-sm"
-                        rows="3"
-                        disabled={readOnly}
-                      />
-                    )}
-                  </Field>
-
-                  <Field title="Status:">
-                    <div className="flex items-center justify-start gap-3">
-                      <div className="text-sm font-medium text-gray-900">
-                        {form.status || '—'}
-                      </div>
-
-                      {/* Show Completed report button when status is Completed */}
-                      {isCompleted && (
-                        <button
-                          onClick={() =>
-                            window.open(
-                              `/job-orders/${jobId}/completed/pdf`,
-                              "_blank"
-                            )
-                          }
-                          className={`px-3 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl shadow-md hover:bg-indigo-700 hover:shadow-lg active:scale-95 transition-all duration-200`}
-                        >
-                          View Report
-                        </button>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Categories</p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {job.categories?.length > 0 ? (
+                        job.categories.map((cat, idx) => (
+                          <span key={idx} className="inline-flex items-center px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium border border-blue-200">
+                            {cat.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-sm text-gray-400 italic">No categories</span>
                       )}
                     </div>
-                  </Field>
+                  </div>
 
-                  {/* ================= RENDER THE CHECKBOXES ================= */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Request Description</p>
+                    <p className="text-sm text-gray-700 leading-relaxed">{job.request_description || '—'}</p>
+                  </div>
+                </div>
+              </div>
 
-                  {isAdmin && (
-                    <Field title="Cancellation / Unserviceable">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Requester Information
+                </h3>
+                <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+                  {job?.signature_name && job.requester?.role === 'admin' && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Signatory</p>
+                      <p className="text-sm text-gray-900">{job.signature_name}</p>
+                    </div>
+                  )}
+                  
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Requested By</p>
+                    <p className="text-sm text-gray-900">
+                      {job?.requester?.name ? (
+                        job?.signature_name && job.requester?.role === 'admin' 
+                          ? `(${job.requester.name})` 
+                          : job.requester.name
+                      ) : '—'}
+                    </p>
+                  </div>
 
-                        {/* LEFT SIDE – CHECKBOXES */}
-                        <div className="flex items-center space-x-6">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Contact Number</p>
+                    <p className="text-sm text-gray-900">{job.contact_no || '—'}</p>
+                  </div>
+                </div>
+              </div>
 
-                          {/* Cancel */}
-                          <div className="flex items-center">
-                            <input
-                              type="checkbox"
-                              id="cancel"
-                              name="cancel"
-                              checked={form.cancel}
-                              onChange={handleChange}
-                              className="mr-2 h-4 w-4 accent-red-600"
-                              disabled={readOnly}
-                            />
-                            <label htmlFor="cancel" className="text-sm font-medium text-gray-700">
-                              Cancel
-                            </label>
+              {/* Attachments Section */}
+              {job.attachments?.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4 flex items-center">
+                    <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                    Attachments
+                  </h3>
+                  <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <div className="grid grid-cols-2 gap-3">
+                      {job.attachments.map((file) => {
+                        const fileUrl = `/storage/${file.file_path}`;
+
+                        if (file.type === 'image') {
+                          return (
+                            <a
+                              key={file.id}
+                              href={fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group relative block rounded-lg overflow-hidden border border-gray-200 hover:border-blue-500 transition-all"
+                            >
+                              <img
+                                src={fileUrl}
+                                alt={file.original_name}
+                                className="w-full h-32 object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                            </a>
+                          );
+                        }
+
+                        if (file.type === 'pdf') {
+                          return (
+                            <a
+                              key={file.id}
+                              href={fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex flex-col items-center justify-center h-32 border border-gray-200 rounded-lg bg-red-50 hover:bg-red-100 hover:border-red-400 transition-all"
+                            >
+                              <svg className="w-10 h-10 text-red-500 mb-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                              </svg>
+                              <span className="text-xs font-medium text-red-700">View PDF</span>
+                            </a>
+                          );
+                        }
+
+                        return null;
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Side - Action Report */}
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                  Action Report
+                </h3>
+
+                {/* Tabs */}
+                <div className="flex space-x-1 border-b border-gray-200 mb-6">
+                  {TABS.map((tab) => (
+                    <button
+                      key={tab}
+                      className={`px-4 py-2 text-sm font-medium transition-colors ${
+                        activeTab === tab
+                          ? 'text-blue-600 border-b-2 border-blue-600'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                      onClick={() => setActiveTab(tab)}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="space-y-6">
+                  {activeTab === 'Details' && (
+                    <div className="space-y-4">
+                      <Field title="Diagnosis">
+                        {readOnly ? (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                            {form.diagnosis || '—'}
                           </div>
-
-                          {/* Unserviceable */}
-                          <div className="flex items-center">
-                            <input
-                              type="checkbox"
-                              id="unserviceable"
-                              name="unserviceable"
-                              checked={form.unserviceable}
-                              onChange={handleUnserviceableChange}
-                              className="mr-2 h-4 w-4 accent-blue-600"
-                              disabled={readOnly}
-                            />
-                            <label htmlFor="unserviceable" className="text-sm font-medium text-gray-700">
-                              Unserviceable
-                            </label>
-                          </div>
-
-                        </div>
-
-                        {isUnserviceable &&  (
-                          <button
-                            onClick={() =>
-                              window.open(
-                                `/job-orders/${jobId}/unserviceable/pdf`,
-                                "_blank"
-                              )
-                            }
-                            className="
-                              px-3 py-2
-                              bg-indigo-600
-                              text-white
-                              text-sm font-semibold
-                              rounded-xl
-                              shadow-md
-                              hover:bg-indigo-700
-                              hover:shadow-lg
-                              active:scale-95
-                              transition-all duration-200
-                            "
-                          >
-                            View Report
-                          </button>
+                        ) : (
+                          <textarea
+                            name="diagnosis"
+                            value={form.diagnosis}
+                            onChange={handleChange}
+                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            rows="3"
+                            disabled={readOnly}
+                            placeholder="Enter diagnosis details..."
+                          />
                         )}
+                      </Field>
 
-                      </div>
-                    </Field>
+                      <Field title="Action Taken">
+                        {readOnly ? (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                            {form.action_taken || '—'}
+                          </div>
+                        ) : (
+                          <textarea
+                            name="action_taken"
+                            value={form.action_taken}
+                            onChange={handleChange}
+                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            rows="3"
+                            disabled={readOnly}
+                            placeholder="Describe actions taken..."
+                          />
+                        )}
+                      </Field>
+
+                      <Field title="Current Status">
+                        <div className="flex items-center justify-between">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
+                            {form.status || '—'}
+                          </span>
+
+                          {isCompleted && (
+                            <button
+                              onClick={() =>
+                                window.open(
+                                  `/job-orders/${jobId}/completed/pdf`,
+                                  "_blank"
+                                )
+                              }
+                              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              View Report
+                            </button>
+                          )}
+                        </div>
+                      </Field>
+
+                      {/* Cancellation / Unserviceable Checkboxes */}
+                      {isAdmin && (
+                        <Field title="Job Actions">
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                              <div className="flex items-center space-x-6">
+                                <label className="flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    id="cancel"
+                                    name="cancel"
+                                    checked={form.cancel}
+                                    onChange={handleChange}
+                                    className="mr-2 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                                    disabled={readOnly}
+                                  />
+                                  <span className="text-sm font-medium text-gray-700">
+                                    Cancel Job Order
+                                  </span>
+                                </label>
+
+                                <label className="flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    id="unserviceable"
+                                    name="unserviceable"
+                                    checked={form.unserviceable}
+                                    onChange={handleUnserviceableChange}
+                                    className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    disabled={readOnly}
+                                  />
+                                  <span className="text-sm font-medium text-gray-700">
+                                    Mark as Unserviceable
+                                  </span>
+                                </label>
+                              </div>
+
+                              {isUnserviceable && (
+                                <button
+                                  onClick={() =>
+                                    window.open(
+                                      `/job-orders/${jobId}/unserviceable/pdf`,
+                                      "_blank"
+                                    )
+                                  }
+                                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all"
+                                >
+                                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                  View Report
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </Field>
+                      )}
+
+                      <UnserviceableModal
+                        isOpen={isUnserviceableModalOpen}
+                        jobId={jobId}
+                        showNotification={showNotification}
+                        onClose={() => setIsUnserviceableModalOpen(false)}
+                        onSaved={() => {
+                          setIsUnserviceableModalOpen(false);
+                          setForm((prev) => ({
+                            ...prev,
+                            cancel: false,
+                            unserviceable: true,
+                          }));
+                        }}
+                      />
+
+                      <Field title="Assigned Technician">
+                        {readOnly ? (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                            {job?.action_report?.serviced_by?.name || '—'}
+                          </div>
+                        ) : (
+                          <select
+                            name="serviced_by"
+                            value={form.serviced_by}
+                            onChange={handleChange}
+                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            disabled={readOnly}
+                          >
+                            <option value="">Select Technician</option>
+                            {users.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </Field>
+
+                      {(form.remarks || !readOnly) && (
+                        <Field title="Remarks">
+                          {readOnly ? (
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                              {form.remarks || '—'}
+                            </div>
+                          ) : (
+                            <textarea
+                              name="remarks"
+                              value={form.remarks}
+                              onChange={handleChange}
+                              className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              rows="3"
+                              disabled={readOnly}
+                              placeholder="Additional remarks or notes..."
+                            />
+                          )}
+                        </Field>
+                      )}
+                    </div>
                   )}
 
-                  {/* Show Unserviceable Modal when open */}
-                  <UnserviceableModal
-                    isOpen={isUnserviceableModalOpen}
-                    jobId={jobId}
-                    showNotification={showNotification}
-                    onClose={() => {
-                      // Cancel
-                      setIsUnserviceableModalOpen(false);
-                    }}
-                    onSaved={() => {
-                      // Only when successfully saved
-                      setIsUnserviceableModalOpen(false);
-                      setForm((prev) => ({
-                        ...prev,
-                        cancel: false,
-                        unserviceable: true,
-                      }));
-                    }}
-                  />
+                  {activeTab === 'Dates' && (
+                    <div className="space-y-4">
+                      <Field title="Date Accepted">
+                        {readOnly ? (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                            {formatDisplayDate(form.date_accepted) || '—'}
+                          </div>
+                        ) : (
+                          <input
+                            type="datetime-local"
+                            value={form.date_accepted || ''}
+                            disabled
+                            className="w-full border border-gray-300 rounded-lg p-3 text-sm bg-gray-100 cursor-not-allowed"
+                          />
+                        )}
+                      </Field>
 
+                      <Field title="Date Started">
+                        {readOnly ? (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                            {formatDisplayDate(form.date_started) || '—'}
+                          </div>
+                        ) : (
+                          <input
+                            type="datetime-local"
+                            name="date_started"
+                            value={form.date_started || ''}
+                            onChange={handleChange}
+                            disabled={readOnly}
+                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        )}
+                      </Field>
 
-                  <Field title="Technician">
-                    {readOnly ? (
-                      <div className="text-sm font-medium text-gray-900">
-                        {job?.action_report?.serviced_by?.name || '—'}
-                      </div>
-                    ) : (
-                      <select
-                        name="serviced_by"
-                        value={form.serviced_by}
-                        onChange={handleChange}
-                        className="w-full border rounded-lg p-2 text-sm"
-                        disabled={readOnly}
-                      >
-                        <option value="">Select Technician</option>
-                        {users.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Field title="Date Finished">
+                        {readOnly ? (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                            {formatDisplayDate(form.date_finished) || '—'}
+                          </div>
+                        ) : (
+                          <input
+                            type="datetime-local"
+                            name="date_finished"
+                            value={form.date_finished || ''}
+                            onChange={handleChange}
+                            disabled={readOnly}
+                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        )}
+                      </Field>
 
-                    )}
-                  </Field>
-
-                  <Field title="Remarks">
-                    {/* Show Remarks in Admin Side */}
-                    {readOnly ? (
-                      // User Side: Only show if remarks are not empty
-                      form.remarks ? (
-                        <div className="text-sm font-medium text-gray-900">{form.remarks || '—'}</div>
-                      ) : (
-                        // Don't render anything if remarks are empty
-                        <div className="hidden" />
-                      )
-                    ) : (
-                      // Admin Side: Always show remarks field, editable
-                      <textarea
-                        name="remarks"
-                        value={form.remarks}
-                        onChange={handleChange}
-                        className="w-full border rounded-lg p-2 text-sm"
-                        rows="3"
-                        disabled={readOnly}
-                      />
-                    )}
-                  </Field>
-                </>
-              )}
-
-              {activeTab === 'Dates' && (
- 
-                  <>
-                    <Field title="Date Accepted">
-                      {readOnly ? (
-                        <div className="text-sm font-medium text-gray-900">
-                          {formatDisplayDate(form.date_accepted) || '—'}
-                        </div>
-                      ) : (
-                        <input
-                          type="datetime-local"
-                          value={form.date_accepted || ''}
-                          disabled
-                          className="w-full border rounded-lg p-2 text-sm bg-gray-100"
-                        />
-                      )}
-                    </Field>
-
-                    <Field title="Date Started">
-                      {readOnly ? (
-                        <div className="text-sm font-medium text-gray-900">
-                          {formatDisplayDate(form.date_started) || '—'}
-                        </div>
-                      ) : (
-                        <input
-                          type="datetime-local"
-                          name="date_started"
-                          value={form.date_started || ''}
-                          onChange={handleChange}
-                          disabled={readOnly}
-                          className="w-full border rounded-lg p-2 text-sm"
-                        />
-                      )}
-                    </Field>
-
-                    <Field title="Date Finished">
-                      {readOnly ? (
-                        <div className="text-sm font-medium text-gray-900">
-                          {formatDisplayDate(form.date_finished) || '—'}
-                        </div>
-                      ) : (
-                        <input
-                          type="datetime-local"
-                          name="date_finished"
-                          value={form.date_finished || ''}
-                          onChange={handleChange}
-                          disabled={readOnly}
-                          className="w-full border rounded-lg p-2 text-sm"
-                        />
-                      )}
-                    </Field>
-
-                    <Field title="Confirmed At">
-                    {isConfirmed ? (
-                      <div className="text-sm font-medium text-gray-900">
-                        {formatDisplayDate(job?.action_report?.confirmed_at) || '—'}
-                      </div>
-                    ) : (
-                      <div className="text-sm font-medium text-gray-500">Not confirmed yet</div>
-                    )}
-                  </Field>
-                  </>
-                )}
-
+                      <Field title="Confirmed At">
+                        {isConfirmed ? (
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                            <div className="flex items-center">
+                              <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="text-sm font-medium text-green-900">
+                                {formatDisplayDate(job?.action_report?.confirmed_at)}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                            <div className="flex items-center">
+                              <svg className="w-5 h-5 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="text-sm font-medium text-yellow-900">
+                                Awaiting confirmation
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </Field>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        
 
-        {(!readOnly || showConfirmButtonUser) && (
-          <div className="px-8 pb-4 flex flex-col sm:flex-row sm:items-center gap-3 border-t bg-white">
+        {/* Footer Actions */}
+        <div className="bg-gray-50 border-t border-gray-200 px-8 py-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               {showConfirmButtonForAdmin && (
                 <button
                   onClick={handleConfirm}
                   disabled={confirming}
-                  className={`px-6 py-2 rounded-lg text-white ${
+                  className={`inline-flex items-center px-6 py-2.5 rounded-lg text-white text-sm font-medium transition-all ${
                     confirming
                       ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700'
+                      : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
                   }`}
                 >
-                  {confirming ? 'Confirming...' : 'Confirm'}
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {confirming ? 'Confirming...' : 'Confirm Completion'}
                 </button>
               )}
 
@@ -984,49 +955,62 @@ const readOnly =
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className={`px-6 py-2 rounded-lg text-white ${
+                  className={`inline-flex items-center px-6 py-2.5 rounded-lg text-white text-sm font-medium transition-all ${
                     saving
-                      ? 'bg-gray-500 cursor-not-allowed'
-                      : 'bg-gray-900 hover:bg-gray-800'
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
                   }`}
                 >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
                   {saving ? 'Saving...' : 'Save Changes'}
                 </button>
               )}
             </div>
 
             {showConfirmButtonUser && (
-              <div className="flex items-center gap-4 ml-auto">
-                {/* CSM checkbox for requester when requester is a regular user */}
+              <div className="flex items-center gap-4">
                 {requesterIsUser && isRequester && (
-                  <label className="inline-flex items-center space-x-2">
+                  <label className="inline-flex items-center space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={csmChecked}
                       onChange={handleCsmCheckboxChange}
-                      className="h-4 w-4"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
-                    <span className="text-sm">Client Satisfaction Measurement (CSM)</span>
+                    <span className="text-sm font-medium text-gray-700">Complete CSM Survey</span>
                   </label>
                 )}
 
                 <button
                   onClick={handleConfirm}
                   disabled={confirming || (requesterIsUser && !csmCompleted)}
-                  className={`px-6 py-2 rounded-lg text-white ${
+                  className={`inline-flex items-center px-6 py-2.5 rounded-lg text-white text-sm font-medium transition-all ${
                     confirming || (requesterIsUser && !csmCompleted)
                       ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700'
+                      : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
                   }`}
                 >
-                  {confirming ? 'Confirming...' : 'Confirm'}
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {confirming ? 'Confirming...' : 'Confirm Completion'}
                 </button>
               </div>
             )}
-          </div>
-        )}
 
-        {/* CSM modal — delegate to reusable component */}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="px-6 py-2.5 bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        {/* CSM Modal */}
         <CSMModal
           isOpen={isCsmModalOpen}
           initialData={{ rating: '', comments: '' }}
@@ -1034,7 +1018,6 @@ const readOnly =
           onCancel={handleCsmCancel}
           showNotification={showNotification}
         />
-
       </div>
     </div>
   );

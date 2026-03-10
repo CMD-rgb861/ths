@@ -32,20 +32,65 @@ class JobOrderController extends Controller
             'attachments',
             'actionReport.servicedBy',
             'clientSatisfactionMeasurements',
-        ])->orderBy('created_at', 'desc');
+        ]);
+
+        // Check if filtering by Completed status
+        $isCompletedFilter = $request->filled('status') && $request->status === 'Completed';
+
+        // Default sort
+        $sortBy = $request->input('sort', 'newest');
+
+        // Apply sorting
+        switch ($sortBy) {
+            case 'oldest':
+                if ($isCompletedFilter) {
+                    $query->join('action_reports', 'job_orders.id', '=', 'action_reports.job_order_id')
+                          ->orderBy('action_reports.confirmed_at', 'asc')
+                          ->select('job_orders.*');
+                } else {
+                    $query->orderBy('job_orders.created_at', 'asc');
+                }
+                break;
+            case 'department_asc':
+                $query->join('departments', 'job_orders.department_id', '=', 'departments.id')
+                      ->orderBy('departments.name', 'asc')
+                      ->select('job_orders.*');
+                break;
+            case 'department_desc':
+                $query->join('departments', 'job_orders.department_id', '=', 'departments.id')
+                      ->orderBy('departments.name', 'desc')
+                      ->select('job_orders.*');
+                break;
+            case 'job_order_asc':
+                $query->orderBy('job_orders.job_order_no', 'asc');
+                break;
+            case 'job_order_desc':
+                $query->orderBy('job_orders.job_order_no', 'desc');
+                break;
+            case 'newest':
+            default:
+                if ($isCompletedFilter) {
+                    $query->join('action_reports', 'job_orders.id', '=', 'action_reports.job_order_id')
+                          ->orderBy('action_reports.confirmed_at', 'desc')
+                          ->select('job_orders.*');
+                } else {
+                    $query->orderBy('job_orders.created_at', 'desc');
+                }
+                break;
+        }
 
         // If the request is from an admin and the 'created_after' parameter is present
         if ($request->has('created_after')) {
-            $query->where('created_at', '>', $request->input('created_after'));
+            $query->where('job_orders.created_at', '>', $request->input('created_after'));
         }
 
         if (!$request->user()->isAdmin()) {
-            $query->where('requested_by', $request->user()->id);
+            $query->where('job_orders.requested_by', $request->user()->id);
         }
 
         // 🔥 HISTORY FILTER (NEW)
         if ($request->boolean('history')) {
-            $query->whereIn('status', [
+            $query->whereIn('job_orders.status', [
                 'Completed',
                 'Cancelled',
                 'Unserviceable'
@@ -56,7 +101,7 @@ class JobOrderController extends Controller
             $search = $request->search;
 
             $query->where(function ($q) use ($search) {
-                $q->where('job_order_no', 'like', "%{$search}%")
+                $q->where('job_orders.job_order_no', 'like', "%{$search}%")
                 ->orWhereHas('department', function ($d) use ($search) {
                     $d->where('name', 'like', "%{$search}%");
                 });
@@ -65,16 +110,16 @@ class JobOrderController extends Controller
 
         // 🔥 STATUS FILTER
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $query->where('job_orders.status', $request->status);
         }
 
         // 🔥 DATE RANGE FILTER
         if ($request->filled('date_from')) {
-            $query->whereDate('date', '>=', $request->date_from);
+            $query->whereDate('job_orders.date', '>=', $request->date_from);
         }
 
         if ($request->filled('date_to')) {
-            $query->whereDate('date', '<=', $request->date_to);
+            $query->whereDate('job_orders.date', '<=', $request->date_to);
         }
 
         // Clone query to compute totals without affecting pagination
@@ -82,11 +127,11 @@ class JobOrderController extends Controller
 
         // Compute totals for each status
         $totals = [
-            'Pending' => (clone $totalsQuery)->where('status', 'Pending')->count(),
-            'Ongoing' => (clone $totalsQuery)->where('status', 'Ongoing')->count(),
-            'Completed' => (clone $totalsQuery)->where('status', 'Completed')->count(),
-            'Cancelled' => (clone $totalsQuery)->where('status', 'Cancelled')->count(),
-            'Unserviceable' => (clone $totalsQuery)->where('status', 'Unserviceable')->count(),
+            'Pending' => (clone $totalsQuery)->where('job_orders.status', 'Pending')->count(),
+            'Ongoing' => (clone $totalsQuery)->where('job_orders.status', 'Ongoing')->count(),
+            'Completed' => (clone $totalsQuery)->where('job_orders.status', 'Completed')->count(),
+            'Cancelled' => (clone $totalsQuery)->where('job_orders.status', 'Cancelled')->count(),
+            'Unserviceable' => (clone $totalsQuery)->where('job_orders.status', 'Unserviceable')->count(),
         ];
 
         // Paginated data

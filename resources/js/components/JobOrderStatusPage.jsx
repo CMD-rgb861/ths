@@ -1,10 +1,17 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import JobOrderModal from './JobOrderModal';
 import JobOrderOngoingModal from './JobOrderOngoingModal';
 import StatusIndicator from './ui/StatusIndicator';
-import { Navigate } from 'react-router-dom';
+
+const STATUS_BADGE_STYLES = {
+  Pending: 'bg-yellow-100 text-yellow-800',
+  Ongoing: 'bg-blue-100 text-blue-800',
+  Completed: 'bg-green-100 text-green-800',
+  Cancelled: 'bg-red-100 text-red-800',
+  Unserviceable: 'bg-gray-200 text-gray-800',
+};
 
 export default function JobOrderStatusPage({ showNotification }) {
   const { status } = useParams();
@@ -12,34 +19,33 @@ export default function JobOrderStatusPage({ showNotification }) {
   const user = JSON.parse(localStorage.getItem('user'));
   const isAdmin = user?.role === 'admin';
 
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [isEditable, setIsEditable] = useState(true);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [showPendingModal, setShowPendingModal] = useState(false);
+  const [sortBy, setSortBy] = useState('newest');
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+
+  const formattedStatus = status?.charAt(0).toUpperCase() + status?.slice(1);
+
+  // Redirect non-admin users
   if (!isAdmin) {
     return <Navigate to="/" replace />;
   }
 
-  const formattedStatus =
-    status?.charAt(0).toUpperCase() + status?.slice(1);
-
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [lastPage, setLastPage] = useState(1);
-
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const [selectedJobId, setSelectedJobId] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [isEditable, setIsEditable] = useState(true);
-
-  const [selectedJob, setSelectedJob] = useState(null);
-  const [showPendingModal, setShowPendingModal] = useState(false);
-
-  /* ================= LOAD ORDERS ================= */
+  // Load job orders
   const loadOrders = useCallback(() => {
     setLoading(true);
 
     axios
       .get('/job-orders', {
-        params: { page, search, status: formattedStatus }
+        params: { page, search, status: formattedStatus, sort: sortBy }
       })
       .then((res) => {
         const rows = Array.isArray(res.data?.data) ? res.data.data : [];
@@ -52,16 +58,15 @@ export default function JobOrderStatusPage({ showNotification }) {
         setLastPage(1);
       })
       .finally(() => setLoading(false));
-  }, [page, search, formattedStatus]);
+  }, [page, search, formattedStatus, sortBy]);
 
   useEffect(() => {
     loadOrders();
-  }, [page, search, formattedStatus]);
+  }, [loadOrders]);
 
-  /* ================= HANDLE VIEW ================= */
+  // Handle view button click
   const handleView = (job) => {
-    const jobStatus =
-      job.action_report?.status || 'Pending';
+    const jobStatus = job.action_report?.status || 'Pending';
 
     if (jobStatus === 'Pending') {
       setSelectedJob(job);
@@ -73,204 +78,275 @@ export default function JobOrderStatusPage({ showNotification }) {
     }
   };
 
-  /* ================= STATUS BADGES ================= */
-  const badgeStyle = {
-    Pending: 'bg-yellow-100 text-yellow-800',
-    Ongoing: 'bg-blue-100 text-blue-800',
-    Completed: 'bg-green-100 text-green-800',
-    Cancelled: 'bg-red-100 text-red-800',
-    Unserviceable: 'bg-gray-200 text-gray-800',
-  };
+  const sortOptions = [
+    { value: 'newest', label: 'Newest First' },
+    { value: 'oldest', label: 'Oldest First' },
+    { value: 'department_asc', label: 'Department: A to Z' },
+    { value: 'department_desc', label: 'Department: Z to A' },
+    { value: 'job_order_asc', label: 'Job Order No: Low to High' },
+    { value: 'job_order_desc', label: 'Job Order No: High to Low' },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* BACK BUTTON */}
+      {/* Back Button */}
       <button
         onClick={() => navigate('/reports')}
-        className="text-sm text-gray-600 hover:text-gray-900"
+        className="inline-flex items-center text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
       >
-        ← Back to Reports
+        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to Reports
       </button>
 
-      {/* HEADER */}
-      <h1 className="text-xl font-semibold">
-        {formattedStatus} Job Orders
-      </h1>
-
-      {/* SEARCH */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          placeholder="Search job order no or description..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-        />
+      {/* Header Card */}
+      <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+        <h1 className="text-2xl font-bold text-gray-900">
+          {formattedStatus} Job Orders
+        </h1>
+        <p className="text-gray-600 mt-1">
+          View and manage {formattedStatus.toLowerCase()} job orders
+        </p>
       </div>
 
-      {/* TABLE */}
-      <div className="overflow-x-auto bg-white border rounded-xl mt-4">
-        {loading && (
-          <div className="p-6 text-sm text-gray-500">
-            Loading...
-          </div>
-        )}
+      {/* Search and Table Card */}
+      <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+        {/* Search Bar and Filter */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex gap-4">
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                placeholder="Search job order number or description..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              />
+            </div>
 
-        {!loading && orders.length === 0 && (
-          <div className="p-6 text-sm text-gray-500">
-            No records found.
-          </div>
-        )}
+            {/* Sort Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSortDropdown(!showSortDropdown)}
+                className="inline-flex items-center px-4 py-3 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[200px] justify-between"
+              >
+                <span>{sortOptions.find(opt => opt.value === sortBy)?.label}</span>
+                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
 
-        {!loading && orders.length > 0 && (
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr className="text-left text-gray-600">
-                <th className="px-6 py-3 font-medium">
-                  Job Order No.
-                </th>
-                <th className="px-6 py-3 font-medium">
-                  Department
-                </th>
-                <th className="px-6 py-3 font-medium">
-                  Categories
-                </th>
-                <th className="px-6 py-3 font-medium">
-                  Status
-                </th>
-                <th className="px-6 py-3 font-medium">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y">
-              {orders.map((o) => (
-                <tr
-                  key={o.id}
-                  className="hover:bg-gray-50 transition"
-                >
-                  <td className="px-6 py-4 font-medium text-gray-900">
-                    {o.job_order_no}
-                  </td>
-
-                  <td className="px-6 py-4 text-gray-700">
-                    {o.department?.name || '—'}
-                  </td>
-
-                  <td className="px-6 py-4">
-                    {o.categories?.length > 0 ? (
-                      o.categories.map((category, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 inline-block bg-blue-100 text-blue-800 rounded-full text-xs font-medium mr-1"
-                        >
-                          {category.name}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-gray-500">
-                        No categories assigned
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col items-center">
-                      <span
-                        className={`px-3 py-1 text-xs rounded-full ${
-                          badgeStyle[o.action_report?.status]
-                        }`}
-                      >
-                        {o.action_report?.status}
-                      </span>
-
-                      {/* Show waiting/confirmation indicator when an action report exists */}
-                      {o.action_report && (
-                        <div className="mt-1">
-                          <StatusIndicator
-                            status={o.action_report?.status}
-                            actionReport={o.action_report}
-                            requesterId={o.requester?.id}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </td>
-
-                  <td className="px-6 py-4 flex gap-2">
+              {showSortDropdown && (
+                <div className="absolute right-0 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                  {sortOptions.map((option) => (
                     <button
-                      onClick={() => handleView(o)}
-                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                      key={option.value}
+                      onClick={() => {
+                        setSortBy(option.value);
+                        setShowSortDropdown(false);
+                        setPage(1);
+                      }}
+                      className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                        sortBy === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                      }`}
                     >
-                      View
+                      {option.label}
                     </button>
-                  </td>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Job Orders Table */}
+        <div className="overflow-x-auto">
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              <p className="mt-4 text-sm text-gray-500">Loading job orders...</p>
+            </div>
+          )}
+
+          {!loading && orders.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <svg className="h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p className="text-gray-500 text-sm">No {formattedStatus.toLowerCase()} job orders found</p>
+              <p className="text-gray-400 text-xs mt-1">Try adjusting your search criteria</p>
+            </div>
+          )}
+
+          {!loading && orders.length > 0 && (
+            <table className="min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Job Order No.
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Department
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Categories
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody className="bg-white divide-y divide-gray-200">
+                {orders.map((order) => (
+                  <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-semibold text-gray-900">
+                        {order.job_order_no}
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-700">
+                        {order.department?.name || '—'}
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        {order.categories?.length > 0 ? (
+                          order.categories.map((category, index) => (
+                            <span
+                              key={index}
+                              className="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium"
+                            >
+                              {category.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-400">No categories</span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col items-start gap-2">
+                        <span
+                          className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                            STATUS_BADGE_STYLES[order.action_report?.status]
+                          }`}
+                        >
+                          {order.action_report?.status}
+                        </span>
+
+                        {order.action_report && (
+                          <StatusIndicator
+                            status={order.action_report?.status}
+                            actionReport={order.action_report}
+                            requesterId={order.requester?.id}
+                          />
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={() => handleView(order)}
+                        className="inline-flex items-center px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
+                      >
+                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Pagination */}
+        {!loading && orders.length > 0 && (
+          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 rounded-b-lg">
+            <div className="flex items-center justify-center gap-4">
+              <button
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Previous
+              </button>
+
+              <span className="text-sm font-medium text-gray-700">
+                Page {page} of {lastPage}
+              </span>
+
+              <button
+                disabled={page === lastPage}
+                onClick={() => setPage((p) => p + 1)}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                Next
+                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* PAGINATION */}
-      <div className="flex justify-between items-center text-sm mt-4">
-        <button
-          disabled={page === 1}
-          onClick={() => setPage((p) => p - 1)}
-          className="px-3 py-1 border rounded disabled:opacity-40"
-        >
-          Previous
-        </button>
+      {/* Ongoing/Completed Modal */}
+      {showModal && selectedJobId && (
+        <JobOrderOngoingModal
+          jobId={selectedJobId}
+          isOpen={showModal}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedJobId(null);
+            loadOrders();
+          }}
+          onStatusChange={(updatedJob) => {
+            setOrders(prev =>
+              prev.map(order =>
+                order.id === updatedJob.id ? updatedJob : order
+              )
+            );
+          }}
+          showNotification={showNotification}
+          isEditable={isEditable}
+          isAdmin={isAdmin}
+        />
+      )}
 
-        <span>
-          Page {page} of {lastPage}
-        </span>
-
-        <button
-          disabled={page === lastPage}
-          onClick={() => setPage((p) => p + 1)}
-          className="px-3 py-1 border rounded disabled:opacity-40"
-        >
-          Next
-        </button>
-      </div>
-
-      {/* ================= ONGOING / COMPLETED MODAL ================= */}
-    {showModal && selectedJobId && (
-      <JobOrderOngoingModal
-        jobId={selectedJobId}
-        isOpen={showModal}
-        onClose={() => {
-          setShowModal(false);
-          setSelectedJobId(null);
-          loadOrders();
-        }}
-        onStatusChange={(updatedJob) => {
-          setOrders(prev =>
-            prev.map(o =>
-              o.id === updatedJob.id ? updatedJob : o
-            )
-          );
-        }}
-        showNotification={showNotification}
-        isEditable={isEditable}
-        isAdmin={isAdmin}
-      />
-    )}
-
-      {/* ================= PENDING MODAL ================= */}
+      {/* Pending Modal */}
       {showPendingModal && selectedJob && (
         <JobOrderModal
-          isOpen={showPendingModal} // Pass the showPendingModal state here
+          isOpen={showPendingModal}
           job={selectedJob}
           onClose={() => {
-            loadOrders(); // refetch NOW
-            setShowPendingModal(false); // Set showPendingModal to false to close the modal
-            setSelectedJobId(null); // Clear selected job id
+            loadOrders();
+            setShowPendingModal(false);
+            setSelectedJobId(null);
           }}
           onStatusChange={loadOrders}
           showNotification={showNotification}

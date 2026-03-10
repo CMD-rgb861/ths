@@ -103,7 +103,7 @@ class CSMPageBuilder
             0,
             6,
             "This Client Satisfaction Measurement (CSM) tracks the customer experiences of government offices. Your feedback on your recently\nconcluded transactionwill help this office provide a better service. Personal information shared will be kept confidential and you always\nhave the option to not answer this form.",
-            0,
+            0,  
             'L'
         );
         $pdf->Ln(1);
@@ -239,7 +239,7 @@ class CSMPageBuilder
             $pdf->Cell($textWidth, $fontHeight, $category, 0, 0);
 
             if ($category === 'Others:') {
-                $pdf->Cell(30, $fontHeight, '_____________', 0, 0);
+                $pdf->Cell(30, $fontHeight, '________________', 0, 0);
             }
 
             // Automatic gap between groups
@@ -294,7 +294,7 @@ class CSMPageBuilder
         $pdf->SetFont($arialBold, '', 8.5);
         $pdf->Cell($ageLabelWidth, $fontHeight, 'Age:', 0, 0);
         $pdf->SetFont($arialRegular, '', 8.5);
-        $pdf->SetX($pdf->GetX() + 2); // move underline right
+        $pdf->SetX($pdf->GetX()); // move underline right
         $pdf->Cell($ageFieldWidth, $fontHeight, '__________', 0, 1); // move to next line after age
 
         /*
@@ -314,12 +314,12 @@ class CSMPageBuilder
         $pdf->SetFont($arialBold, '', 8.5);
         $pdf->Cell($dateLabelWidth, $fontHeight, 'Date and Time Visited:', 0, 0);
         $pdf->SetFont($arialRegular, '', 8.5);
-        $pdf->SetX($pdf->GetX() + 6); // move underline right
+        $pdf->SetX($pdf->GetX() + 7); // move underline right
         $pdf->Cell($dateFieldWidth + 15, $fontHeight, '_________________________________', 0, 0);
         $pdf->SetFont($arialBold, '', 8.5);
         $pdf->Cell($regionLabelWidth, $fontHeight, 'Region of Residence:', 0, 0);
         $pdf->SetFont($arialRegular, '', 8.5);
-        $pdf->SetX($pdf->GetX() + 5); // move underline right
+        $pdf->SetX($pdf->GetX() + 6); // move underline right
         $pdf->Cell($regionFieldWidth, $fontHeight, '____________________________', 0, 1);
         $pdf->Ln($rowSpacing); // consistent spacing after row
 
@@ -351,11 +351,11 @@ class CSMPageBuilder
         $pdf->SetFont($arialBold, '', 8.5);
         $pdf->Cell($serviceLabelWidth, $fontHeight, 'Service/s Availed:', 0, 0);
         $pdf->SetFont($arialRegular, '', 8.5);
-        $pdf->SetX($pdf->GetX() + 5); // move underline right
+        $pdf->SetX($pdf->GetX() + 6); // move underline right
         $pdf->Cell($serviceFieldWidth, $fontHeight, '_____________________________________', 0, 0);
 
         // Move to exact start position of second label
-        $pdf->SetX($serviceLabelWidth + $serviceFieldWidth + 38);
+        $pdf->SetX($serviceLabelWidth + $serviceFieldWidth + 39);
 
         // Name of Service Provider label
         $pdf->SetFont($arialBold, '', 8.5);
@@ -367,8 +367,8 @@ class CSMPageBuilder
         $pdf->SetY($pdf->GetY() - $underlineShiftUp);
 
         // Align underline with label
-        $pdf->SetX($serviceLabelWidth + $serviceFieldWidth + 38);
-        $pdf->Cell($providerFieldWidth, $fontHeight, '______________________________________________', 0, 1);
+        $pdf->SetX($serviceLabelWidth + $serviceFieldWidth + 39);
+        $pdf->Cell($providerFieldWidth, $fontHeight, '________________________________________________', 0, 1);
 
         $pdf->Ln($rowSpacing); // consistent spacing after row
        
@@ -921,7 +921,7 @@ class CSMPageBuilder
         $thankYouTextY = $pdf->GetY() + $thankYouY;
         
         // Disable auto page break
-        $pdf->SetAutoPageBreak(false, 0);
+        $pdf->SetAutoPageBreak(false, 0);   
         
         // Add text
         $pdf->SetXY($thankYouTextX, $thankYouTextY);
@@ -981,8 +981,8 @@ class CSMPageBuilder
         // --------------------------------------------------------------------------
         
         // Position adjustments for second box - CHANGE THESE TO MOVE THE BOX
-        $x2 = 146.5;   // Move left (-) or right (+) from left margin
-        $y2 = - 5.8;    // Move up (-) or down (+) from current position
+        $x2 = 144.5;   // Move left (-) or right (+) from left margin
+        $y2 = - 4.2;    // Move up (-) or down (+) from current position
 
         // Text content for second box
         $textBox2Lines = [
@@ -1005,8 +1005,8 @@ class CSMPageBuilder
         }
         
         // Calculate dimensions
-        $textBox2Width = $maxLineWidth + ($textBox2Padding * 2) + 4; // +4 for extra space
-        $lineHeight = 2; // height per line
+        $textBox2Width = $maxLineWidth + ($textBox2Padding * 2) + 6; // +4 for extra space
+        $lineHeight = 1.5; // height per line
         $textBox2Height = (count($textBox2Lines) * $lineHeight) + ($textBox2Padding * 2) + 4; // +2 for spacing
         
         // Define second textbox properties
@@ -1024,19 +1024,18 @@ class CSMPageBuilder
         // Add text inside the second box with padding
         $pdf->SetXY($textBox2X + $textBox2Padding, $textBox2Y + $textBox2Padding + 1);
         
-        // Text for second box - centered
+        // Text for second box - left aligned
         $pdf->SetFont('arial', 'B', 5);
         
-        // Draw each line centered
+        // Draw each line left aligned
         foreach ($textBox2Lines as $index => $line) {
-            $lineWidth = $pdf->GetStringWidth($line);
-            $pdf->SetX($textBox2X + ($textBox2Width - $lineWidth) / 2);
+            $pdf->SetX($textBox2X + $textBox2Padding);
             
             // Last line doesn't need line break
             if ($index < count($textBox2Lines) - 1) {
-                $pdf->Cell($lineWidth, $lineHeight, $line, 0, 1, 'C', false);
+                $pdf->Cell($textBox2Width - ($textBox2Padding * 2), $lineHeight, $line, 0, 1, 'L', false);
             } else {
-                $pdf->Cell($lineWidth, $lineHeight, $line, 0, 0, 'C', false);
+                $pdf->Cell($textBox2Width - ($textBox2Padding * 2), $lineHeight, $line, 0, 0, 'L', false);
             }
         }
 

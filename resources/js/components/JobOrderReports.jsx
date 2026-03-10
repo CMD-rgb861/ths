@@ -9,8 +9,17 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const PER_PAGE = 5;
+const STATUSES = ['Pending', 'Ongoing', 'Completed', 'Cancelled'];
+const STATUS_STYLES = {
+  Pending: 'bg-yellow-100 text-yellow-800',
+  Ongoing: 'bg-blue-100 text-blue-800',
+  Completed: 'bg-green-100 text-green-800',
+  Cancelled: 'bg-red-100 text-red-800',
+};
 
 export default function JobOrderReports() {
+  const navigate = useNavigate();
+  
   const [orders, setOrders] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [filters, setFilters] = useState({
@@ -23,44 +32,36 @@ export default function JobOrderReports() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [itDirector, setItDirector] = useState(null);
-  const navigate = useNavigate();
   const [search, setSearch] = useState('');
-  const [selectedTab, setSelectedTab] = useState('distribution'); // Default tab is 'distribution'
+  const [selectedTab, setSelectedTab] = useState('distribution');
 
-  /* ---------------- FETCH DATA ---------------- */
-useEffect(() => {
-  setLoading(true);
+  // Fetch job orders data
+  useEffect(() => {
+    setLoading(true);
 
-  axios.get('/job-orders')
-  .then(res => {
-    const rows = Array.isArray(res.data?.data) ? res.data.data : [];
-    setOrders(rows);
-    setFiltered(rows);
+    axios.get('/job-orders')
+      .then(res => {
+        const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+        setOrders(rows);
+        setFiltered(rows);
+        setTotals(res.data.totals || {});
+      })
+      .catch(() => {
+        setOrders([]);
+        setFiltered([]);
+        setTotals({});
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-      setTotals(res.data.totals || {});
+  // Fetch IT Director information
+  useEffect(() => {
+    axios.get('/signatory/it-director')
+      .then(res => setItDirector(res.data))
+      .catch(() => setItDirector(null));
+  }, []);
 
-    })
-    .catch(() => {
-      setOrders([]);
-      setFiltered([]);
-      setTotals({});
-      showNotification(
-        "error",
-        "Failed to load job orders",
-        "An error occurred while fetching the data. Please try again later."
-      );
-    })
-    .finally(() => setLoading(false));
-}, []);
-
-/* ---------------- FETCH IT DIRECTOR ---------------- */
-useEffect(() => {
-  axios.get('/signatory/it-director')
-    .then(res => setItDirector(res.data))
-    .catch(() => setItDirector(null));
-}, []);
-
-  /* ---------------- APPLY FILTERS ---------------- */
+  // Apply filters to job orders
   useEffect(() => {
     let data = [...orders];
 
@@ -73,12 +74,12 @@ useEffect(() => {
     }
 
     if (filters.from) {
-      const fromDate = new Date(filters.from + 'T00:00:00'); // start of day
+      const fromDate = new Date(filters.from + 'T00:00:00');
       data = data.filter(o => new Date(o.created_at) >= fromDate);
     }
 
     if (filters.to) {
-      const toDate = new Date(filters.to + 'T23:59:59'); // end of day
+      const toDate = new Date(filters.to + 'T23:59:59');
       data = data.filter(o => new Date(o.created_at) <= toDate);
     }
 
@@ -88,17 +89,15 @@ useEffect(() => {
         o.job_order_no?.toLowerCase().includes(term) ||
         o.department?.name?.toLowerCase().includes(term) ||
         o.requester?.name?.toLowerCase().includes(term) ||
-        o.action_report?.status?.toLowerCase().includes(term) // Add this line
+        o.action_report?.status?.toLowerCase().includes(term)
       );
     }
 
     setPage(1);
     setFiltered(data);
-
   }, [filters, orders, search]);
 
-  /* ---------------- DEPARTMENT DISTRIBUTION PIE CHART DATA ---------------- */
-  // Department Pie Chart Data
+  // Generate department distribution pie chart data
   const getDepartmentPieData = (data) => {
     const departmentCounts = {};
     data.forEach(order => {
@@ -112,21 +111,35 @@ useEffect(() => {
     const values = Object.values(departmentCounts);
 
     if (!labels.length) {
-      return { labels: ['No Data'], datasets: [{ data: [100], backgroundColor: ['#FF6384'] }] };
+      return { 
+        labels: ['No Data'], 
+        datasets: [{ 
+          data: [100], 
+          backgroundColor: ['#FF6384'] 
+        }] 
+      };
     }
 
     return {
       labels,
       datasets: [{
         data: values,
-        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'],
+        backgroundColor: [
+          '#FF6384', 
+          '#36A2EB', 
+          '#FFCE56', 
+          '#4BC0C0', 
+          '#9966FF', 
+          '#FF9F40'
+        ],
       }],
     };
   };
-  // Compute pie data once so we can check for empty/no-data case before rendering
+
   const pieData = useMemo(() => getDepartmentPieData(filtered), [filtered]);
-  // Pie chart options with percentage in tooltips and custom legend
-  const pieChartOptions = {
+
+  // Pie chart configuration options
+  const getPieChartOptions = (legendPosition = 'top') => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -142,21 +155,20 @@ useEffect(() => {
         },
       },
       legend: {
-        position: 'top',
+        position: legendPosition,
         labels: {
           generateLabels: function (chart) {
-            const dataset = chart.data.datasets && chart.data.datasets[0];
+            const dataset = chart.data.datasets?.[0];
             const labels = Array.isArray(chart.data.labels) ? chart.data.labels : [];
-
-            // Safeguard for valid data
             const data = Array.isArray(dataset?.data) ? dataset.data : [];
             const total = data.reduce((sum, value) => sum + (typeof value === 'number' ? value : 0), 0) || 1;
 
-            // Build legend items from labels so each slice has its own legend entry and color
             return labels.map((lbl, index) => {
               const value = data[index] ?? 0;
               const percentage = ((value / total) * 100).toFixed(2);
-              const bg = Array.isArray(dataset?.backgroundColor) ? dataset.backgroundColor[index] : dataset?.backgroundColor;
+              const bg = Array.isArray(dataset?.backgroundColor) 
+                ? dataset.backgroundColor[index] 
+                : dataset?.backgroundColor;
 
               return {
                 text: `${lbl ?? `#${index + 1}`} (${percentage}%)`,
@@ -166,397 +178,372 @@ useEffect(() => {
               };
             });
           },
-          boxWidth: 12, // smaller box width for the legend
+          boxWidth: legendPosition === 'bottom' ? 14 : 12,
+          padding: legendPosition === 'bottom' ? 15 : undefined,
         },
       },
     },
-  };
+  });
 
-  /* ---------------- PAGINATION ---------------- */
-  const paginated = filtered.slice(
-    (page - 1) * PER_PAGE,
-    page * PER_PAGE
-  );
-
+  // Calculate pagination
+  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
 
-  /* ---------------- STATUS BADGE ---------------- */
-  const statusBadge = (status) => {
-    const styles = {
-      Pending: 'bg-yellow-100 text-yellow-800',
-      Ongoing: 'bg-blue-100 text-blue-800',
-      Completed: 'bg-green-100 text-green-800',
-      Cancelled: 'bg-red-100 text-red-800',
-    };
+  // Get unique departments from orders
+  const uniqueDepartments = useMemo(() => {
+    return [...new Map(
+      orders
+        .filter(o => o.department)
+        .map(o => [o.department.id, o.department])
+    ).values()];
+  }, [orders]);
 
-    return (
-      <span
-        className={`px-3 py-1 text-xs font-medium rounded-full ${
-          styles[status] || 'bg-gray-100 text-gray-700'
-        }`}
-      >
-        {status || 'Pending'}
-      </span>
-    );
-  };
+  // Render status badge
+  const statusBadge = (status) => (
+    <span
+      className={`px-3 py-1 text-xs font-medium rounded-full ${
+        STATUS_STYLES[status] || 'bg-gray-100 text-gray-700'
+      }`}
+    >
+      {status || 'Pending'}
+    </span>
+  );
 
-  /* ---------------- NAVIGATE TO JOB ORDER STATUS ---------------- */
+  // Handle navigation to job order status page
   const handleStatusClick = (status) => {
     navigate(`/job-orders/${status.toLowerCase()}`);
   };
 
-  return (
-    <div className="space-y-8">
+  // Handle filter changes
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
 
-      {/* HEADER */}
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">
-          Job Order Reports
-        </h1>
-        <p className="text-sm text-gray-500">
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h1 className="text-2xl font-bold text-gray-900">Job Order Reports</h1>
+        <p className="text-sm text-gray-600 mt-1">
           Overview and analytics of submitted IT requests
         </p>
       </div>
 
-      {/* FILTER PANEL */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-700">
+      {/* Status Summary */}
+      <JobOrderStatusSummary totals={totals} />
+
+      {/* Filter Panel */}
+      <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+        <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4 flex items-center">
+          <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
           Filters
         </h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* From Date */}
-          <div className="flex flex-col">
-            <label htmlFor="from" className="text-sm text-gray-600 mb-1">From</label>
+          <div>
+            <label htmlFor="from" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              From Date
+            </label>
             <input
               id="from"
               type="date"
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
-              onChange={e => setFilters({ ...filters, from: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              onChange={e => handleFilterChange('from', e.target.value)}
             />
           </div>
 
           {/* To Date */}
-          <div className="flex flex-col">
-            <label htmlFor="to" className="text-sm text-gray-600 mb-1">To</label>
+          <div>
+            <label htmlFor="to" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              To Date
+            </label>
             <input
               id="to"
               type="date"
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
-              onChange={e => setFilters({ ...filters, to: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              onChange={e => handleFilterChange('to', e.target.value)}
             />
           </div>
 
           {/* Status Filter */}
-          <div className="flex flex-col">
-            <label htmlFor="status" className="text-sm text-gray-600 mb-1">Status</label>
+          <div>
+            <label htmlFor="status" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Status
+            </label>
             <select
               id="status"
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
-              onChange={e => setFilters({ ...filters, status: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              onChange={e => handleFilterChange('status', e.target.value)}
             >
               <option value="">All Status</option>
-              {['Pending', 'Ongoing', 'Completed', 'Cancelled'].map(s => (
+              {STATUSES.map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </div>
 
           {/* Department Filter */}
-          <div className="flex flex-col">
-            <label htmlFor="department" className="text-sm text-gray-600 mb-1">Department</label>
+          <div>
+            <label htmlFor="department" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Department
+            </label>
             <select
               id="department"
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
-              onChange={e => setFilters({ ...filters, department: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              onChange={e => handleFilterChange('department', e.target.value)}
             >
               <option value="">All Departments</option>
-              {[...new Map(
-                orders
-                  .filter(o => o.department)
-                  .map(o => [o.department.id, o.department])
-              ).values()].map(d => (
+              {uniqueDepartments.map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
           </div>
-
         </div>
       </div>
 
-      {/* STATUS SUMMARY */}
-      <JobOrderStatusSummary totals={totals} />
-
-      {/* SEARCH BAR */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
-        <input
-          type="text"
-          placeholder="Search by Job Order No, Department, or Requester..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
-        />
+      {/* Search Bar */}
+      <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            placeholder="Search by Job Order No, Department, or Requester..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
+        </div>
       </div>
 
-      {/* RESULTS SECTION */}
-      <div className="space-y-4">
-
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">
-            Job Order Results
-          </h2>
-          <p className="text-sm text-gray-500">
-            Showing {filtered.length} total record(s)
-          </p>
+      {/* Results Section */}
+      <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Job Order Results</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Showing {paginated.length} of {filtered.length} record(s)
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-
-          {loading ? (
-            <div className="flex justify-center items-center py-6">
-              <div className="animate-spin border-t-4 border-blue-600 rounded-full w-8 h-8"></div>
+        {loading && (
+          <div className="p-12 text-center">
+            <div className="inline-flex items-center space-x-2 text-gray-500">
+              <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span className="text-sm font-medium">Loading job orders...</span>
             </div>
-          ) : null}
+          </div>
+        )}
 
-          {!loading && paginated.length === 0 && (
-            <div className="p-6 text-sm text-gray-500">
-              No records found.
-            </div>
-          )}
+        {!loading && paginated.length === 0 && (
+          <div className="p-12 text-center">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="mt-4 text-sm text-gray-500">No records found</p>
+            <p className="text-xs text-gray-400 mt-1">Try adjusting your filters or search criteria</p>
+          </div>
+        )}
 
-          {!loading && paginated.length > 0 && (
-            <div className="divide-y">
-              {paginated.map(o => {
+        {!loading && paginated.length > 0 && (
+          <div className="divide-y divide-gray-200">
+            {paginated.map(order => {
+              const status = order.action_report?.status || 'Pending';
+              const requestedBy = order.requester?.name;
+              const acceptedBy = order.action_report?.accepted_by_user?.name || 
+                                 itDirector?.user?.name || 
+                                 itDirector?.name;
+              const servicedBy = order.action_report?.serviced_by?.name || 
+                                 order.action_report?.serviced_by;
+              const cancelledBy = order.action_report?.cancelled_by_user?.name;
 
-                const status = o.action_report?.status || 'Pending';
-
-                const requestedBy = o.requester?.name;
-                // Use accepted_by_user if present; otherwise fall back to configured IT Director
-                const acceptedBy = o.action_report?.accepted_by_user?.name || itDirector?.user?.name || itDirector?.name;
-                const servicedBy = o.action_report?.serviced_by?.name || o.action_report?.serviced_by;
-                const cancelledBy = o.action_report?.cancelled_by_user?.name;
-
-                return (
-                  <div
-                    key={o.id}
-                    className="p-6 hover:bg-gray-50 transition"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {o.job_order_no}
+              return (
+                <div
+                  key={order.id}
+                  className="p-6 hover:bg-gray-50 transition-colors duration-150"
+                >
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center space-x-3">
+                        <div className="font-semibold text-gray-900 text-sm">
+                          {order.job_order_no}
                         </div>
-
-                        <div className="text-sm text-gray-500">
-                          {o.department?.name}
-                        </div>
-
-                        <div className="text-sm text-gray-500 space-y-0">
-                          {o.signature_name && o.requester?.role === 'admin' ? (
-                            <div className="">Signatory: <span className="font-medium">{o.signature_name}</span></div>
-                          ) : null}
-
-                          <div>
-                            Requested by: {requestedBy ? (
-                              o.signature_name && o.requester?.role === 'admin' ? `(${requestedBy})` : requestedBy
-                            ) : '—'}
-                          </div>
-                        </div>
-
-                        {status === 'Ongoing' && (
-                          <div className="text-sm text-blue-600">
-                            Accepted by: {acceptedBy || '—'}
-                          </div>
-                        )}
-
-                        {status === 'Completed' && (
-                          <div className="text-sm text-green-600">
-                            Serviced by: {servicedBy || '—'}
-                          </div>
-                        )}
-
-                        {status === 'Cancelled' && (
-                          <div className="text-sm text-red-600">
-                            Cancelled by: {cancelledBy || '—'}
-                          </div>
-                        )}
+                        {statusBadge(status)}
                       </div>
 
-                      {statusBadge(status)}
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">Department:</span> {order.department?.name || '—'}
+                      </div>
 
+                      <div className="text-sm text-gray-600 space-y-1">
+                        {order.signature_name && order.requester?.role === 'admin' && (
+                          <div>
+                            <span className="font-medium">Signatory:</span> {order.signature_name}
+                          </div>
+                        )}
+
+                        <div>
+                          <span className="font-medium">Requested by:</span> {requestedBy ? (
+                            order.signature_name && order.requester?.role === 'admin' 
+                              ? `(${requestedBy})` 
+                              : requestedBy
+                          ) : '—'}
+                        </div>
+                      </div>
+
+                      {status === 'Ongoing' && acceptedBy && (
+                        <div className="flex items-center text-sm text-blue-700">
+                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="font-medium">Accepted by:</span> {acceptedBy}
+                        </div>
+                      )}
+
+                      {status === 'Completed' && servicedBy && (
+                        <div className="flex items-center text-sm text-green-700">
+                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="font-medium">Serviced by:</span> {servicedBy}
+                        </div>
+                      )}
+
+                      {status === 'Cancelled' && cancelledBy && (
+                        <div className="flex items-center text-sm text-red-700">
+                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          <span className="font-medium">Cancelled by:</span> {cancelledBy}
+                        </div>
+                      )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* PAGINATION */}
-        {totalPages >= 1 && (
-          <div className="flex justify-center items-center gap-2">
-
-            <button
-              onClick={() => setPage(prev => Math.max(prev - 1, 1))}
-              disabled={page === 1}
-              className={`px-4 py-2 text-sm rounded-lg border transition ${
-                page === 1
-                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                  : 'bg-white hover:bg-gray-100 border-gray-300'
-              }`}
-            >
-              Prev
-            </button>
-
-            {Array.from({ length: totalPages }).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setPage(i + 1)}
-                className={`px-4 py-2 text-sm rounded-lg border transition ${
-                  page === i + 1
-                    ? 'bg-gray-900 text-white border-gray-900'
-                    : 'bg-white hover:bg-gray-100 border-gray-300'
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
-
-            <button
-              onClick={() => setPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={page === totalPages}
-              className={`px-4 py-2 text-sm rounded-lg border transition ${
-                page === totalPages
-                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                  : 'bg-white hover:bg-gray-100 border-gray-300'
-              }`}
-            >
-              Next
-            </button>
-
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* DEPARTMENT DISTRIBUTION */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mt-8 shadow-md">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">
-          Department Distribution
-        </h2>
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+              disabled={page === 1}
+              className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg border transition-all ${
+                page === 1
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+              }`}
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Previous
+            </button>
+
+            <span className="text-sm text-gray-700 px-4">
+              Page <span className="font-semibold">{page}</span> of{' '}
+              <span className="font-semibold">{totalPages}</span>
+            </span>
+
+            <button
+              onClick={() => setPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={page === totalPages}
+              className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg border transition-all ${
+                page === totalPages
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+              }`}
+            >
+              Next
+              <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Department Distribution */}
+      <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center">
+            <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Department Distribution
+          </h2>
+        </div>
 
         {/* Tabs */}
-        <div className="border-b mb-4">
-          <div className="flex space-x-6">
+        <div className="border-b border-gray-200">
+          <div className="flex px-6">
             <button
               onClick={() => setSelectedTab('distribution')}
-              className={`py-2 px-4 text-sm font-medium ${selectedTab === 'distribution' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+              className={`py-3 px-4 text-sm font-medium transition-colors ${
+                selectedTab === 'distribution' 
+                  ? 'border-b-2 border-blue-600 text-blue-600' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
             >
               Distribution
             </button>
             <button
               onClick={() => setSelectedTab('pie')}
-              className={`py-2 px-4 text-sm font-medium ${selectedTab === 'pie' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+              className={`py-3 px-4 text-sm font-medium transition-colors ${
+                selectedTab === 'pie' 
+                  ? 'border-b-2 border-blue-600 text-blue-600' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
             >
               Graph
             </button>
           </div>
         </div>
 
-        {/* Content based on selected tab */}
-        {selectedTab === 'distribution' && (
-          <JobOrderDepartmentSummary orders={filtered} />
-        )}
-        {selectedTab === 'pie' && (
-          <div className="p-8 flex flex-col items-center">
+        {/* Tab Content */}
+        <div className="p-6">
+          {selectedTab === 'distribution' && (
+            <JobOrderDepartmentSummary orders={filtered} />
+          )}
 
-            {/* ✅ Title */}
-            <h3 className="text-lg font-semibold text-gray-800 mb-6 text-center">
-              Department Distribution
-            </h3>
-
-            {/* Pie Graph or No-data message */}
-            {Array.isArray(pieData.labels) &&
-            pieData.labels.length === 1 &&
-            pieData.labels[0] === 'No Data' ? (
-
-              <div className="text-center text-sm text-gray-500">
-                No department data to display for the current filters.
-                <div className="mt-2">
-                  Try clearing filters or adjusting the date range.
+          {selectedTab === 'pie' && (
+            <div className="flex flex-col items-center py-8">
+              {Array.isArray(pieData.labels) &&
+              pieData.labels.length === 1 &&
+              pieData.labels[0] === 'No Data' ? (
+                <div className="text-center">
+                  <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <p className="text-sm text-gray-500">No department data to display</p>
+                  <p className="text-xs text-gray-400 mt-1">Try clearing filters or adjusting the date range</p>
                 </div>
-              </div>
-
-            ) : (
-
-              <div className="w-80 h-80">
-                <Pie
-                  data={pieData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      tooltip: {
-                        callbacks: {
-                          label: function (tooltipItem) {
-                            const dataset = tooltipItem.dataset;
-                            const total = dataset.data.reduce((sum, value) => sum + value, 0);
-                            const value = dataset.data[tooltipItem.dataIndex];
-                            const percentage = ((value / total) * 100).toFixed(2);
-                            return `${tooltipItem.label}: ${value} (${percentage}%)`;
-                          },
-                        },
-                      },
-                      legend: {
-                        position: 'bottom', // ✅ legend moved to bottom
-                        labels: {
-                          generateLabels: function (chart) {
-                            const dataset = chart.data.datasets && chart.data.datasets[0];
-                            const labels = Array.isArray(chart.data.labels)
-                              ? chart.data.labels
-                              : [];
-
-                            const data = Array.isArray(dataset?.data)
-                              ? dataset.data
-                              : [];
-
-                            const total =
-                              data.reduce(
-                                (sum, value) =>
-                                  sum + (typeof value === 'number' ? value : 0),
-                                0
-                              ) || 1;
-
-                            return labels.map((lbl, index) => {
-                              const value = data[index] ?? 0;
-                              const percentage = ((value / total) * 100).toFixed(2);
-                              const bg = Array.isArray(dataset?.backgroundColor)
-                                ? dataset.backgroundColor[index]
-                                : dataset?.backgroundColor;
-
-                              return {
-                                text: `${lbl ?? `#${index + 1}`} (${percentage}%)`,
-                                fillStyle: bg,
-                                hidden: false,
-                                index,
-                              };
-                            });
-                          },
-                          boxWidth: 14,
-                          padding: 15,
-                        },
-                      },
-                    },
-                  }}
-                />
-              </div>
-
-            )}
-          </div>
-        )}
+              ) : (
+                <div className="w-full max-w-lg">
+                  <Pie data={pieData} options={getPieChartOptions('bottom')} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-
     </div>
   );
 }

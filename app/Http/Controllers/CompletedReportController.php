@@ -255,7 +255,7 @@ class CompletedReportController extends Controller
         $pdf->Cell(0, 6, 'Request:', 0, 1, 'L');
 
         // Set text font (underlined)
-        $pdf->SetFont($arialN, 'U', 9);
+        $pdf->SetFont($arialN, '', 9);
         $reqText = $jobOrder->request_description ?? ''; // text from DB
 
         $reqWidth = $coords['request']['w'] - 4;  // text block width
@@ -264,7 +264,7 @@ class CompletedReportController extends Controller
 
         // 1️⃣ Print the text
         $startY = $pdf->GetY();
-        $pdf->SetXY($coords['request']['x'] + 2, $startY -0.5);
+        $pdf->SetXY($coords['request']['x'] + 2, $startY -1);
         $pdf->MultiCell($reqWidth, $lineHeight, $reqText, 0, 'L');
 
         // 2️⃣ Count how many lines the text actually used
@@ -384,7 +384,7 @@ class CompletedReportController extends Controller
         // Document code under Approved by block
         $pdf->SetFont($arialNB, '', 10);
         $pdf->SetXY($reqrX - 3, $dynamicStartY + 21);
-        $pdf->Cell($reqrW - 40, 5, 'F-ITS-001 Rev.01(01-23-2021)', 0, 1, 'L');
+        $pdf->Cell($reqrW - 40, 5, 'EF-ITS-001 (02-02-26)', 0, 1, 'L');
 
 
         // --------------------------
@@ -416,8 +416,8 @@ class CompletedReportController extends Controller
         $minLines = 4; // minimum lines to show
 
         $startY = $pdf->GetY();
-        $pdf->SetXY($rightCol['x'] + 4, $startY - 0.5);
-        $pdf->SetFont($arialN, 'U', 9);
+        $pdf->SetXY($rightCol['x'] + 4, $startY - 1);
+        $pdf->SetFont($arialN, '', 9);
         $pdf->MultiCell($diagWidth, $lineHeight, $diagText, 0, 'L');
 
         $usedLines = ceil($pdf->getNumLines($diagText, $diagWidth));
@@ -448,7 +448,7 @@ class CompletedReportController extends Controller
         $minLines = 4; // minimum lines to show
 
         $startY = $pdf->GetY();
-        $pdf->SetXY($rightCol['x'] + 4, $startY - 0.5);
+        $pdf->SetXY($rightCol['x'] + 4, $startY - 1);
         $pdf->SetFont($arialN, '', 9);
         $pdf->MultiCell($actWidth, $lineHeight, $actText, 0, 'L');
 

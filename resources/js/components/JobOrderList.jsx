@@ -1,18 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
+import { useLocation } from 'react-router-dom';
+import { FaBell } from 'react-icons/fa';
 import JobOrderModal from './JobOrderModal';
 import JobOrderOngoingModal from './JobOrderOngoingModal';
 import StatusBadge from './ui/StatusBadge';
-import StatusIndicator from './ui/StatusIndicator'; // Import StatusIndicator component
-import { FaBell } from 'react-icons/fa'; // Import Bell icon for notification
+import StatusIndicator from './ui/StatusIndicator';
 import JobOrderForm from './JobOrderForm';
-import { useLocation } from 'react-router-dom'; // Import useLocation
-import NewJobOrdersModal from './NewJobOrdersModal'; // Import NewJobOrdersModal
+import NewJobOrdersModal from './NewJobOrdersModal';
 
-const PER_PAGE = 10; // or whatever you prefer
+const PER_PAGE = 10;
 
 export default function JobOrderList({ showNotification, setNewPendingJobs, newPendingJobs }) {
-  const location = useLocation();  // Get current location/path
+  const location = useLocation();
   
   const [jobs, setJobs] = useState([]);
   const [meta, setMeta] = useState({});
@@ -21,31 +21,28 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   const [loading, setLoading] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-
   const [selectedOngoingJob, setSelectedOngoingJob] = useState(null);
   const [ongoingModalOpen, setOngoingModalOpen] = useState(false);
-
-  const [isNewJobsModalOpen, setIsNewJobsModalOpen] = useState(false); // State for the new job modal
+  const [isNewJobsModalOpen, setIsNewJobsModalOpen] = useState(false);
 
   const user = JSON.parse(localStorage.getItem('user'));
   const userId = user?.id;
   const isAdmin = user?.role === 'admin';
 
-  /* ================= FETCH JOBS ================= */
-  const fetchJobs = async (searchValue = search, pageValue = page) => {
-    if (loading) return; // Prevent duplicate fetches
+  // Fetch job orders with filters
+  const fetchJobs = useCallback(async (searchValue = search, pageValue = page) => {
+    if (loading) return;
 
     setLoading(true);
 
     try {
       const res = await axios.get('/job-orders', {
-        params: { search: searchValue } // send search param to backend
+        params: { search: searchValue }
       });
 
       let data = res.data.data || [];
 
-      // ================= FILTER =================
-      // Keep only Pending & Ongoing
+      // Filter: Keep only Pending & Ongoing
       data = data.filter(job =>
         ['Pending', 'Ongoing'].includes(job.action_report?.status || 'Pending')
       );
@@ -55,16 +52,17 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         data = data.filter(job => job.requested_by === userId);
       }
 
-      // ================= OPTION 3 (Auto Go Back if Empty Page) =================
+      // Calculate pagination
       const totalPages = Math.ceil(data.length / PER_PAGE) || 1;
 
+      // Auto go back if current page exceeds total pages
       if (pageValue > totalPages) {
         setPage(totalPages);
         setLoading(false);
         return;
       }
 
-      // ================= OPTION 2 (Manual Pagination) =================
+      // Manual pagination
       const start = (pageValue - 1) * PER_PAGE;
       const end = start + PER_PAGE;
       const paginatedData = data.slice(start, end);
@@ -78,7 +76,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         next_page_url: pageValue < totalPages
       });
 
-      // ================= TRACK NEW PENDING JOBS (ADMIN ONLY) =================
+      // Track new pending jobs (admin only)
       if (isAdmin) {
         const currentPendingJobs = data.filter(
           job => job.action_report?.status === 'Pending' && !job.notified
@@ -90,26 +88,24 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
 
         setNewPendingJobs(prev => [...prev, ...newPending]);
       }
-
     } catch (error) {
-      console.log("API ERROR:", error.response || error.message);
+      console.error("Failed to fetch job orders:", error);
       setJobs([]);
       setMeta({});
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, page, loading, isAdmin, userId, newPendingJobs, setNewPendingJobs]);
 
-  /* ================= EFFECTS ================= */
+  // Load jobs when search or page changes
   useEffect(() => {
     fetchJobs(search, page);
   }, [search, page]);
 
-  /* ================= MODAL LOGIC ================= */
+  // Modal handlers
   const openModal = (job) => {
     const status = job.action_report?.status;
 
-    // 🔐 Only admin can open Ongoing dashboard modal
     if (status === 'Ongoing') {
       setSelectedOngoingJob(job);
       setOngoingModalOpen(true);
@@ -130,49 +126,40 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   };
 
   const handleStatusChange = (updatedJob = null, wasAccepted = false) => {
-    // If the job was just accepted, remove it from newPendingJobs
     if (wasAccepted && updatedJob) {
       setNewPendingJobs(prev => prev.filter(job => job.id !== updatedJob.id));
     }
     
-    // Refresh the entire list
     fetchJobs();
   };
 
-  /* ================= COUNTS (ADMIN ONLY) ================= */
+  // Calculated counts (admin only)
   const pendingCount = jobs.filter(
     job => job.action_report?.status === 'Pending'
-  ).length; // Total Pending job count
+  ).length;
 
   const ongoingCount = jobs.filter(
     job => job.action_report?.status === 'Ongoing'
   ).length;
 
-  /* ================= RESET NEW PENDING JOBS ================= */
+  // New jobs notification handlers
   const handleBellClick = () => {
-    setIsNewJobsModalOpen(true); // Open the modal for new jobs
-    // Do not clear the state yet — we'll clear it after the modal is closed
+    setIsNewJobsModalOpen(true);
   };
 
-  /* ================= MARK JOBS AS VIEWED ================= */
   const handleNewJobsModalClose = () => {
     setIsNewJobsModalOpen(false);
 
-    // Update backend so that these jobs are no longer new
     if (newPendingJobs.length > 0) {
       axios.post('/job-orders/mark-pending-notified', {
         jobs: newPendingJobs.map(job => job.id)
       })
       .then(() => {
-        // After marking as notified, remove from local state
-        // setNewPendingJobs([]);
-        fetchJobs(search, page); // refresh list
+        fetchJobs(search, page);
       })
-      .catch(err => console.error(err));
+      .catch(err => console.error('Failed to mark jobs as notified:', err));
     }
   };
-
-  // New Notification Modal HANDLERS
 
   const isJobNew = (jobId) => {
     return newPendingJobs.some(job => job.id === jobId);
@@ -203,165 +190,200 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
       });
   };
 
-  /* ================= UI ================= */
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-lg font-semibold text-gray-900">
-          Job Orders
-        </h1>
-        <p className="text-sm text-gray-500">
-          {isAdmin
-            ? 'Monitor, manage, and update all IT job requests.'
-            : 'Track and monitor your submitted IT requests.'}
-        </p>
-      </div>
-
-      {/* ================= ADMIN SUMMARY CARDS ================= */}
-      {isAdmin && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Pending Card */}
-          <div className="bg-white border border-yellow-200 rounded-xl p-5 shadow-sm relative">
-            <p className="text-sm text-gray-500">Total Pending</p>
-            <h2 className="text-2xl font-bold text-yellow-600">
-              {pendingCount} {/* Display the actual count of pending jobs */}
-            </h2>
-            {/* Notification Icon */}
-            {newPendingJobs.length > 0 && (
-              <div
-                className="absolute top-0 right-0 p-2 bg-yellow-600 text-white rounded-full cursor-pointer"
-                onClick={handleBellClick} // Open the new pending job modal
-              >
-                <FaBell className="w-5 h-5" />
-                <div className="absolute top-0 right-0 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">
-                  {newPendingJobs.length} {/* Display the count of new pending jobs */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Job Orders</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              {isAdmin
+                ? 'Monitor, manage, and update all IT job requests'
+                : 'Track and monitor your submitted IT requests'}
+            </p>
+          </div>
+          
+          {/* Admin Summary Stats - Inline */}
+          {isAdmin && (
+            <div className="flex items-center space-x-6">
+              <div className="text-center relative">
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Pending</p>
+                    <p className="text-2xl font-bold text-yellow-600">{pendingCount}</p>
+                  </div>
+                </div>
+                
+                {newPendingJobs.length > 0 && (
+                  <button
+                    onClick={handleBellClick}
+                    className="absolute -top-2 -right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg animate-pulse"
+                  >
+                    <FaBell className="w-4 h-4" />
+                    <span className="absolute -top-1 -right-1 bg-red-700 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center font-bold">
+                      {newPendingJobs.length}
+                    </span>
+                  </button>
+                )}
+              </div>
+              
+              <div className="h-12 w-px bg-gray-300"></div>
+              
+              <div className="text-center">
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Ongoing</p>
+                    <p className="text-2xl font-bold text-blue-600">{ongoingCount}</p>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
 
-          {/* Ongoing Card */}
-          <div className="bg-white border border-blue-200 rounded-xl p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Total Ongoing</p>
-            <h2 className="text-2xl font-bold text-blue-600">
-              {ongoingCount}
-            </h2>
+        {/* Search Bar */}
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by job order number, department, or requester..."
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
           </div>
         </div>
-      )}
-
-      {/* Search */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search job order number or department..."
-          className="w-full lg:w-96 border border-gray-300 rounded-xl px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-        />
       </div>
 
-      {/* ================= TABLE ================= */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      {/* Job Orders Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {loading && (
-          <div className="p-6 text-sm text-gray-500">
-            Searching...
+          <div className="p-12 text-center">
+            <div className="inline-flex items-center space-x-2 text-gray-500">
+              <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span className="text-sm font-medium">Loading job orders...</span>
+            </div>
           </div>
         )}
 
         {!loading && jobs.length === 0 && (
-          <div className="p-6 text-sm text-gray-500">
-            No job orders found.
+          <div className="p-12 text-center">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="mt-4 text-sm text-gray-500">No job orders found</p>
+            <p className="text-xs text-gray-400 mt-1">Try adjusting your search criteria</p>
           </div>
         )}
 
         {!loading && jobs.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr className="text-left text-gray-600">
-                  <th className="px-6 py-3 font-medium">Job Order No.</th>
-                  <th className="px-6 py-3 font-medium">Department</th>
-                  <th className="px-6 py-3 font-medium">Categories</th>
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Job Order No.
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Department
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Categories
+                  </th>
                   {isAdmin && (
-                    <th className="px-6 py-3 font-medium">Requester</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Requester
+                    </th>
                   )}
-                  <th className="px-6 py-3 font-medium text-center">Status</th>
-                  <th className="px-6 py-3 font-medium">Actions</th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y">
-                {jobs.map((j) => (
-                  <tr key={j.id} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4 font-medium text-gray-900">
-                      <div className="flex items-center gap-2">
-                        {isJobNew(j.id) && (
+              <tbody className="bg-white divide-y divide-gray-200">
+                {jobs.map((job) => (
+                  <tr key={job.id} className="hover:bg-gray-50 transition-colors duration-150">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        {isJobNew(job.id) && (
                           <span className="relative flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
                           </span>
                         )}
-                        {j.job_order_no}
-                        {isJobNew(j.id) && (
-                          <span className="px-2 py-1 text-xs bg-red-600 text-white rounded-full">
+                        <span className="text-sm font-semibold text-gray-900">{job.job_order_no}</span>
+                        {isJobNew(job.id) && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
                             NEW
                           </span>
                         )}
                       </div>
                     </td>
 
-                    <td className="px-6 py-4 text-gray-700">
-                      {j.department?.name || '—'}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm text-gray-700">{job.department?.name || '—'}</span>
                     </td>
 
                     <td className="px-6 py-4">
-                      {j.categories?.length > 0 ? (
-                        j.categories.map((category, index) => (
-                          <span
-                            key={index}
-                            className="px-3 py-1 inline-block bg-blue-100 text-blue-800 rounded-full text-xs font-medium mr-1"
-                          >
-                            {category.name}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-gray-500">
-                          No categories assigned
-                        </span>
-                      )}
-                    </td>
-
-                    {isAdmin && (
-                      <td className="px-6 py-4 text-gray-700">
-                        {j.requester?.name || '—'}
-                      </td>
-                    )}
-
-                    <td className="px-6 py-4">
-                      {/* StatusBadge for Pending, Ongoing, etc. */}
-                      <div className="flex flex-col items-center">
-                        <StatusBadge status={j.action_report?.status} />
-                        {/* If the job is Ongoing, display StatusIndicator below the badge */}
-                        {j.action_report?.status === 'Ongoing' && (
-                          <div className="mt-1">
-                                <StatusIndicator
-                                  status={j.action_report?.status}
-                                  actionReport={j.action_report}
-                                  requesterId={j.requester?.id} // Pass the requester ID
-                                />
-                          </div>
+                      <div className="flex flex-wrap gap-1">
+                        {job.categories?.length > 0 ? (
+                          job.categories.map((category, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                            >
+                              {category.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-400 italic">No categories</span>
                         )}
                       </div>
                     </td>
 
-                    <td className="px-6 py-4 flex gap-2">
-                      {/* View Button */}
+                    {isAdmin && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm text-gray-700">{job.requester?.name || '—'}</span>
+                      </td>
+                    )}
+
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col items-center space-y-1">
+                        <StatusBadge status={job.action_report?.status} />
+                        {job.action_report?.status === 'Ongoing' && (
+                          <StatusIndicator
+                            status={job.action_report?.status}
+                            actionReport={job.action_report}
+                            requesterId={job.requester?.id}
+                          />
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
                       <button
-                        onClick={() => openModal(j)}
-                        className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                        onClick={() => openModal(job)}
+                        className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150"
                       >
-                        View
+                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        View Details
                       </button>
                     </td>
                   </tr>
@@ -372,41 +394,50 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         )}
       </div>
 
-      {/* ================= PAGINATION ================= */}
+      {/* Pagination */}
       {!loading && jobs.length > 0 && (
-        <div className="flex justify-between items-center text-sm">
-          <button
-            disabled={!meta.prev_page_url}
-            onClick={() => setPage(p => p - 1)}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-          >
-            Previous
-          </button>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-center gap-4">
+            <button
+              disabled={!meta.prev_page_url}
+              onClick={() => setPage(p => p - 1)}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Previous
+            </button>
 
-          <span className="text-gray-600">
-            Page {meta.current_page || 1} of {meta.last_page || 1}
-          </span>
+            <span className="text-sm text-gray-700 px-4">
+              Page <span className="font-semibold">{meta.current_page || 1}</span> of{' '}
+              <span className="font-semibold">{meta.last_page || 1}</span>
+            </span>
 
-          <button
-            disabled={!meta.next_page_url}
-            onClick={() => setPage(p => p + 1)}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-          >
-            Next
-          </button>
+            <button
+              disabled={!meta.next_page_url}
+              onClick={() => setPage(p => p + 1)}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              Next
+              <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Render JobOrderForm only on the /create route */}
+      {/* Job Order Form (only on /create route) */}
       {location.pathname === '/create' && (
         <JobOrderForm
           userRole={user?.role}
           showNotification={showNotification}
-          refreshJobs={fetchJobs}          // Pass the job-fetching function
+          refreshJobs={fetchJobs}
         />
       )}
 
-      {/* ================= MODALS ================= */}
+      {/* Modals */}
       <JobOrderModal
         isOpen={modalOpen}
         job={selectedJob}
@@ -424,10 +455,9 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         isAdmin={isAdmin}
       />
 
-      {/* New Job Orders Modal */}
       <NewJobOrdersModal
         isOpen={isNewJobsModalOpen}
-        onClose={handleNewJobsModalClose} // Use the new function to handle closing the modal
+        onClose={handleNewJobsModalClose}
         newPendingJobs={newPendingJobs}
         onViewJob={handleViewFromNotification}
         onMarkAllViewed={handleMarkAllViewed}
