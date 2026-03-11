@@ -88,9 +88,9 @@ class CSMPageBuilder
         }
 
         $pdf->SetFont($arialRegular, '', 9); 
-        $pdf->Cell(0, 5, 'Republic of the Philippines', 0, 1, 'C');
+        $pdf->Cell(0, 5, 'LEYTE NORMAL UNIVERSITY', 0, 1, 'C');
         $pdf->SetFont($arialBold, '', 9);
-        $pdf->Cell(0, 5, 'Leyte Normal University', 0, 1, 'C');
+        $pdf->Cell(0, 5, 'INTEGRITY·EXCELLENCE·SERVICE', 0, 1, 'C');
         $pdf->Cell(0, 5, 'CLIENT SATISFACTION MEASUREMENT (CSM)', 0, 1, 'C');
         $pdf->Ln(1);
 
@@ -163,15 +163,15 @@ class CSMPageBuilder
         $pdf->Cell($col2Width, $rowHeight, '', 1, 1, 'L');
         
         // Row 3: DATE VISITED | (empty) | TIME VISITED | (empty) - 4 columns
-        $pdf->Cell($col1Width, $rowHeight, 'DATE VISITED:', 1, 0, 'L');
-        $pdf->Cell($row3ColWidth, $rowHeight, '', 1, 0, 'L');
-        $pdf->Cell($row3ColWidth, $rowHeight, 'TIME VISITED:', 1, 0, 'L');
-        $pdf->Cell($row3ColWidth, $rowHeight, '', 1, 1, 'L');
-        
-        // Row 4: NAME OF SERVICE PROVIDER (OPTIONAL) | (empty column) - GRAY FILL
         $pdf->SetFillColor(220, 220, 220); // Gray color
-        $pdf->Cell($col1Width, $rowHeight, 'NAME OF SERVICE PROVIDER (OPTIONAL):', 1, 0, 'L', true);
-        $pdf->Cell($col2Width, $rowHeight, '', 1, 1, 'L', true);
+        $pdf->Cell($col1Width, $rowHeight, 'DATE VISITED:', 1, 0, 'L', true);
+        $pdf->Cell($row3ColWidth, $rowHeight, '', 1, 0, 'L', true);
+        $pdf->Cell($row3ColWidth, $rowHeight, 'TIME VISITED:', 1, 0, 'L', true);
+        $pdf->Cell($row3ColWidth, $rowHeight, '', 1, 1, 'L', true);
+        
+        // Row 4: NAME OF SERVICE PROVIDER (OPTIONAL) | (empty column)
+        $pdf->Cell($col1Width, $rowHeight, 'NAME OF SERVICE PROVIDER (OPTIONAL):', 1, 0, 'L');
+        $pdf->Cell($col2Width, $rowHeight, '', 1, 1, 'L');
         
         // Reset fill color to white for subsequent content
         $pdf->SetFillColor(255, 255, 255);
@@ -193,8 +193,13 @@ class CSMPageBuilder
         // Save starting Y for alignment
         $piTableStartY = $pdf->GetY();
 
+        $titleHeight = 6; // define before use
+
+        // Row -1: (new row above header)
+        $pdf->Cell($piCol1Width, $titleHeight, '', 1, 0, 'L');
+        $pdf->Cell($piCol2Width, $titleHeight, '', 1, 1, 'L');
+
         // Row 0: PERSONAL INFORMATION header - only in first column
-        $titleHeight = 6; // Match the CC table title cell height
         $pdf->Cell($piCol1Width, $titleHeight, 'PERSONAL INFORMATION', 1, 1, 'L');
 
         // Row 0.5: Data Privacy Notice - spans full width
@@ -376,7 +381,8 @@ class CSMPageBuilder
         $pdf->SetFont($arialRegular, '', 5);
         $ccInstructions = 'INSTRUCTIONS: Check mark (✔) your answer to the Citizen\'s Charter (CC) questions. The Citizen\'s Charter is an official document that reflects the services of a government agency/office including its requirements, fees, and processing times among others.';
         $instructionsHeight = 12;
-        $pdf->MultiCell($ccTableWidth, $instructionsHeight, $ccInstructions, 1, 'L', false, 1, '', '', true, 0, false, true, $instructionsHeight, 'M');
+        $pdf->SetFillColor(220, 220, 220);
+        $pdf->MultiCell($ccTableWidth, $instructionsHeight, $ccInstructions, 1, 'L', true, 1, '', '', true, 0, false, true, $instructionsHeight, 'M');
 
         // Define column widths for CC table (3 columns)
         $ccCol1Width = $ccTableWidth * 0.10;
@@ -466,6 +472,38 @@ class CSMPageBuilder
         // INSERT CONTENT
         foreach ($ccRows as $i => $row) {
             $rowY = $startY + array_sum(array_slice($rowHeights, 0, $i));
+
+            if ($row['label'] === 'CC2') {
+                $pdf->SetFillColor(220, 220, 220);
+
+                // Draw filled background
+                $pdf->Rect(
+                    $ccTableX,
+                    $rowY,
+                    $ccCol1Width,
+                    $rowHeights[$i],
+                    'F' // fill only
+                );
+                $pdf->Rect(
+                    $ccTableX + $ccCol1Width,
+                    $rowY,
+                    $ccCol2Width,
+                    $rowHeights[$i],
+                    'F'
+                );
+                $pdf->Rect(
+                    $ccTableX + $ccCol1Width + $ccCol2Width,
+                    $rowY,
+                    $ccCol3Width,
+                    $rowHeights[$i],
+                    'F'
+                );
+
+                // Redraw the borders
+                $pdf->Rect($ccTableX, $rowY, $ccCol1Width, $rowHeights[$i], 'D');
+                $pdf->Rect($ccTableX + $ccCol1Width, $rowY, $ccCol2Width, $rowHeights[$i], 'D');
+                $pdf->Rect($ccTableX + $ccCol1Width + $ccCol2Width, $rowY, $ccCol3Width, $rowHeights[$i], 'D');
+            }
             // Label
             $pdf->SetXY($ccTableX + 1, $rowY + 1);
             $pdf->SetFont($arialBold, '', 5);
@@ -538,17 +576,6 @@ class CSMPageBuilder
         $rows = 10;
         $cols = 7;
 
-        // Table header
-        $headers = [
-            ' ',           // first column for questions
-            "☹\nStrongly\nDisagree",      // Using ☹ (U+2639)
-            "☹\nDisagree",                 // Using ☹ (U+2639) 
-            "�\nNeither Agree\nnor Disagree",  // Using face without mouth (U+1F636)
-            "☺\nAgree",                    // Using ☺ (U+263A)
-            "☺\nStrongly\nAgree",          // Using ☺ (U+263A)
-            "N/A\nNot\nApplicable"
-        ];
-
         // Calculate available width for table (page width minus margins)
         $margins = $pdf->getMargins();
         $availableWidth = $pageWidth - $margins['left'] - $margins['right'];
@@ -557,7 +584,7 @@ class CSMPageBuilder
 
         // Calculate minimum width needed for rating columns
         $pdf->SetFont('arial', '', 8.5);
-        
+
         $totalRatingWidth = 0;
         for ($i = 1; $i < count($headerTexts); $i++) {
             $lines = explode("\n", $headerTexts[$i]);
@@ -576,7 +603,7 @@ class CSMPageBuilder
 
         // First column gets remaining width
         $colWidths[0] = $availableWidth - $totalRatingWidth;
-        
+
         // Ensure first column has minimum width
         if ($colWidths[0] < 40) {
             $colWidths[0] = 40;
@@ -585,6 +612,25 @@ class CSMPageBuilder
                 $colWidths[$i] = $colWidths[$i] * $scale;
             }
         }
+
+        // Insert a new row with just one column as the new header above the SQD table
+        // REMOVE the CLIENT SATISFACTION SURVEY row
+        // $pdf->SetFont('arial', 'B', 11);
+        // $pdf->Cell(array_sum($colWidths), 11, 'CLIENT SATISFACTION SURVEY', 1, 1, 'C');
+        $pdf->SetFont('arial', 'B', 9);
+        $pdf->Cell(array_sum($colWidths), 9, 'SERVICE QUALITY DIMENSIONS (SQD)', 1, 1, 'C');
+        $pdf->SetFont('arial', '', 8.5);
+
+        // Table header
+        $headers = [
+            ' ',           // first column for questions
+            "☹\nStrongly\nDisagree",      // Using ☹ (U+2639)
+            "☹\nDisagree",                 // Using ☹ (U+2639) 
+            "�\nNeither Agree\nnor Disagree",  // Using face without mouth (U+1F636)
+            "☺\nAgree",                    // Using ☺ (U+263A)
+            "☺\nStrongly\nAgree",          // Using ☺ (U+263A)
+            "N/A\nNot\nApplicable"
+        ];
 
         // --------------------------------------------------------------------------
         // DRAW HEADER ROW WITH EMOJI IMAGES
