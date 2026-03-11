@@ -31,6 +31,8 @@ class JobOrderController extends Controller
             'categories',
             'attachments',
             'actionReport.servicedBy',
+            'actionReport.acceptedBy',
+            'actionReport.cancelledBy',
             'clientSatisfactionMeasurements',
         ]);
 
@@ -125,17 +127,41 @@ class JobOrderController extends Controller
         // Clone query to compute totals without affecting pagination
         $totalsQuery = clone $query;
 
-        // Compute totals for each status
+        // Compute totals for each status (based on full dataset, not user filter)
+        $allJobsQuery = JobOrder::query();
+        if (!$request->user()->isAdmin()) {
+            $allJobsQuery->where('requested_by', $request->user()->id);
+        }
+
         $totals = [
-            'Pending' => (clone $totalsQuery)->where('job_orders.status', 'Pending')->count(),
-            'Ongoing' => (clone $totalsQuery)->where('job_orders.status', 'Ongoing')->count(),
-            'Completed' => (clone $totalsQuery)->where('job_orders.status', 'Completed')->count(),
-            'Cancelled' => (clone $totalsQuery)->where('job_orders.status', 'Cancelled')->count(),
-            'Unserviceable' => (clone $totalsQuery)->where('job_orders.status', 'Unserviceable')->count(),
+            'Pending' => (clone $allJobsQuery)->where('status', 'Pending')->count(),
+            'Ongoing' => (clone $allJobsQuery)->where('status', 'Ongoing')->count(),
+            'Completed' => (clone $allJobsQuery)->where('status', 'Completed')->count(),
+            'Cancelled' => (clone $allJobsQuery)->where('status', 'Cancelled')->count(),
+            'Unserviceable' => (clone $allJobsQuery)->where('status', 'Unserviceable')->count(),
         ];
 
+        // Check if per_page is provided and handle accordingly
+        $perPage = $request->input('per_page', 10);
+        
+        // If per_page is set to a high number (e.g., 1000) or -1, get all results
+        if ($perPage == -1 || $perPage >= 1000) {
+            $jobs = $query->get();
+            
+            return response()->json([
+                'data' => $jobs,
+                'meta' => [
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'per_page' => $jobs->count(),
+                    'total' => $jobs->count(),
+                ],
+                'totals' => $totals,
+            ]);
+        }
+
         // Paginated data
-        $jobs = $query->paginate(10);
+        $jobs = $query->paginate($perPage);
 
         return response()->json([
             'data' => $jobs->items(),
@@ -145,7 +171,7 @@ class JobOrderController extends Controller
                 'per_page' => $jobs->perPage(),
                 'total' => $jobs->total(),
             ],
-            'totals' => $totals, // ✅ Added totals for frontend cards
+            'totals' => $totals,
         ]);
     }
     /*

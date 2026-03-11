@@ -94,552 +94,413 @@ class CSMPageBuilder
         $pdf->Cell(0, 5, 'CLIENT SATISFACTION MEASUREMENT (CSM)', 0, 1, 'C');
         $pdf->Ln(1);
 
-        $pdf->SetFont($arialBold, 'I', 8.8);
-        $pdf->Cell(0, 8, 'HELP US SERVE YOU BETTER!', 0, 1, 'C');
-        $pdf->Ln(0.5);
-
-        $pdf->SetFont('arial', 'I', 8.5);
+        $pdf->SetFont($arialBold, '', 8.5);
         $pdf->MultiCell(
             0,
             6,
-            "This Client Satisfaction Measurement (CSM) tracks the customer experiences of government offices. Your feedback on your recently\nconcluded transactionwill help this office provide a better service. Personal information shared will be kept confidential and you always\nhave the option to not answer this form.",
+            "HELP US SERVE YOU BETTER! This Client Satisfaction Measurement (CSM) tracks the customer experiences of government offices. Your feedback on your recently concluded transaction will help this office provide a better service. Personal information shared will be kept confidential and you always have the option to not answer this form.",
             0,  
             'L'
         );
-        $pdf->Ln(1);
-
-        /*
-        |--------------------------------------------------------------------------
-        | STANDARD SIZES
-        |--------------------------------------------------------------------------
-        */
-
-        $labelWidth = 50;
-        $boxWidth = 4;
-        $boxHeight = 4;
-        $labelSpacing = 3;
-        $optionSpacing = 25;
-
-       /*
-        |--------------------------------------------------------------------------
-        | SHARED SPACING CONFIG
-        |--------------------------------------------------------------------------
-        */
-
-        $pdf->SetFont('arial', '', 8.5);
-
-        $labelWidth   = 20;
-        $boxWidth     = 2;
-        $boxHeight    = 2;
-
-        $labelSpacing = 0.5;  // space between checkbox and label
-        $groupGap     = 3;    // space between option groups
-
-        $fontHeight   = 6;    // approximate height of font 7
-        $boxOffsetY   = ($fontHeight - $boxHeight) / 2;  // center checkbox vertically
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | CLIENT TYPE
-        |--------------------------------------------------------------------------
-        */
-
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($labelWidth, $fontHeight, 'Client Type:', 0, 0);
-        
-        $pdf->SetX(31);
-        
-        $pdf->SetFont($arialRegular, '', 8.5);
-
-        $clientTypes = [
-            'Citizen',
-            'Business',
-            'Government(Employee or another agency)'
-        ];
-
-        foreach ($clientTypes as $type) {
-
-            // Draw checkbox vertically centered with text
-            $pdf->Rect($pdf->GetX(), $pdf->GetY() + $boxOffsetY, $boxWidth, $boxHeight);
-
-            // Check mark
-            $pdf->Cell(
-                $boxWidth,
-                $fontHeight,
-                ($jobOrder->client_type == $type ? '✔' : ''),
-                0,
-                0,
-                'C'
-            );
-
-            // Space after checkbox
-            $pdf->Cell($labelSpacing, $fontHeight, '', 0, 0);
-
-            // Get exact width of label text
-            $textWidth = $pdf->GetStringWidth($type);
-
-            // Print label using exact width
-            $pdf->Cell($textWidth, $fontHeight, $type, 0, 0);
-
-            // Automatic gap between groups
-            $pdf->Cell($groupGap, $fontHeight, '', 0, 0);
-        }
-
-        $pdf->Ln(5);
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | CLIENT CATEGORY
-        |--------------------------------------------------------------------------
-        */
-
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($labelWidth, $fontHeight, 'Client Category:', 0, 0);
-        
-        $pdf->SetX(37);
-        
-        $pdf->SetFont($arialRegular, '', 8.5);
-
-        $categories = [
-            'Student',
-            'Visitor',
-            'Faculty',
-            'Admin/Personnel',
-            'Others:'
-        ];
-
-        foreach ($categories as $category) {
-
-            // Draw checkbox vertically centered with text
-            $pdf->Rect($pdf->GetX(), $pdf->GetY() + $boxOffsetY, $boxWidth, $boxHeight);
-
-            // Check mark
-            $pdf->Cell(
-                $boxWidth,
-                $fontHeight,
-                (!empty($jobOrder->client_category) &&
-                is_array($jobOrder->client_category) &&
-                in_array($category, $jobOrder->client_category)
-                    ? '✔'
-                    : ''),
-                0,
-                0,
-                'C'
-            );
-
-            // Space after checkbox
-            $pdf->Cell($labelSpacing, $fontHeight, '', 0, 0);
-
-            // Get exact label width
-            $textWidth = $pdf->GetStringWidth($category);
-
-            // Print label with exact width
-            $pdf->Cell($textWidth, $fontHeight, $category, 0, 0);
-
-            if ($category === 'Others:') {
-                $pdf->Cell(30, $fontHeight, '________________', 0, 0);
-            }
-
-            // Automatic gap between groups
-            $pdf->Cell($groupGap, $fontHeight, '', 0, 0);
-        }
-
-        $pdf->Ln(5);
-
-        /*
-        |--------------------------------------------------------------------------
-        | NAME + SEX + AGE INLINE
-        |--------------------------------------------------------------------------
-        */
-
-        $fontHeight     = 6;
-        $boxOffsetY     = ($fontHeight - $boxHeight) / 2;
-
-        // NAME field
-        $labelWidth     = 19.5;
-        $nameFieldWidth = 43;   // slightly shorter underline
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($labelWidth, $fontHeight, 'Name (Optional):', 0, 0);
-        $pdf->SetFont($arialRegular, '', 8.5);
-        $pdf->SetX($pdf->GetX() + 5); // move underline right
-        $pdf->Cell($nameFieldWidth, $fontHeight, '____________________________________________________', 0, 0);
-
-        // Move X to right after name underline for Sex label
-        $pdf->SetX($labelWidth + $nameFieldWidth + 65); // 2mm gap
-        $sexLabelWidth  = 7;
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($sexLabelWidth, $fontHeight, 'Sex:', 0, 0);
-        
-        $pdf->SetX($pdf->GetX() + 2); // move checkboxes right
-        
-        $pdf->SetFont($arialRegular, '', 8.5);
-
-        $sexOptions = ['Male', 'Female'];
-        foreach ($sexOptions as $sex) {
-            $pdf->Rect($pdf->GetX(), $pdf->GetY() + $boxOffsetY, $boxWidth, $boxHeight);
-            $pdf->Cell($boxWidth, $fontHeight, ($jobOrder->sex == $sex ? '✔' : ''), 0, 0, 'C');
-            $pdf->Cell($labelSpacing, $fontHeight, '', 0, 0);
-
-            $textWidth = $pdf->GetStringWidth($sex);
-            $pdf->Cell($textWidth, $fontHeight, $sex, 0, 0);
-
-            $pdf->Cell($groupGap, $fontHeight, '', 0, 0);
-        }
-
-        // AGE field (inline, after SEX options)
-        $ageLabelWidth  = 7;
-        $ageFieldWidth  = 20;
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($ageLabelWidth, $fontHeight, 'Age:', 0, 0);
-        $pdf->SetFont($arialRegular, '', 8.5);
-        $pdf->SetX($pdf->GetX()); // move underline right
-        $pdf->Cell($ageFieldWidth, $fontHeight, '__________', 0, 1); // move to next line after age
-
-        /*
-        |--------------------------------------------------------------------------
-        | DATE & REGION INLINE
-        |--------------------------------------------------------------------------
-        */
-
-        $fontHeight       = -1;   // same height for all labels and underlines
-        $rowSpacing       = 4;   // vertical spacing after each row
-
-        $dateLabelWidth   = 25;  // width for "Date and Time Visited:"
-        $dateFieldWidth   = 50;  // underline width
-        $regionLabelWidth = 25;  // width for "Region of Residence:"
-        $regionFieldWidth = 50;  // underline width
-
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($dateLabelWidth, $fontHeight, 'Date and Time Visited:', 0, 0);
-        $pdf->SetFont($arialRegular, '', 8.5);
-        $pdf->SetX($pdf->GetX() + 7); // move underline right
-        $pdf->Cell($dateFieldWidth + 15, $fontHeight, '_________________________________', 0, 0);
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($regionLabelWidth, $fontHeight, 'Region of Residence:', 0, 0);
-        $pdf->SetFont($arialRegular, '', 8.5);
-        $pdf->SetX($pdf->GetX() + 6); // move underline right
-        $pdf->Cell($regionFieldWidth, $fontHeight, '____________________________', 0, 1);
-        $pdf->Ln($rowSpacing); // consistent spacing after row
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | SERVICE DETAILS INLINE UNDERLINE ADJUSTED
-        |--------------------------------------------------------------------------
-        */
-
-        $serviceLabelWidth  = 20;  // width for "Service/s Availed:"
-        $serviceFieldWidth  = 50;  // underline width
-        $providerLabelWidth = 45;  // width for "Name of Service Provider:"
-        $providerFieldWidth = 50;  // underline width
-
-        // Current Y position
-        $currentY = $pdf->GetY();
-        $currentX = $pdf->GetX();
-
-        // Amount to move the row up (except the separate underline)
-        $shiftUp = 2; // adjust as needed
-        
-
-        // Move the Y coordinate up for the row (except the last underline)
-        $pdf->SetY($currentY - $shiftUp);
-        
-
-        // Service/s Availed - inline
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($serviceLabelWidth, $fontHeight, 'Service/s Availed:', 0, 0);
-        $pdf->SetFont($arialRegular, '', 8.5);
-        $pdf->SetX($pdf->GetX() + 6); // move underline right
-        $pdf->Cell($serviceFieldWidth, $fontHeight, '_____________________________________', 0, 0);
-
-        // Move to exact start position of second label
-        $pdf->SetX($serviceLabelWidth + $serviceFieldWidth + 39);
-
-        // Name of Service Provider label
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($providerLabelWidth, $fontHeight, 'Name of Person who provided service (optional):', 0, 1);
-        $pdf->SetFont($arialRegular, '', 8.5);
-
-        // Move underline slightly closer
-        $underlineShiftUp = -0.5;
-        $pdf->SetY($pdf->GetY() - $underlineShiftUp);
-
-        // Align underline with label
-        $pdf->SetX($serviceLabelWidth + $serviceFieldWidth + 39);
-        $pdf->Cell($providerFieldWidth, $fontHeight, '________________________________________________', 0, 1);
-
-        $pdf->Ln($rowSpacing); // consistent spacing after row
-       
-       
-        /*
-        |--------------------------------------------------------------------------
-        | EVALUATION OPTIONS
-        |--------------------------------------------------------------------------
-        */
-        $labelWidth   = 57;   // Left label column
-        $fontHeight   = 6;    // consistent font height
-        $boxOffsetY   = ($fontHeight - $boxHeight) / 2;  // center checkbox vertically
-        $labelSpacing = 0.2;  // smaller gap between checkbox and label
-        $groupGap     = 3;    // gap between option groups
-
-        // Current Y position
-        $currentY = $pdf->GetY();
-
-        // Amount to move up (in mm)
-        $shiftUp = 3; // adjust this value as needed (smaller = less, larger = higher)
-
-        // Move the Y coordinate up
-        $pdf->SetY($currentY - $shiftUp);
-
-        // Then draw the content as usual
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($labelWidth, $fontHeight, 'Which of the following are you going to evaluate?', 0, 0);
-        
-        $pdf->SetX($pdf->GetX() + 16); // move checkboxes and labels right
-        
-        $pdf->SetFont($arialRegular, '', 8.5);
-
-        $evalOptions = ['Student', 'Faculty', 'Admin/Personnel', 'Others:'];
-
-        foreach ($evalOptions as $index => $option) {
-
-            $pdf->Rect($pdf->GetX(), $pdf->GetY() + $boxOffsetY, $boxWidth, $boxHeight);
-
-            $field = "evaluate_option_{$index}";
-
-            $pdf->Cell(
-                $boxWidth,
-                $fontHeight,
-                (!empty($jobOrder->$field) && $jobOrder->$field == 'Yes' ? '✔' : ''),
-                0,
-                0,
-                'C'
-            );
-
-            $pdf->Cell($labelSpacing, $fontHeight, '', 0, 0);
-
-            $textWidth = $pdf->GetStringWidth($option);
-            $pdf->Cell($textWidth, $fontHeight, $option, 0, 0);
-
-            if ($option === 'Others:') {
-                $pdf->Cell(25, $fontHeight, '____________________', 0, 0);
-            }
-
-            $pdf->Cell($groupGap, $fontHeight, '', 0, 0);
-        }
-
-        $pdf->Ln(5);
-
-        /*
-        |--------------------------------------------------------------------------
-        | FINAL FIELDS
-        |--------------------------------------------------------------------------
-        */
-        $fontHeight = 6;  // consistent font size
-
-        // Office/Faculty Unit
-        $labelText = 'Office/Faculty Unit transacted with (for Faculty and Personnel Ratee):';
-        $underlineWidth = 60; // width of the line
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($pdf->GetStringWidth($labelText), $fontHeight, $labelText, 0, 0);
-        $pdf->SetFont($arialRegular, '', 8.5);
-        $pdf->SetX($pdf->GetX() + 1); 
-        $pdf->Cell($underlineWidth, $fontHeight, '___________________________________', 0, 1);
-
-        // Move Y **up slightly** before Student's Program
-        $pdf->SetY($pdf->GetY() - 1); // move up 2mm, adjust as needed
-
-        // Student's Program
-        $labelText = "Student's Program (for Student Ratee):";
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($pdf->GetStringWidth($labelText), $fontHeight, $labelText, 0, 0);
-        $pdf->SetFont($arialRegular, '', 8.5);
-        $pdf->SetX($pdf->GetX() + 1);
-        $pdf->Cell($underlineWidth, $fontHeight, '______________', 0, 1);
-
         $pdf->Ln(2);
 
-        // --------------------------------------------------------------------------
-        // CITIZEN'S CHARTER (CC) INSTRUCTIONS + QUESTION
-        // --------------------------------------------------------------------------
-
-        $fontHeight    = 6;
-        $boxWidth      = 2;
-        $boxHeight     = 2;
-        $labelSpacing  = 0.5;  // gap between checkbox and label
-        $groupGap      = 3;    // gap between option groups
-        $boxOffsetY    = ($fontHeight - $boxHeight) / 2;  // center checkbox vertically
-
-        $pdf->Ln(2); // small space after previous fields
-
-        // Instructions with Arial font and DejaVu Sans only for checkmark
-        $pdf->SetFont($arialRegular, '', 8.5);
+        /*
+        |--------------------------------------------------------------------------
+        | SERVICE DETAILS TABLE
+        |--------------------------------------------------------------------------
+        */
+        $fontHeight = 6;
+        $pdf->SetFont($arialBold, '', 8.5);
         
-        // Build instructions with inline font changes - using Arial Bold for "Check mark"
-        $instructions = 'INSTRUCTIONS: <span style="font-family: ' . $arialBold . '; font-weight: bold;">Check mark (<span style="font-family: dejavusans;">✔</span>)</span> your answer to the Citizen\'s Charter (CC) questions. The Citizen\'s Charter is an official document<br>that reflects the services of a government agency/office including its requirements, fees, and processing times among others.';
-
-        $pdf->writeHTMLCell(
-            0, 0, '', '', $instructions,
-            0, 1, 0, true, 'L', true
-        );
-        $pdf->Ln(2); // spacing after instructions
-
-        $pdf->SetY($pdf->GetY() - 1); // move up slightly before CC questions
-
-        // CC1 prefix and question
-        $ccPrefix   = "CC1";
-        $ccQuestion = "Which of the following best describes your awareness of a CC?";
-
-        // Draw CC1 prefix in bold
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($pdf->GetStringWidth($ccPrefix) + 2, $fontHeight, $ccPrefix, 0, 0);
-
-        // Add spacing before question
-        $pdf->Cell(7, $fontHeight, '', 0, 0); // 3mm spacing
-
-        // Draw question text in bold
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell(0, $fontHeight, $ccQuestion, 0, 1, 'L'); // next line
-
-        // CC1 choices
-        $ccOptions = [
-            "I have never heard of it",
-            "I have heard of it but don't know what it contains",
-            "I have read it and understood it",
-            "I have read it and partially understood it"
+        // Table dimensions - 2 columns layout for rows 1, 2, 4, 5 and 4 columns for row 3
+        $tableWidth = $pageWidth - 24; // total width (page minus margins)
+        
+        // Calculate width needed for first column labels
+        $labels = [
+            'TRANSACTION DETAILS',
+            'OFFICE/UNIT TRANSACTED WITH:',
+            'SERVICE/S AVAILED:',
+            'DATE VISITED:',
+            'NAME OF SERVICE PROVIDER (OPTIONAL):'
         ];
+        
+        $maxLabelWidth = 0;
+        foreach ($labels as $label) {
+            $labelWidth = $pdf->GetStringWidth($label);
+            if ($labelWidth > $maxLabelWidth) {
+                $maxLabelWidth = $labelWidth;
+            }
+        }
+        
+        // Add padding to the max label width
+        $col1Width = $maxLabelWidth + 4; // +4 for padding
+        
+        // Second column gets remaining width for 2-column rows
+        $col2Width = $tableWidth - $col1Width;
+        
+        // For row 4 (4 columns): divide remaining space into 3 equal parts
+        $row3RemainingWidth = $tableWidth - $col1Width;
+        $row3ColWidth = $row3RemainingWidth / 3; // Each of the 3 remaining columns
+        
+        $rowHeight = 6; // Reduced from 8 to 6
+        
+        $startX = $pdf->GetX();
+        $startY = $pdf->GetY();
+        
+        // Row 0: TRANSACTION DETAILS (header row - only in first column)
+        $pdf->SetFont($arialBold, '', 8.5);
+        $pdf->Cell($col1Width, $rowHeight, 'TRANSACTION DETAILS', 1, 0, 'L');
+        $pdf->Cell($col2Width, $rowHeight, '', 0, 1, 'L');
+        
+        // Row 1: OFFICE/UNIT TRANSACTED WITH | (empty column) - GRAY FILL
+        $pdf->SetFillColor(220, 220, 220); // Gray color
+        $pdf->Cell($col1Width, $rowHeight, 'OFFICE/UNIT TRANSACTED WITH:', 1, 0, 'L', true);
+        $pdf->Cell($col2Width, $rowHeight, '', 1, 1, 'L', true);
+        
+        // Row 2: SERVICE/S AVAILED | (empty column)
+        $pdf->SetFillColor(255, 255, 255); // Reset to white
+        $pdf->Cell($col1Width, $rowHeight, 'SERVICE/S AVAILED:', 1, 0, 'L');
+        $pdf->Cell($col2Width, $rowHeight, '', 1, 1, 'L');
+        
+        // Row 3: DATE VISITED | (empty) | TIME VISITED | (empty) - 4 columns
+        $pdf->Cell($col1Width, $rowHeight, 'DATE VISITED:', 1, 0, 'L');
+        $pdf->Cell($row3ColWidth, $rowHeight, '', 1, 0, 'L');
+        $pdf->Cell($row3ColWidth, $rowHeight, 'TIME VISITED:', 1, 0, 'L');
+        $pdf->Cell($row3ColWidth, $rowHeight, '', 1, 1, 'L');
+        
+        // Row 4: NAME OF SERVICE PROVIDER (OPTIONAL) | (empty column) - GRAY FILL
+        $pdf->SetFillColor(220, 220, 220); // Gray color
+        $pdf->Cell($col1Width, $rowHeight, 'NAME OF SERVICE PROVIDER (OPTIONAL):', 1, 0, 'L', true);
+        $pdf->Cell($col2Width, $rowHeight, '', 1, 1, 'L', true);
+        
+        // Reset fill color to white for subsequent content
+        $pdf->SetFillColor(255, 255, 255);
 
-        // Indent for checkboxes
-        $leftMargin    = $pdf->getMargins()['left'];
-        $ccPrefixWidth = $pdf->GetStringWidth($ccPrefix . ' ');
-        $extraIndent   = 10; // Increased from 2 to 5 to move options right
-        $indent        = $leftMargin + $ccPrefixWidth + $extraIndent;
+        $pdf->Ln(4);
 
-        $pdf->SetFont($arialRegular, '', 8.5); // same font size for choices
-        $choiceHeight = 4; // smaller row height for compact spacing
+        /*
+        |--------------------------------------------------------------------------
+        | PERSONAL INFORMATION TABLE
+        |--------------------------------------------------------------------------
+        */
+        $pdf->SetFont($arialBold, '', 7);
 
-        foreach ($ccOptions as $option) {
-            $pdf->SetX($indent);
+        // Personal Info Table dimensions - reduce width by 20%
+        $piTableWidth = ($pageWidth - 24) * 0.37; // 80% of original width
+        $piCol1Width = $piTableWidth / 2;
+        $piCol2Width = $piTableWidth / 2;
 
-            // Move checkbox slightly higher
-            $checkboxShiftUp = 1;
-            $pdf->Rect($pdf->GetX(), $pdf->GetY() + $boxOffsetY - $checkboxShiftUp, $boxWidth, $boxHeight);
+        // Save starting Y for alignment
+        $piTableStartY = $pdf->GetY();
 
-            // Checkbox placeholder
-            $pdf->Cell($boxWidth, $choiceHeight, '', 0, 0, 'C');
+        // Row 0: PERSONAL INFORMATION header - only in first column
+        $titleHeight = 6; // Match the CC table title cell height
+        $pdf->Cell($piCol1Width, $titleHeight, 'PERSONAL INFORMATION', 1, 1, 'L');
 
-            // Space between checkbox and label
-            $pdf->Cell($labelSpacing, $choiceHeight, '', 0, 0);
+        // Row 0.5: Data Privacy Notice - spans full width
+        $pdf->SetFont($arialRegular, '', 5.5);
+        $privacyNotice = 'Data Privacy Notice: All information collected through this feedback form will be treated with strict confidentiality and will be used solely for service improvement purposes, in compliance with the Data Privacy Act of 2012 (RA 10173)';
+        $privacyNoticeHeight = 8;
+        $pdf->MultiCell($piTableWidth, $privacyNoticeHeight, $privacyNotice, 1, 'L', false, 1, '', '', true, 0, false, true, $privacyNoticeHeight, 'M');
 
-            // Option text
-            $pdf->Cell(0, $choiceHeight, $option, 0, 1, 'L');
+        // Reset font for next sections
+        $pdf->SetFont($arialBold, '', 7);
 
-            $pdf->Ln(-0.5); // optional tighter spacing
+        // Row 1: CLIENT TYPE (left) | SEX (right)
+        $clientTypes = ['Citizen', 'Business', 'Government'];
+        $sexOptions = ['Male', 'Female', 'Prefer not to say'];
+        $lineHeight = 3;
+        $paddingTop = 4;
+        $clientTypeHeight = $paddingTop + (count($clientTypes) * $lineHeight);
+        $sexHeight = $paddingTop + (count($sexOptions) * $lineHeight);
+        $row1Height = max($clientTypeHeight, $sexHeight);
+        $clientTypeY = $pdf->GetY();
+        $clientTypeX = $pdf->GetX();
+        $pdf->Cell($piCol1Width, $row1Height, '', 1, 0, 'L');
+        $sexCellX = $pdf->GetX();
+        $pdf->Cell($piCol2Width, $row1Height, '', 1, 1, 'L');
+        $pdf->SetXY($clientTypeX + 1, $clientTypeY + 1);
+        $pdf->SetFont($arialBold, '', 7);
+        $pdf->Cell(0, 3, 'CLIENT TYPE:', 0, 1, 'L');
+        $pdf->SetFont($arialRegular, '', 6);
+        $checkboxSize = 2;
+        foreach ($clientTypes as $index => $type) {
+            $pdf->SetX($clientTypeX + 2);
+            $currentY = $pdf->GetY();
+            $pdf->Rect($pdf->GetX(), $currentY + 0.5, $checkboxSize, $checkboxSize);
+            $pdf->SetX($pdf->GetX() + $checkboxSize + 1);
+            $pdf->Cell(0, $lineHeight, $type, 0, 1, 'L');
+        }
+        $pdf->SetXY($sexCellX + 1, $clientTypeY + 1);
+        $pdf->SetFont($arialBold, '', 7);
+        $pdf->Cell(0, 3, 'SEX:', 0, 1, 'L');
+        $pdf->SetFont($arialRegular, '', 6);
+        foreach ($sexOptions as $index => $option) {
+            $pdf->SetX($sexCellX + 2);
+            $currentY = $pdf->GetY();
+            $pdf->Rect($pdf->GetX(), $currentY + 0.5, $checkboxSize, $checkboxSize);
+            $pdf->SetX($pdf->GetX() + $checkboxSize + 1);
+            $pdf->Cell(0, $lineHeight, $option, 0, 1, 'L');
         }
 
-        // Small spacing after CC1
-        $pdf->Ln(1);
-        // --------------------------------------------------------------------------
-        // CC2 QUESTION
-        // --------------------------------------------------------------------------
-
-        $ccPrefix   = "CC2";
-        $ccQuestion = "If aware of CC (answered 1-3 in CC1), would you say that the CC of this office was ...?";
-
-        // Draw CC2 prefix in bold
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($pdf->GetStringWidth($ccPrefix) + 2, $fontHeight, $ccPrefix, 0, 0);
-
-        // Add spacing before question
-        $pdf->Cell(7, $fontHeight, '', 0, 0); // 3mm spacing
-
-        // Draw question in bold
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell(0, $fontHeight, $ccQuestion, 0, 1, 'L');
-
-        $pdf->Ln(-2);
-
-        // CC2 options (inline)
-        $cc2Options = [
-            "1. Easy to see",
-            "2. Somewhat easy to see",
-            "3. Difficult to see",
-            "4. Not visible at all",
-            "5. N/A"
-        ];
-
-        $pdf->SetFont($arialRegular, '', 8.5);
-
-        // Align options under the question
-        $pdf->SetX($indent);
-
-        foreach ($cc2Options as $option) {
-
-            // Draw checkbox
-            $pdf->Rect($pdf->GetX(), $pdf->GetY() + $boxOffsetY, $boxWidth, $boxHeight);
-
-            // Space after checkbox
-            $pdf->Cell($boxWidth, $fontHeight, '', 0, 0);
-            $pdf->Cell($labelSpacing, $fontHeight, '', 0, 0);
-
-            // Option text
-            $textWidth = $pdf->GetStringWidth($option);
-            $pdf->Cell($textWidth + 4, $fontHeight, $option, 0, 0); // +4 spacing between options
+        // Row 2: CLIENT CATEGORY (left) | AGE (right)
+        $clientCategories = ['Student', 'Visitor', 'Faculty', 'Admin/Personnel', 'Others'];
+        $ageOptions = ['Below 18 y/o', '18-24 y/o', '25-34 y/o', '35-44 y/o', '45-54 y/o', '55-64 y/o', '65 y/o & above'];
+        $categoriesHeight = $paddingTop + (count($clientCategories) * $lineHeight);
+        $ageHeight = $paddingTop + (count($ageOptions) * $lineHeight);
+        $row2Height = max($categoriesHeight, $ageHeight);
+        $categoryY = $pdf->GetY();
+        $categoryX = $pdf->GetX();
+        $pdf->Cell($piCol1Width, $row2Height, '', 1, 0, 'L');
+        $ageCellX = $pdf->GetX();
+        $pdf->Cell($piCol2Width, $row2Height, '', 1, 1, 'L');
+        $pdf->SetXY($categoryX + 1, $categoryY + 1);
+        $pdf->SetFont($arialBold, '', 7);
+        $pdf->Cell(0, 3, 'CLIENT CATEGORY:', 0, 1, 'L');
+        $pdf->SetFont($arialRegular, '', 6);
+        foreach ($clientCategories as $index => $category) {
+            $pdf->SetX($categoryX + 2);
+            $currentY = $pdf->GetY();
+            $pdf->Rect($pdf->GetX(), $currentY + 0.5, $checkboxSize, $checkboxSize);
+            $pdf->SetX($pdf->GetX() + $checkboxSize + 1);
+            if ($category === 'Others') {
+                $pdf->Cell(0, $lineHeight, $category . ': __________', 0, 1, 'L');
+            } else {
+                $pdf->Cell(0, $lineHeight, $category, 0, 1, 'L');
+            }
+        }
+        $pdf->SetXY($ageCellX + 1, $categoryY + 1);
+        $pdf->SetFont($arialBold, '', 7);
+        $pdf->Cell(0, 3, 'AGE:', 0, 1, 'L');
+        $pdf->SetFont($arialRegular, '', 6);
+        foreach ($ageOptions as $index => $ageOption) {
+            $pdf->SetX($ageCellX + 2);
+            $currentY = $pdf->GetY();
+            $pdf->Rect($pdf->GetX(), $currentY + 0.5, $checkboxSize, $checkboxSize);
+            $pdf->SetX($pdf->GetX() + $checkboxSize + 1);
+            $pdf->Cell(0, $lineHeight, $ageOption, 0, 1, 'L');
         }
 
-        $pdf->Ln(5);
+        // Row 3: WHICH OF THE FOLLOWING ARE YOU GOING TO EVALUATE? - spans full width
+        // Calculate height needed for EVALUATE cell
+        $evaluateOptions = ['Student', 'Faculty', 'Admin/Personnel', 'Others'];
+        // Height calculation: title line + inline options line + Others line
+        $evaluateHeight = $paddingTop + ($lineHeight * 2); // Title + 1 inline row + Others row
+        
+        // Save the Y position before drawing the cell
+        $evaluateY = $pdf->GetY();
+        $evaluateX = $pdf->GetX();
+        
+        // Draw the cell border first with calculated height
+        $pdf->Cell($piTableWidth, $evaluateHeight, '', 1, 1, 'L');
+        
+        // Now add content inside EVALUATE cell
+        $pdf->SetXY($evaluateX + 1, $evaluateY + 1);
+        $pdf->SetFont($arialBold, '', 5); // Reduced from 7 to 5 to fit narrower table
+        $pdf->Cell(0, 3, 'WHICH OF THE FOLLOWING ARE YOU GOING TO EVALUATE?', 0, 1, 'L');
+        
+        // Add checkboxes and labels for EVALUATE options (inline except Others)
+        $pdf->SetFont($arialRegular, '', 5); // Reduced from 6 to 5
+        
+        // Set starting position for inline options
+        $pdf->SetX($evaluateX + 2);
+        $startY = $pdf->GetY();
+        
+        foreach ($evaluateOptions as $index => $option) {
+            if ($option === 'Others') {
+                // Move to new line for Others
+                $pdf->SetXY($evaluateX + 2, $startY + $lineHeight);
+                
+                // Draw checkbox
+                $currentY = $pdf->GetY();
+                $pdf->Rect($pdf->GetX(), $currentY + 0.5, $checkboxSize, $checkboxSize);
+                
+                // Add label with underline
+                $pdf->SetX($pdf->GetX() + $checkboxSize + 1);
+                $pdf->Cell(0, $lineHeight, $option . ': __________', 0, 1, 'L');
+            } else {
+                // Inline options
+                // Draw checkbox
+                $currentY = $pdf->GetY();
+                $pdf->Rect($pdf->GetX(), $currentY + 0.5, $checkboxSize, $checkboxSize);
+                
+                // Add label
+                $pdf->Cell($checkboxSize, $lineHeight, '', 0, 0, 'L');
+                $pdf->Cell(1, $lineHeight, '', 0, 0, 'L'); // spacing
+                $labelWidth = $pdf->GetStringWidth($option);
+                $pdf->Cell($labelWidth, $lineHeight, $option, 0, 0, 'L');
+                $pdf->Cell(3, $lineHeight, '', 0, 0, 'L'); // gap between options
+            }
+        }
+        
+        // Row 4: NAME (Optional) - spans full width
+        $nameRowHeight = 8; // Fixed height for name field
+        $pdf->Cell($piTableWidth, $nameRowHeight, 'NAME (Optional):', 1, 1, 'L');
+        
+        // Row 5: EMAIL ADDRESS (Optional) - spans full width
+        $emailRowHeight = 8; // Fixed height for email field
+        $pdf->Cell($piTableWidth, $emailRowHeight, 'EMAIL ADDRESS (Optional):', 1, 1, 'L');
 
+        // Save the ending Y for alignment
+        $piTableEndY = $pdf->GetY();
+        $piTableHeight = $piTableEndY - $piTableStartY;
 
         // --------------------------------------------------------------------------
-        // CC3 QUESTION
+        // CITIZEN'S CHARTER (CC) TABLE - POSITIONED BESIDE PERSONAL INFO TABLE
         // --------------------------------------------------------------------------
 
-        $ccPrefix   = "CC3";
-        $ccQuestion = "If aware of CC (answered codes 1-3 in CC1), how much did the CC help you in your transaction?";
+        $pdf->SetFont($arialBold, '', 7);
 
-        // Draw CC3 prefix in bold
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell($pdf->GetStringWidth($ccPrefix) + 4, $fontHeight, $ccPrefix, 0, 0);
+        // CC Table dimensions - positioned to the right of Personal Info table
+        $ccTableWidth = ($pageWidth - 24) - $piTableWidth - 2;
+        $ccTableX = 12 + $piTableWidth + 2;
 
-        // Add spacing before question
-        $pdf->Cell(5, $fontHeight, '', 0, 0); // 3mm spacing
+        // CC table should start at the same Y as PI table
+        $pdf->SetXY($ccTableX, $piTableStartY);
 
-        // Draw question in bold
-        $pdf->SetFont($arialBold, '', 8.5);
-        $pdf->Cell(0, $fontHeight, $ccQuestion, 0, 1, 'L');
+        // --------------------
+        // CC TABLE TITLE ROW (full width)
+        // --------------------
+        $pdf->SetFont($arialBold, '', 6);
 
-        $pdf->Ln(-2 );
+        $ccTitle = 'CITIZEN\'S CHARTER';
+        $titleHeight = 6;
 
-        // CC3 options (inline)
-        $cc3Options = [
-            "1. Helped very much",
-            "2. Somewhat helped",
-            "3. Did not help",
-            "4. N/A"
+        // Draw title cell
+        $pdf->Cell($ccTableWidth * 0.5, $titleHeight, $ccTitle, 1, 1, 'C');
+
+        // Move to next row for instructions
+        $pdf->SetXY($ccTableX, $piTableStartY + $titleHeight);
+
+        // Instructions row - spans full width
+        $pdf->SetFont($arialRegular, '', 5);
+        $ccInstructions = 'INSTRUCTIONS: Check mark (✔) your answer to the Citizen\'s Charter (CC) questions. The Citizen\'s Charter is an official document that reflects the services of a government agency/office including its requirements, fees, and processing times among others.';
+        $instructionsHeight = 12;
+        $pdf->MultiCell($ccTableWidth, $instructionsHeight, $ccInstructions, 1, 'L', false, 1, '', '', true, 0, false, true, $instructionsHeight, 'M');
+
+        // Define column widths for CC table (3 columns)
+        $ccCol1Width = $ccTableWidth * 0.10;
+        $ccCol2Width = $ccTableWidth * 0.50;
+        $ccCol3Width = $ccTableWidth * 0.40;
+
+        // Prepare CC rows data
+        $ccRows = [
+            [
+                'label' => 'CC1',
+                'question' => 'Which of the following best describes your awareness of a CC?',
+                'options' => [
+                    '1. I know what a CC is and I saw this office\'s CC',
+                    '2. I know what a CC is but I did NOT see this office\'s CC',
+                    '3. I learned of the CC only when I saw this office\'s CC',
+                    '4. I do not know what a CC is and I did not see one in this office. (Answer \'N/A\' on CC2 and CC3)'
+                ]
+            ],
+            [
+                'label' => 'CC2',
+                'question' => 'If aware of CC (answered 1-3 in CC1), would you say that the CC of this office was ...?',
+                'options' => [
+                    '1. Easy to see',
+                    '2. Somewhat easy to see',
+                    '3. Difficult to see',
+                    '4. Not visible at all',
+                    '5. N/A'
+                ]
+            ],
+            [
+                'label' => 'CC3',
+                'question' => 'If aware of CC (answered codes 1-3 in CC1), how much did the CC help you in your transaction?',
+                'options' => [
+                    '1. Helped very much',
+                    '2. Somewhat helped',
+                    '3. Did not help',
+                    '4. N/A'
+                ]
+            ]
         ];
 
-        $pdf->SetFont($arialRegular, '', 8.5);
+        // Calculate available height for CC rows (PI table height minus title and instructions)
+        $ccRowsStartY = $pdf->GetY();
+        $ccRowsAvailableHeight = $piTableHeight - ($ccRowsStartY - $piTableStartY);
 
-        // Align options under the question
-        $pdf->SetX($indent);
+        // Calculate row heights for each CC row (proportional to their content, but total = $ccRowsAvailableHeight)
+        $rowHeights = [];
+        $totalContent = 0;
+        foreach ($ccRows as $row) {
+            $questionHeight = $pdf->getStringHeight($ccCol2Width - 2, $row['question']);
+            $optionsHeight = count($row['options']) * 3.5;
+            $rowContent = max($questionHeight + 2, $optionsHeight + 4);
+            $rowHeights[] = $rowContent;
+            $totalContent += $rowContent;
+        }
+        // Scale row heights to fit exactly in available height
+        $scaledRowHeights = [];
+        foreach ($rowHeights as $h) {
+            $scaledRowHeights[] = $ccRowsAvailableHeight * ($h / $totalContent);
+        }
+        $rowHeights = $scaledRowHeights;
 
-        foreach ($cc3Options as $option) {
+        $totalTableHeight = array_sum($rowHeights);
 
-            // Draw checkbox
-            $pdf->Rect($pdf->GetX(), $pdf->GetY() + $boxOffsetY, $boxWidth, $boxHeight);
+        $startY = $pdf->GetY();
 
-            // Space after checkbox
-            $pdf->Cell($boxWidth, $fontHeight, '', 0, 0);
-            $pdf->Cell($labelSpacing, $fontHeight, '', 0, 0);
+        // DRAW TABLE ONCE
+        $pdf->SetXY($ccTableX, $startY);
+        $pdf->Cell($ccCol1Width, $totalTableHeight, '', 1, 0);
+        $pdf->Cell($ccCol2Width, $totalTableHeight, '', 1, 0);
+        $pdf->Cell($ccCol3Width, $totalTableHeight, '', 1, 1);
 
-            // Option text
-            $textWidth = $pdf->GetStringWidth($option);
-            $pdf->Cell($textWidth + 4, $fontHeight, $option, 0, 0);
+        // ROW DIVIDERS
+        $currentY = $startY;
+        foreach ($rowHeights as $h) {
+            $currentY += $h;
+            if ($currentY < $startY + $totalTableHeight) {
+                $pdf->Line(
+                    $ccTableX,
+                    $currentY,
+                    $ccTableX + $ccTableWidth,
+                    $currentY
+                );
+            }
         }
 
-        $pdf->Ln(7);
+        // INSERT CONTENT
+        foreach ($ccRows as $i => $row) {
+            $rowY = $startY + array_sum(array_slice($rowHeights, 0, $i));
+            // Label
+            $pdf->SetXY($ccTableX + 1, $rowY + 1);
+            $pdf->SetFont($arialBold, '', 5);
+            $pdf->Cell($ccCol1Width - 2, 3, $row['label'], 0, 0, 'L');
+            // Question
+            $pdf->SetXY($ccTableX + $ccCol1Width + 1, $rowY + 1);
+            $pdf->MultiCell($ccCol2Width - 2, 3, $row['question'], 0, 'L');
+            // Options (checkboxes and labels inside 3rd column)
+            $pdf->SetFont($arialRegular, '', 4);
+            $checkboxSize = 1.5;
+            $col3X = $ccTableX + $ccCol1Width + $ccCol2Width;
+            $col3Y = $rowY + 1;
+            $optionsCount = count($row['options']);
+            $optionHeight = 3.5;
+            $totalOptionsHeight = $optionsCount * $optionHeight;
+            $col3CellHeight = $rowHeights[$i] - 2;
+            $optionsStartY = $col3Y + max(0, ($col3CellHeight - $totalOptionsHeight) / 2);
+            for ($j = 0; $j < $optionsCount; $j++) {
+                $option = $row['options'][$j];
+                $y = $optionsStartY + $j * $optionHeight;
+                $pdf->SetXY($col3X + 1, $y);
+                $pdf->Rect($col3X + 1, $y, $checkboxSize, $checkboxSize);
+                $pdf->SetXY($col3X + 1 + $checkboxSize + 1, $y - 0.2);
+                $pdf->MultiCell(
+                    $ccCol3Width - ($checkboxSize + 3),
+                    $optionHeight - 0.5,
+                    $option,
+                    0,
+                    'L'
+                );
+            }
+        }
+
+        // Move Y to the end of the PI table to keep next content aligned
+        $pdf->SetY($piTableEndY);
 
         // --------------------------------------------------------------------------
         // SQD INSTRUCTIONS
@@ -830,6 +691,7 @@ class CSMPageBuilder
         // --------------------------------------------------------------------------
 
         $rowHeight = 8; // Reduced row height for more compact table
+        
 
         // Switch back to Arial font for table rows (better readability for text)
         $pdf->SetFont('arial', '', 8.5);

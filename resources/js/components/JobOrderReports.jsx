@@ -34,24 +34,38 @@ export default function JobOrderReports() {
   const [itDirector, setItDirector] = useState(null);
   const [search, setSearch] = useState('');
   const [selectedTab, setSelectedTab] = useState('distribution');
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
 
   // Fetch job orders data
   useEffect(() => {
     setLoading(true);
 
-    axios.get('/job-orders')
-      .then(res => {
-        const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+    // Try different approaches to get all data
+    const fetchAllOrders = async () => {
+      try {
+        // First, try with per_page parameter
+        let response = await axios.get('/job-orders', {
+          params: { per_page: 1000 } // or use -1 if Laravel supports it
+        });
+        
+        const rows = Array.isArray(response.data?.data) ? response.data.data : [];
+        console.log('Total job orders fetched:', rows.length);
+        console.log('Ongoing orders:', rows.filter(o => o.action_report?.status === 'Ongoing').length);
+        
         setOrders(rows);
         setFiltered(rows);
-        setTotals(res.data.totals || {});
-      })
-      .catch(() => {
+        setTotals(response.data.totals || {});
+      } catch (error) {
+        console.error('Error fetching orders:', error);
         setOrders([]);
         setFiltered([]);
         setTotals({});
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAllOrders();
   }, []);
 
   // Fetch IT Director information
@@ -219,14 +233,157 @@ export default function JobOrderReports() {
     setFilters(prev => ({ ...prev, [field]: value }));
   };
 
+  // Export job orders to CSV
+  const exportToCSV = (statusFilter = null) => {
+    // Use original orders data, not filtered
+    let dataToExport = [...orders];
+    
+    if (statusFilter) {
+      dataToExport = dataToExport.filter(o => o.action_report?.status === statusFilter);
+    }
+
+    if (dataToExport.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    const headers = [
+      'Job Order No',
+      'Department',
+      'Status',
+      'Requested By',
+      'Signatory',
+      'Accepted By',
+      'Serviced By',
+      'Cancelled By',
+      'Date Created'
+    ];
+
+    const rows = dataToExport.map(order => {
+      const status = order.action_report?.status || 'Pending';
+      const requestedBy = order.requester?.name || '';
+      const signatory = order.signature_name || '';
+      const acceptedBy = order.action_report?.accepted_by_user?.name || 
+                        itDirector?.user?.name || 
+                        itDirector?.name || '';
+      const servicedBy = order.action_report?.serviced_by?.name || 
+                        order.action_report?.serviced_by || '';
+      const cancelledBy = order.action_report?.cancelled_by_user?.name || '';
+      const dateCreated = order.created_at 
+        ? new Date(order.created_at).toLocaleString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+          })
+        : '';
+
+      return [
+        order.job_order_no || '',
+        order.department?.name || '',
+        status,
+        requestedBy,
+        signatory,
+        acceptedBy,
+        servicedBy,
+        cancelledBy,
+        dateCreated
+      ];
+    });
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const filename = statusFilter 
+      ? `job_orders_${statusFilter.toLowerCase()}_${new Date().toISOString().split('T')[0]}.csv`
+      : `job_orders_all_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setShowExportDropdown(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h1 className="text-2xl font-bold text-gray-900">Job Order Reports</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          Overview and analytics of submitted IT requests
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Job Order Reports</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Overview and analytics of submitted IT requests
+            </p>
+          </div
+          >
+          
+          {/* CSV Export Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExportDropdown(!showExportDropdown)}
+              className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+              <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {showExportDropdown && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setShowExportDropdown(false)}
+                ></div>
+                <div className="absolute right-0 mt-2 w-56 rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+                  <div className="py-1" role="menu">
+                    <button
+                      onClick={() => exportToCSV(null)}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    >
+                      <svg className="w-4 h-4 mr-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      All Job Orders
+                    </button>
+                    <div className="border-t border-gray-100 my-1"></div>
+                    {STATUSES.map(status => (
+                      <button
+                        key={status}
+                        onClick={() => exportToCSV(status)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                      >
+                        <span className={`w-2 h-2 rounded-full mr-3 ${
+                          status === 'Pending' ? 'bg-yellow-500' :
+                          status === 'Ongoing' ? 'bg-blue-500' :
+                          status === 'Completed' ? 'bg-green-500' :
+                          'bg-red-500'
+                        }`}></span>
+                        {status} Only
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Status Summary */}
