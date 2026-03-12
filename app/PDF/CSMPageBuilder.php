@@ -20,22 +20,23 @@ class CSMPageBuilder
                 // Table header text (without emojis in text)
         $headerTexts = [
             ' ',
-            "Strongly\nDisagree",
-            "Disagree",
-            "Neither Agree\nnor Disagree",
-            "Agree",
             "Strongly\nAgree",
+            "Agree",
+            "Neither Agree\nnor Disagree",
+            "Disagree",
+            "Strongly\nDisagree",
             "N/A\nNot\nApplicable"
         ];
 
         // Emoji image paths
         $emojiImages = [
             '',
-            public_path('images/emojis/Strongly Disagree.png'),
+            public_path('images/emojis/Strongly Agree.png'),
+            public_path('images/emojis/Agree.png'),
             public_path('images/emojis/Disagree.png'),
             public_path('images/emojis/Neutral.png'),
-            public_path('images/emojis/Agree.png'),
-            public_path('images/emojis/Strongly Agree.png'),
+            
+            public_path('images/emojis/Strongly Disagree.png'),
             ''
         ];// Add Arial fonts to TCPDF and store font names
         $arialRegular = TCPDF_FONTS::addTTFfont($arialFont, 'TrueTypeUnicode', '', 96);
@@ -261,7 +262,7 @@ class CSMPageBuilder
         $pdf->Cell($piCol2Width, $row2Height, '', 1, 1, 'L');
         $pdf->SetXY($categoryX + 1, $categoryY + 1);
         $pdf->SetFont($arialBold, '', 7);
-        $pdf->Cell(0, 3, 'CLIENT CATEGORY:', 0, 1, 'L');
+        $pdf->Cell(0, 3, 'CLIENT TYPE:', 0, 1, 'L');
         $pdf->SetFont($arialRegular, '', 6);
         foreach ($clientCategories as $index => $category) {
             $pdf->SetX($categoryX + 2);
@@ -574,20 +575,75 @@ class CSMPageBuilder
         // --------------------------------------------------------------------------
 
         $rows = 10;
-        $cols = 7;
+        $cols = 8; // 1 extra column for leftmost (number/blank)
 
         // Calculate available width for table (page width minus margins)
         $margins = $pdf->getMargins();
         $availableWidth = $pageWidth - $margins['left'] - $margins['right'];
 
+        // Reduce the width of the SQD table by 20mm (adjust as needed)
+        $availableWidth -= 55;
+
         $colWidths = [];
 
-        // Calculate minimum width needed for rating columns
+        // // New: Add width for the new leftmost column (e.g., 10)
+        // $newColWidth = 10;
+        // $availableWidth -= $newColWidth;
+
+
+        //STARTS HERE
+
+
+        // Calculate minimum width needed for rating columns (same as before)
         $pdf->SetFont('arial', '', 8.5);
 
-        $totalRatingWidth = 0;
-        for ($i = 1; $i < count($headerTexts); $i++) {
-            $lines = explode("\n", $headerTexts[$i]);
+        // --------------------------------------------------------------------------
+        // SQD ROW LABELS AND ROWS (all in one table)
+        // --------------------------------------------------------------------------
+
+        $sqdRows = [
+            'I am satisfied with the service that I availed.',
+            'I spent a reasonable amount of time for my transaction.',
+            'The office followed the transaction\'s requirements and steps based on the information provided.',
+            'The steps (including payment) I needed to do for my transaction were easy and simple.',
+            'I easily found information about my transaction from the office or its website.',
+            'I paid a reasonable amount of fees for my transaction.',
+            'I feel the office was fair to everyone, or "walang palakasan", during my transaction.',
+            'I was treated courteously by the staff, and (if asked for help) the staff was helpful.',
+            'I got what I needed from the government office, or (if denied) denial of request was sufficiently explained to me.',
+        ];
+
+        // Table header
+        $headers = [
+            '', // new leftmost column (blank)
+            ' ',           // first column for questions
+            "Strongly\nAgree",
+            "Agree",
+            "Neither Agree\nnor Disagree",
+            "Disagree",
+            "Strongly\nDisagree",
+            "N/A\nNot\nApplicable"
+        ];
+
+        $naturalWidths = [];
+
+        // SQD label column
+        $naturalWidths[0] = $pdf->GetStringWidth('SQD8') + 6;
+
+        // Question column (based on longest question)
+        $maxQuestionWidth = 0;
+        foreach ($sqdRows as $row) {
+            $w = $pdf->GetStringWidth($row);
+            if ($w > $maxQuestionWidth) {
+                $maxQuestionWidth = $w;
+            }
+        }
+        $naturalWidths[1] = min($maxQuestionWidth + 20, $availableWidth * 0.45);
+
+        // Rating columns
+        for ($i = 2; $i < $cols; $i++) {
+
+            $lines = explode("\n", $headers[$i]);
             $maxWidth = 0;
 
             foreach ($lines as $line) {
@@ -597,53 +653,139 @@ class CSMPageBuilder
                 }
             }
 
-            $colWidths[$i] = $maxWidth + 8;
-            $totalRatingWidth += $colWidths[$i];
+            $naturalWidths[$i] = min($maxWidth + 8, 22);
         }
 
-        // First column gets remaining width
-        $colWidths[0] = $availableWidth - $totalRatingWidth;
+        // Scale columns so total width matches table width
+        $totalNatural = array_sum($naturalWidths);
+        $scale = $availableWidth / $totalNatural;
 
-        // Ensure first column has minimum width
-        if ($colWidths[0] < 40) {
-            $colWidths[0] = 40;
-            $scale = ($availableWidth - 40) / $totalRatingWidth;
-            for ($i = 1; $i < count($headerTexts); $i++) {
-                $colWidths[$i] = $colWidths[$i] * $scale;
-            }
+        foreach ($naturalWidths as $i => $w) {
+            $colWidths[$i] = $w * $scale;
         }
+
+
 
         // Insert a new row with just one column as the new header above the SQD table
-        // REMOVE the CLIENT SATISFACTION SURVEY row
-        // $pdf->SetFont('arial', 'B', 11);
-        // $pdf->Cell(array_sum($colWidths), 11, 'CLIENT SATISFACTION SURVEY', 1, 1, 'C');
-        $pdf->SetFont('arial', 'B', 9);
-        $pdf->Cell(array_sum($colWidths), 9, 'SERVICE QUALITY DIMENSIONS (SQD)', 1, 1, 'C');
-        $pdf->SetFont('arial', '', 8.5);
+        $pdf->SetFont('arial', 'B', 7);
+        $titleText = 'SERVICE QUALITY DIMENSIONS (SQD)';
 
-        // Table header
-        $headers = [
-            ' ',           // first column for questions
-            "☹\nStrongly\nDisagree",      // Using ☹ (U+2639)
-            "☹\nDisagree",                 // Using ☹ (U+2639) 
-            "�\nNeither Agree\nnor Disagree",  // Using face without mouth (U+1F636)
-            "☺\nAgree",                    // Using ☺ (U+263A)
-            "☺\nStrongly\nAgree",          // Using ☺ (U+263A)
-            "N/A\nNot\nApplicable"
-        ];
+        // Width aligned to INSTRUCTIONS cell (first 2 columns)
+        $titleWidth = $colWidths[0] + $colWidths[1];
+
+        // Calculate height needed for wrapped text
+        $titleHeight = $pdf->getStringHeight($titleWidth, $titleText);
+
+        // Draw title cell
+        $pdf->SetX($startX);
+        $pdf->MultiCell(
+            $titleWidth,   // width same as instructions cell
+            $titleHeight,  // auto-calculated height
+            $titleText,
+            1,             // border
+            'C',           // center align
+            false,         // fill
+            1              // move to next line
+        );
+
+        $pdf->SetFont('arial', '', 8.5);
+                
 
         // --------------------------------------------------------------------------
         // DRAW HEADER ROW WITH EMOJI IMAGES
         // --------------------------------------------------------------------------
 
-        $headerRowHeight = 14;
+        // $headerRowHeight = 14;
         $emojiSize = 6;
 
         $startX = $pdf->GetX();
         $startY = $pdf->GetY();
 
-        // Draw empty bordered cells first
-        foreach ($headerTexts as $i => $headerText) {
+        // --- Auto-adjust header font size ---
+        $headerFontMin = 5.5;
+        $headerFontMax = 8.5;
+        $headerFontSizes = [];
+        for ($i = 2; $i < count($headers); $i++) {
+            $cellWidth = $colWidths[$i];
+            $lines = explode("\n", $headers[$i]);
+            $maxFont = $headerFontMax;
+            foreach ($lines as $line) {
+                $font = $headerFontMax;
+                while ($font > $headerFontMin) {
+                    $pdf->SetFont('arial', '', $font);
+                    if ($pdf->GetStringWidth($line) <= $cellWidth - 1) {
+                        break;
+                    }
+                    $font -= 0.2;
+                }
+                if ($font < $maxFont) $maxFont = $font;
+            }
+            $headerFontSizes[$i] = $maxFont;
+        }
+        // Use the minimum font size for all header cells for visual consistency
+        $autoHeaderFontSize = min($headerFontSizes);
+
+
+            $headerRowHeight = 14;
+            $maxHeaderHeight = $headerRowHeight;
+
+            for ($i = 2; $i < count($headers); $i++) {
+                $pdf->SetFont('arial', '', $autoHeaderFontSize);
+
+                $textHeight = $pdf->getStringHeight(
+                    $colWidths[$i],
+                    $headers[$i]
+                );
+
+                if ($textHeight + 7 > $maxHeaderHeight) { 
+                    $maxHeaderHeight = $textHeight + 7; // + space for emoji
+                }
+            }
+
+            $headerRowHeight = $maxHeaderHeight;
+
+        // --- Auto-adjust font size for INSTRUCTIONS cell ---
+        $instructionsCellText = "INSTRUCTIONS: For SQD 0-8, please put a check mark on the column that corresponds to your answer.";
+        $instructionsCellWidth = $colWidths[0] + $colWidths[1];
+        $instructionsFont = $headerFontMax;
+        while ($instructionsFont > $headerFontMin) {
+            $pdf->SetFont('arial', '', $instructionsFont);
+            // Use getStringHeight to ensure it fits vertically as well
+            $strHeight = $pdf->getStringHeight($instructionsCellWidth, $instructionsCellText);
+            if (
+                $pdf->GetStringWidth($instructionsCellText) <= $instructionsCellWidth - 1
+                && $strHeight <= $headerRowHeight
+            ) {
+                break;
+            }
+            $instructionsFont -= 0.2;
+        }
+
+        // Draw header row as a single row (not per cell)
+        // 1. Instructions cell (merged first two columns)
+        $pdf->SetFont('arial', '', $instructionsFont);
+        $minHeight = $pdf->getStringHeight($instructionsCellWidth, $instructionsCellText);
+
+        // Optionally, add small padding (e.g., +2)
+        $instructionsCellHeight = $minHeight + 2;
+
+        $pdf->MultiCell(
+            $instructionsCellWidth,
+            $instructionsCellHeight,
+            $instructionsCellText,
+            1,
+            'L',
+            false,
+            0,
+            '',
+            '',
+            true,
+            0,
+            false,
+            true
+        );
+        // 2. Remaining header cells (emoji columns)
+        for ($i = 2; $i < count($headers); $i++) {
             $pdf->MultiCell(
                 $colWidths[$i],
                 $headerRowHeight,
@@ -661,22 +803,23 @@ class CSMPageBuilder
             );
         }
 
-        // Overlay emoji images at the top and text directly below
-        $currentX = $startX;
-        foreach ($emojiImages as $i => $emojiPath) {
-            // Draw emoji image at top
+        // Overlay emoji images and header text for rating columns only
+        $currentX = $startX + $colWidths[0] + $colWidths[1];
+        for ($i = 2; $i < count($headers); $i++) {
+            $emojiIdx = $i - 1;
+            $emojiPath = isset($emojiImages[$emojiIdx]) ? $emojiImages[$emojiIdx] : '';
             if (!empty($emojiPath) && file_exists($emojiPath)) {
                 $emojiX = $currentX + ($colWidths[$i] - $emojiSize) / 2;
                 $emojiY = $startY + 0.5;
                 $pdf->Image($emojiPath, $emojiX, $emojiY, $emojiSize, $emojiSize);
-                
-                // Draw text directly below the image
+
                 $textY = $emojiY + $emojiSize;
                 $pdf->SetXY($currentX, $textY);
+                $pdf->SetFont('arial', '', $autoHeaderFontSize);
                 $pdf->MultiCell(
                     $colWidths[$i],
                     0,
-                    $headerTexts[$i],
+                    $headerTexts[$emojiIdx],
                     0,
                     'C',
                     false,
@@ -691,12 +834,12 @@ class CSMPageBuilder
                     'T'
                 );
             } else {
-                // For cells without emoji (first and last column), just draw text centered
                 $pdf->SetXY($currentX, $startY);
+                $pdf->SetFont('arial', '', $autoHeaderFontSize);
                 $pdf->MultiCell(
                     $colWidths[$i],
                     $headerRowHeight,
-                    $headerTexts[$i],
+                    isset($headerTexts[$emojiIdx]) ? $headerTexts[$emojiIdx] : '',
                     0,
                     'C',
                     false,
@@ -715,52 +858,67 @@ class CSMPageBuilder
         $pdf->Ln();
 
 
-        // --------------------------------------------------------------------------
-        // SQD ROW LABELS
-        // --------------------------------------------------------------------------
-
-        $sqdRows = [
-            'SQD0. I am satisfied with the service that I availed.',
-            'SQD1. I spent a reasonable amount of time for my transaction.',
-            'SQD2. The office followed the transaction\'s requirements and steps based on the information provided.',
-            'SQD3. The steps (including payment) I needed to do for my transaction were easy and simple.',
-            'SQD4. I easily found information about my transaction from the office or its website.',
-            'SQD5. I paid a reasonable amount of fees for my transaction.',
-            'SQD6. I feel the office was fair to everyone, or "walang palakasan", during my transaction.',
-            'SQD7. I was treated courteously by the staff, and (if asked for help) the staff was helpful.',
-            'SQD8. I got what I needed from the government office, or (if denied) denial of request was sufficiently explained to me.',
-        ];
-
-
-        // --------------------------------------------------------------------------
-        // DRAW TABLE ROWS
-        // --------------------------------------------------------------------------
-
-        $rowHeight = 8; // Reduced row height for more compact table
         
 
-        // Switch back to Arial font for table rows (better readability for text)
-        $pdf->SetFont('arial', '', 8.5);
+        // --- Dynamically calculate row height and font size for SQD table ---
+        $numRows = count($sqdRows);
+        $tableTopY = $pdf->GetY();
+        $margins = $pdf->getMargins();
+        $pageHeight = $pdf->getPageHeight();
+        $bottomMargin = $margins['bottom'];
+        $availableHeight = $pageHeight - $tableTopY - $bottomMargin - 35; // 35 is a buffer for content after table
 
-        foreach ($sqdRows as $rowText) {
+        // Minimum and maximum font sizes
+        $maxFontSize = 8.5;
+        $minFontSize = 6.5;
 
+        // Minimum and maximum row heights
+        $maxRowHeight = 10;
+        $minRowHeight = 6;
+
+        // Calculate row height and font size
+        $rowHeight = max($minRowHeight, min($maxRowHeight, $availableHeight / max(1, $numRows)));
+        // Font size is proportional to row height
+        $fontSize = max($minFontSize, min($maxFontSize, $rowHeight * 1.1));
+
+        $pdf->SetFont('arial', '', $fontSize);
+
+        foreach ($sqdRows as $rowIdx => $rowText) {
             $startX = $pdf->GetX();
             $startY = $pdf->GetY();
 
-            // First column (question text) - MultiCell with proper height calculation
-            $pdf->MultiCell($colWidths[0], $rowHeight, $rowText, 1, 'L', false, 0, '', '', true, 0, false, true, $rowHeight, 'M');
+            // SQD label column
+            $label = 'SQD' . $rowIdx;
+            $pdf->Cell($colWidths[0], $rowHeight, $label, 1, 0, 'C');
 
-            // Remaining columns (checkboxes) - drawn at same Y position
-            for ($c = 1; $c < $cols; $c++) {
+            // Question column
+            $pdf->MultiCell(
+                $colWidths[1],
+                $rowHeight,
+                $rowText,
+                1,
+                'L',
+                false,
+                0,
+                '',
+                '',
+                true,
+                0,
+                false,
+                true,
+                $rowHeight,
+                'M'
+            );
 
+            // Rating columns
+            for ($c = 2; $c < $cols; $c++) {
                 $x = $pdf->GetX();
-                $y = $startY; // Use starting Y to keep all cells aligned
+                $y = $startY;
 
-                // Draw cell border
                 $pdf->Cell($colWidths[$c], $rowHeight, '', 1, 0, 'C');
 
-                // Draw checkbox centered vertically and horizontally
-                $checkboxSize = 2; // Smaller checkbox for reduced height
+                // Checkbox size proportional to row height
+                $checkboxSize = max(1.5, min(3, $rowHeight * 0.25 + 1));
                 $pdf->Rect(
                     $x + ($colWidths[$c] / 2) - ($checkboxSize / 2),
                     $y + ($rowHeight / 2) - ($checkboxSize / 2),
