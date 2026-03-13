@@ -22,7 +22,8 @@ class CompletedReportController extends Controller
                 'approver',
                 'conformer',
                 'actionReport.servicedBy',
-                'actionReport'
+                'actionReport',
+                'csm',
             ])
             ->firstOrFail();
 
