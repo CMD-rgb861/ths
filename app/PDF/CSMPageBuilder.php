@@ -31,7 +31,7 @@ class CSMPageBuilder
             "Neither Agree\nnor Disagree",
             "Disagree",
             "Strongly Disagree",
-            "N/A\nNot\nApplicable"
+            "Not\nApplicable"
         ];
 
         // Emoji image paths
@@ -42,7 +42,7 @@ class CSMPageBuilder
             public_path('images/emojis/Neutral.png'),
             public_path('images/emojis/Disagree.png'),
             public_path('images/emojis/Strongly Disagree.png'),
-            ''
+            public_path('images/emojis/Not_Applicable.png')
         ];
 
         // Add fonts to TCPDF and store font names
@@ -155,7 +155,7 @@ class CSMPageBuilder
         }
         
         // Add padding to the max label width
-        $col1Width = $maxLabelWidth + 4; // +4 for padding
+        $col1Width = $maxLabelWidth - 15; // +4 for padding
         
         // Second column gets remaining width for 2-column rows
         $col2Width = $tableWidth - $col1Width;
@@ -172,7 +172,15 @@ class CSMPageBuilder
         // Row 0: TRANSACTION DETAILS (header row - only in first column)
         // Section header → Arial Narrow Bold
         $pdf->SetFont($arialNarrowBold, '', 8.5);
-        $pdf->Cell($col1Width, $rowHeight, 'TRANSACTION DETAILS', 1, 0, 'L');
+        // Black background with white text
+        $pdf->SetFillColor(0, 0, 0);     // black background
+        $pdf->SetTextColor(255, 255, 255); // white text
+
+        $pdf->Cell($col1Width, $rowHeight, 'TRANSACTION DETAILS', 1, 0, 'L', true);
+
+        // Reset colors for the rest of the document
+        $pdf->SetFillColor(255, 255, 255);
+        $pdf->SetTextColor(0, 0, 0);
         $pdf->Cell($col2Width, $rowHeight, '', 0, 1, 'L');
         
         // Row 1: OFFICE/UNIT TRANSACTED WITH | (empty column) - GRAY FILL
@@ -186,12 +194,23 @@ class CSMPageBuilder
         $pdf->Cell($col1Width, $rowHeight, 'SERVICE/S AVAILED:', 1, 0, 'L');
         $pdf->Cell($col2Width, $rowHeight, '', 1, 1, 'L');
         
+        // custom widths for DATE/TIME row
         // Row 3: DATE VISITED | (empty) | TIME VISITED | (empty) - 4 columns
-        $pdf->SetFillColor(220, 220, 220); // Gray color
-        $pdf->Cell($col1Width, $rowHeight, 'DATE VISITED:', 1, 0, 'L', true);
-        $pdf->Cell($row3ColWidth, $rowHeight, '', 1, 0, 'L', true);
-        $pdf->Cell($row3ColWidth, $rowHeight, 'TIME VISITED:', 1, 0, 'L', true);
-        $pdf->Cell($row3ColWidth, $rowHeight, '', 1, 1, 'L', true);
+        $pdf->SetFillColor(220, 220, 220);
+
+        // make sure row starts at the left edge of the table
+        $pdf->SetX($startX);
+
+        // custom widths for this row
+        $row3Col1Width = $col1Width;
+        $row3Col2Width = $row3RemainingWidth * 0.45; // date field
+        $row3Col3Width = $row3RemainingWidth * 0.20; // smaller TIME label
+        $row3Col4Width = $tableWidth - $row3Col1Width - $row3Col2Width - $row3Col3Width; // exact remainder
+
+        $pdf->Cell($row3Col1Width, $rowHeight, 'DATE VISITED:', 1, 0, 'L', true);
+        $pdf->Cell($row3Col2Width, $rowHeight, '', 1, 0, 'L', true);
+        $pdf->Cell($row3Col3Width, $rowHeight, 'TIME VISITED:', 1, 0, 'C', true);
+        $pdf->Cell($row3Col4Width, $rowHeight, '', 1, 1, 'L', true);
         
         $providerLabel = "NAME OF SERVICE PROVIDER\n(OPTIONAL):";
 
@@ -218,14 +237,14 @@ class CSMPageBuilder
         | PERSONAL INFORMATION TABLE
         |--------------------------------------------------------------------------
         */
-        $pdf->SetFont($arialNarrowBold, '', 7);
+        $pdf->SetFont($arialBold, '', 7.5);
 
         $piTableWidth = ($pageWidth - 24) * 0.42;
         $piCol1Width  = $piTableWidth / 2;
         $piCol2Width  = $piTableWidth / 2;
 
         $piTableStartY = $pdf->GetY();
-        $titleHeight = 6;
+        $titleHeight = 6.5;
 
         $checkboxSize = 2;
         $lineHeight   = 3;
@@ -237,7 +256,19 @@ class CSMPageBuilder
         $rightInset  = 2;  // padding before column border
 
         // Row 0: PERSONAL INFORMATION header
-        $pdf->Cell($piTableWidth, $titleHeight, 'PERSONAL INFORMATION', 1, 1, 'L');
+        $piHeaderWidth = $piTableWidth - 40;
+
+        // black background + white text
+        $pdf->SetFillColor(0, 0, 0);
+        $pdf->SetTextColor(255, 255, 255);
+
+        $pdf->Cell($piHeaderWidth, $titleHeight, 'PERSONAL INFORMATION', 1, 0, 'L', true);
+
+        // reset colors for the rest of the document
+        $pdf->SetTextColor(0, 0, 0);
+        $pdf->SetFillColor(255, 255, 255);
+
+        $pdf->Cell($piTableWidth - $piHeaderWidth, $titleHeight, '', 0, 1);
 
         // Row 0.5: Data Privacy Notice
         $pdf->SetFont($arialNarrow, '', 7.5);
@@ -594,13 +625,13 @@ class CSMPageBuilder
         // TITLE ROW
         // --------------------------------------------------------------------------
         $ccTitle = 'CITIZEN\'S CHARTER';
-        $titleHeight = 6;
+        $titleHeight = 6.5;
 
         $ccTitleFont = $fitFontToWidth(
             $pdf,
             $arialNarrowBold,
             '',
-            6,
+            7.5,
             4.5,
             $ccTitle,
             ($ccTableWidth * 0.5) - 2
@@ -1189,8 +1220,8 @@ class CSMPageBuilder
         // Move Y back to end of PI table so next content stays aligned
         $pdf->SetY($piTableEndY);
 
-
-        $pdf->Ln(1);
+        $pdf->Ln(0.5);
+        
         // --------------------------------------------------------------------------
         // SQD TABLE (10 rows x 7 columns)
         // --------------------------------------------------------------------------
@@ -1234,7 +1265,7 @@ class CSMPageBuilder
             "Neither Agree\nnor Disagree",
             "Disagree",
             "Strongly Disagree",
-            "N/A\nNot\nApplicable"
+            "Not\nApplicable"
         ];
 
         $naturalWidths = [];
@@ -1286,7 +1317,7 @@ class CSMPageBuilder
         $headerBaseY  = $pdf->GetY();
 
         // move ONLY the title cell
-        $titleOffsetY  = 6.7;
+        $titleOffsetY  = 9.8;
         $headerOffsetY = 0;
 
         // Width aligned to INSTRUCTIONS cell (first 2 columns)
@@ -1314,7 +1345,7 @@ class CSMPageBuilder
         // --------------------------------------------------------------------------
         // DRAW HEADER ROW WITH EMOJI IMAGES
         // --------------------------------------------------------------------------
-        $emojiSize = 6;
+        $emojiSize = 7;
 
         // fixed header row position
         $headerRowX = $headerStartX;
@@ -1348,10 +1379,10 @@ class CSMPageBuilder
             $headerFontSizes[$i] = $maxFont;
         }
 
-        $autoHeaderFontSize = min($headerFontSizes);
+        $autoHeaderFontSize = 6.5;
 
         // calculate common header height
-        $headerRowHeight = 14;
+        $headerRowHeight = 17;
         $maxHeaderHeight = $headerRowHeight;
 
         for ($i = 2; $i < count($headers); $i++) {
@@ -1371,7 +1402,7 @@ class CSMPageBuilder
         $headerRowHeight = $maxHeaderHeight;
 
         // --- Auto-adjust font size for INSTRUCTIONS cell ---
-        $instructionsCellText = "INSTRUCTIONS: For SQD 0-8, please put a check mark on the column that corresponds to your answer.";
+        $instructionsCellText = "INSTRUCTIONS: For SQD 0-8, please put a check mark on the column that best corresponds to your answer.";
         $instructionsCellWidth = $colWidths[0] + $colWidths[1];
         $instructionsFont = $headerFontMax;
 
@@ -1391,7 +1422,7 @@ class CSMPageBuilder
 
         // 1. Instructions merged cell at fixed coordinates
 
-        $reduceTop = 7; // how much height to remove from the top
+        $reduceTop = 10; // how much height to remove from the top
         $instructionsHeight = $headerRowHeight - $reduceTop;
         $instructionsY = $headerRowY + $reduceTop;
 
@@ -1490,18 +1521,20 @@ class CSMPageBuilder
             $topFont = 8.5;
             $topFontMin = 4.5;
 
-            while ($topFont > $topFontMin) {
+            $topFont = $autoHeaderFontSize;
 
-                $pdf->SetFont($arialNarrow, '', $topFont);
+            // while ($topFont > $topFontMin) {
 
-                $textHeight = $pdf->getStringHeight($cellWidth - 1, $topText);
+            //     $pdf->SetFont($arialNarrow, '', $topFont);
 
-                if ($textHeight <= ($cellHeight * 0.28)) {
-                    break;
-                }
+            //     $textHeight = $pdf->getStringHeight($cellWidth - 1, $topText);
 
-                $topFont -= 0.2;
-            }
+            //     if ($textHeight <= ($cellHeight * 0.28)) {
+            //         break;
+            //     }
+
+            //     $topFont -= 0.2;
+            // }
 
             // ----------------------------
             // AUTO EMOJI SIZE
@@ -1511,7 +1544,7 @@ class CSMPageBuilder
                 $cellHeight * 0.22
             );
 
-            $emojiSize = max(3, min(7, $emojiSize));
+            $emojiSize = max(6, min(16, $emojiSize));
 
             // ----------------------------
             // AUTO FONT SIZE FOR BOTTOM TEXT (Rating numbers → Arial Bold)
@@ -1627,7 +1660,7 @@ class CSMPageBuilder
         $availableHeight = $pageHeight - $tableTopY - $bottomMargin - 35; // 35 is a buffer for content after table
 
         // Minimum and maximum font sizes
-        $maxFontSize = 8.5;
+        $maxFontSize = 9;
         $minFontSize = 6.5;
 
         // Minimum and maximum row heights
@@ -1643,281 +1676,236 @@ class CSMPageBuilder
         foreach ($sqdRows as $rowIdx => $rowText) {
         $rowStartX = $headerStartX;
         $rowStartY = $pdf->GetY();
+
+        // calculate required height for question text
+        $pdf->SetFont($arialNarrowBold, '', $fontSize);
+
+        $questionHeight = $pdf->getStringHeight(
+            $colWidths[1],
+            $rowText
+        );
+
+        // final row height must fit text
+        $currentRowHeight = max($rowHeight, $questionHeight + 2);
+
         $pdf->SetXY($rowStartX, $rowStartY);
 
         // SQD label column → Arial Narrow Bold
         $pdf->SetFont($arialNarrowBold, '', $fontSize);
         $label = 'SQD' . $rowIdx;
-        $pdf->Cell($colWidths[0], $rowHeight, $label, 1, 0, 'C');
+        $pdf->Cell($colWidths[0], $currentRowHeight, $label, 1, 0, 'C');
 
         // Question column → Arial Narrow Bold
         $pdf->SetFont($arialNarrowBold, '', $fontSize);
         $pdf->MultiCell(
             $colWidths[1],
-            $rowHeight,
+            $currentRowHeight,
             $rowText,
             1,
             'L',
-                false,
-                0,
-                '',
-                '',
-                true,
-                0,
-                false,
-                true,
-                $rowHeight,
-                'M'
-            );
+            false,
+            0,
+            '',
+            '',
+            true,
+            0,
+            false,
+            true,
+            $currentRowHeight,
+            'M'
+        );
 
             // Rating columns
             for ($c = 2; $c < $cols; $c++) {
-                $pdf->Cell($colWidths[$c], $rowHeight, '', 1, 0, 'C');
+                $pdf->Cell($colWidths[$c], $currentRowHeight, '', 1, 0, 'C');
             }
 
             $pdf->Ln();
         }
 
     $pdf->Ln(5);
+        
         // --------------------------------------------------------------------------
         // SUGGESTIONS (1x1 table responsive)
         // --------------------------------------------------------------------------
-        // Options / body text → Arial Narrow Regular
-        $pdf->SetFont($arialNarrowBold, '', 8.5);
 
-        // move slightly upward like your original code
+        // align top with SQD area
         $pdf->SetY($headerRowY);
 
         $sqdWidth = array_sum($colWidths);
-        $gap = 4; // space between tables
+        $gap = 4;
 
         $boxLeft = $margins['left'] + $sqdWidth + $gap;
-        $pdf->SetX($boxLeft);
 
-        // calculate responsive width
-        $boxWidth = $pageWidth - $boxLeft - $margins['right'] - 5;
+        // align right edge with CC table
+        $boxRight = $ccTableX + $ccTableWidth - 1;
+        $boxWidthSuggestions = $boxRight - $boxLeft;
 
-        // adjustable height
-        $boxHeight = 22;
-
-        // draw the outer table cell
-        $pdf->Rect($boxLeft, $pdf->GetY(), $boxWidth, $boxHeight);
-
-        // store top position
-        $boxTopY = $pdf->GetY();
-
-        // padding inside the box
+        // inner padding
         $padding = 1.5;
 
-        // text area width
-        $textWidth = $boxWidth - ($padding * 2);
-
         // label text
-        $labelText = 'Suggestions on how we can further improve our services (optional):';
+        $labelText = 'Suggestions on how we can further improve our services:';
+
+        // usable text width
+        $textWidth = $boxWidthSuggestions - ($padding * 2);
 
         // --------------------------------------------------------------------------
-        // AUTO FONT FIT
+        // LABEL FONT SIZE
         // --------------------------------------------------------------------------
-        $maxFont = 8.5;
-        $minFont = 5;
+        $fontSize = 9;
+        $minFontSize = 6;
 
-        $fontSize = $maxFont;
+        $pdf->SetFont($arialNarrowBold, '', $fontSize);
+        $textHeight = $pdf->getStringHeight($textWidth, $labelText);
 
-        while ($fontSize > $minFont) {
-
-            // Options / body text → Arial Narrow Regular
-            $pdf->SetFont($arialNarrowBold, '', $fontSize);
-
-            $textHeight = $pdf->getStringHeight($textWidth, $labelText);
-
-            if ($textHeight < ($boxHeight * 0.35)) {
-                break;
-            }
-
+        while ($textHeight > 12 && $fontSize > $minFontSize) {
             $fontSize -= 0.2;
+            $pdf->SetFont($arialNarrowBold, '', $fontSize);
+            $textHeight = $pdf->getStringHeight($textWidth, $labelText);
         }
 
         $pdf->SetFont($arialNarrowBold, '', $fontSize);
 
-        // place label
-        $pdf->SetXY($boxLeft + $padding, $boxTopY + $padding);
+        // top position
+        $boxTopY = $pdf->GetY();
+        $labelX = $boxLeft + $padding;
+        $labelY = $boxTopY + $padding;
 
+        // --------------------------------------------------------------------------
+        // LINE SETTINGS
+        // --------------------------------------------------------------------------
+        $gapBelowText = 6;   // space between label and first line
+        $lineGap      = 4.2;   // spacing between lines
+        $totalLines   = 9;
+        $bottomPad    = 2;
+
+        // first line starts after the label
+        $lineStartY = $labelY + $textHeight + $gapBelowText;
+
+        // last line position
+        $lastLineY = $lineStartY + (($totalLines - 1) * $lineGap);
+
+        // final box height based on label + 9 lines
+        $boxHeight = ($lastLineY - $boxTopY) + $bottomPad;
+
+        // draw outer box AFTER computing final height
+        $pdf->Rect($boxLeft, $boxTopY, $boxWidthSuggestions, $boxHeight);
+
+        // --------------------------------------------------------------------------
+        // DRAW LABEL
+        // --------------------------------------------------------------------------
+        $pdf->SetXY($labelX, $labelY);
         $pdf->MultiCell(
             $textWidth,
             0,
             $labelText,
             0,
-            'L'
+            'L',
+            false,
+            1,
+            '',
+            '',
+            true,
+            0,
+            false,
+            true,
+            0,
+            'T'
         );
 
         // --------------------------------------------------------------------------
-        // DRAW UNDERLINES (always inside box)
+        // DRAW 9 UNDERLINES
         // --------------------------------------------------------------------------
+        for ($i = 0; $i < $totalLines; $i++) {
+            $lineY = $lineStartY + ($i * $lineGap);
 
-        $lineSpacing = ($boxHeight - 8) / 3; // dynamic spacing
-
-        $line1Y = $boxTopY + ($boxHeight * 0.55);
-        $line2Y = $line1Y + $lineSpacing;
-
-        // line 1
-        $pdf->Line(
-            $boxLeft + $padding,
-            $line1Y,
-            $boxLeft + $boxWidth - $padding,
-            $line1Y
-        );
-
-        // line 2
-        $pdf->Line(
-            $boxLeft + $padding,
-            $line2Y,
-            $boxLeft + $boxWidth - $padding,
-            $line2Y
-        );
+            $pdf->Line(
+                $boxLeft + $padding,
+                $lineY,
+                $boxLeft + $boxWidthSuggestions - $padding,
+                $lineY
+            );
+        }
 
         // move cursor to bottom of box
         $pdf->SetY($boxTopY + $boxHeight);
 
-$pdf->Ln(1);
+
+        $pdf->Ln(4);
+
 
         // --------------------------------------------------------------------------
         // THANK YOU MESSAGE (under Suggestions table)
         // --------------------------------------------------------------------------
 
         // spacing below suggestions box
-        $thankYouY = 2;
+        $thankYouY = 10;
 
-        // place directly under the suggestions box
+        // place directly under the Suggestions box
         $thankYouTextX = $boxLeft;
         $thankYouTextY = $boxTopY + $boxHeight + $thankYouY;
 
-        // Disable auto page break
+        // disable auto page break
         $pdf->SetAutoPageBreak(false, 0);
 
-        // Add text centered under the suggestions box only
+        // center THANK YOU using the Suggestions box width
         $pdf->SetXY($thankYouTextX, $thankYouTextY);
-        // THANK YOU → Arial Bold
-        $pdf->SetFont('times', 'BI', 9);
-        $pdf->Cell($boxWidth, 6, 'THANK YOU!', 0, 1, 'C');
+        $pdf->SetFont('times', 'BI', 11);
+        $pdf->Cell($boxWidthSuggestions, 6, 'Thank You!', 0, 1, 'C');
 
-        // Re-enable auto page break
+        // re-enable auto page break
         $pdf->SetAutoPageBreak(true, 10);
 
         $pdf->Ln(60);
 
         // --------------------------------------------------------------------------
-        // STANDALONE TEXT BOX (like Word/Google Docs textbox)
+        // STANDALONE TEXT BOX (lower-left under SQD table)
         // --------------------------------------------------------------------------
-        $margins = $pdf->getMargins();
 
-        // Position adjustments - CHANGE THESE TO MOVE THE BOX
-        $x = - 2;   // Move left (-) or right (+) from current position
-        $y = 0;   // Move up (-) or down (+) from current position
+        // position adjustments
+        $x = - 2;   // move left (-) or right (+) from SQD left edge
+        $y = 24;   // move down (+) from bottom of SQD table
 
-        // Text content for first box
-        $textBox1Content = 'F-QMS-025 rev. 1 (04-19-24)';
-        
-        // Calculate auto-size based on text
-        $textBoxPadding = 2; // internal padding
+        // text content
+        $textBox1Content = 'F-QMS-025 Rev. 3 (02-02-26)';
+
+        // calculate auto-size based on text
+        $textBoxPadding = 1;
         $pdf->SetFont($arialNarrow, '', 8.5);
         $textBox1ContentWidth = $pdf->GetStringWidth($textBox1Content);
-        
-        // Auto-calculate width and height
-        $textBoxWidth = $textBox1ContentWidth + ($textBoxPadding * 2) + 2; // +2 for extra space
-        $textBoxHeight = 8; // fixed height for single line
-        
-        // Define textbox properties
-        $textBoxX = $boxLeft + $x;
-        $textBoxY = $pdf->GetY() + $y;
 
-        // Draw the border of the text box
+        // auto-calculate width and height
+        $textBoxWidth = $textBox1ContentWidth + ($textBoxPadding * 2) + 2;
+        $textBoxHeight = 6;
+
+        // anchor to lower-left under SQD table
+        $textBoxX = $headerStartX + $x;
+        $textBoxY = $tableTopY + ($rowHeight * count($sqdRows)) + $y;
+
+        // draw border
         $pdf->SetLineWidth(0.3);
         $pdf->Rect($textBoxX, $textBoxY, $textBoxWidth, $textBoxHeight);
         $pdf->SetLineWidth(0.2);
 
-        // Disable auto page break to keep text in box
+        // disable auto page break
         $pdf->SetAutoPageBreak(false, 0);
 
-        // Add text inside the box with padding
+        // draw text
         $pdf->SetXY($textBoxX + $textBoxPadding, $textBoxY + $textBoxPadding);
-        
-        // Label text - use Cell instead of MultiCell to prevent page break
         $pdf->SetFont($arialNarrow, '', 8.5);
-        $pdf->Cell($textBoxWidth - ($textBoxPadding * 2), $textBoxHeight - ($textBoxPadding * 2), $textBox1Content, 0, 0, 'L', false);
+        $pdf->Cell(
+            $textBoxWidth - ($textBoxPadding * 2),
+            $textBoxHeight - ($textBoxPadding * 2),
+            $textBox1Content,
+            0,
+            0,
+            'L',
+            false
+        );
 
-        // Re-enable auto page break
+        // re-enable auto page break
         $pdf->SetAutoPageBreak(true, 10);
-
-        // --------------------------------------------------------------------------
-        // SECOND STANDALONE TEXT BOX (Right side)
-        // --------------------------------------------------------------------------
-        
-        // Position adjustments for second box - CHANGE THESE TO MOVE THE BOX
-        $x2 = 144.5;   // Move left (-) or right (+) from left margin
-        $y2 = - 4.2;    // Move up (-) or down (+) from current position
-
-        // Text content for second box
-        $textBox2Lines = [
-            'ANTI-RED TAPE AUTHORITY',
-            'CLIENT SATISFACTION MEASUREMENT FORM',
-            'PSA Approval No.: ARTA-2242-3'
-        ];
-        
-        // Calculate auto-size based on text
-        $textBox2Padding = 1;
-        // Arial Narrow Bold for the label lines
-        $pdf->SetFont($arialNarrowBold, '', 4.5);
-        
-        // Find the longest line to determine width
-        $maxLineWidth = 0;
-        foreach ($textBox2Lines as $line) {
-            $lineWidth = $pdf->GetStringWidth($line);
-            if ($lineWidth > $maxLineWidth) {
-                $maxLineWidth = $lineWidth;
-            }
-        }
-        
-        // Calculate dimensions
-        $textBox2Width = $maxLineWidth + ($textBox2Padding * 2) + 6; // +4 for extra space
-        $lineHeight = 1.5; // height per line
-        $textBox2Height = (count($textBox2Lines) * $lineHeight) + ($textBox2Padding * 2) + 4; // +2 for spacing
-        
-        // Define second textbox properties
-        $textBox2X = $boxLeft + $x2;
-        $textBox2Y = $pdf->GetY() + $y2;
-
-        // Draw the border of the second text box
-        $pdf->SetLineWidth(0.3);
-        $pdf->Rect($textBox2X, $textBox2Y, $textBox2Width, $textBox2Height);
-        $pdf->SetLineWidth(0.2);
-
-        // Disable auto page break
-        $pdf->SetAutoPageBreak(false, 0);
-
-        // Add text inside the second box with padding
-        $pdf->SetXY($textBox2X + $textBox2Padding, $textBox2Y + $textBox2Padding + 1);
-        
-        // Arial Narrow Bold for second box text
-        $pdf->SetFont($arialNarrowBold, '', 5);
-        
-        // Draw each line left aligned
-        foreach ($textBox2Lines as $index => $line) {
-            $pdf->SetX($textBox2X + $textBox2Padding);
-            
-            // Last line doesn't need line break
-            if ($index < count($textBox2Lines) - 1) {
-                $pdf->Cell($textBox2Width - ($textBox2Padding * 2), $lineHeight, $line, 0, 1, 'L', false);
-            } else {
-                $pdf->Cell($textBox2Width - ($textBox2Padding * 2), $lineHeight, $line, 0, 0, 'L', false);
-            }
-        }
-
-        // Re-enable auto page break
-        $pdf->SetAutoPageBreak(true, 10);
-
-        // Move to after the text boxes (use whichever is taller)
-        $maxHeight = max($textBoxHeight, $textBox2Height);
-        $pdf->SetY(max($textBoxY, $textBox2Y) + $maxHeight + 2);
 
         // --------------------------------------------------------------------------
         // STOP SCALING AFTER SQD TABLE
