@@ -625,20 +625,33 @@ class CSMPageBuilder
         // TITLE ROW
         // --------------------------------------------------------------------------
         $ccTitle = 'CITIZEN\'S CHARTER';
-        $titleHeight = 6.5;
+        $titleHeight = 7;
+        $ccHeaderWidth = $ccTableWidth - 80; // adjust this like PERSONAL INFORMATION
 
         $ccTitleFont = $fitFontToWidth(
             $pdf,
             $arialNarrowBold,
             '',
-            7.5,
+            8.5,
             4.5,
             $ccTitle,
-            ($ccTableWidth * 0.5) - 2
+            $ccHeaderWidth - 2
         );
 
         $pdf->SetFont($arialNarrowBold, '', $ccTitleFont);
-        $pdf->Cell($ccTableWidth * 0.5, $titleHeight, $ccTitle, 1, 1, 'L');
+
+        // black background + white text
+        $pdf->SetFillColor(0, 0, 0);
+        $pdf->SetTextColor(255, 255, 255);
+
+        $pdf->Cell($ccHeaderWidth, $titleHeight, $ccTitle, 1, 0, 'L', true);
+
+        // reset colors
+        $pdf->SetTextColor(0, 0, 0);
+        $pdf->SetFillColor(255, 255, 255);
+
+        // remaining blank part
+        $pdf->Cell($ccTableWidth - $ccHeaderWidth, $titleHeight, '', 0, 1);
 
         // --------------------------------------------------------------------------
         // INSTRUCTIONS ROW
@@ -1220,7 +1233,7 @@ class CSMPageBuilder
         // Move Y back to end of PI table so next content stays aligned
         $pdf->SetY($piTableEndY);
 
-        $pdf->Ln(0.5);
+        $pdf->Ln(0.1);
         
         // --------------------------------------------------------------------------
         // SQD TABLE (10 rows x 7 columns)
@@ -1320,21 +1333,26 @@ class CSMPageBuilder
         $titleOffsetY  = 9.8;
         $headerOffsetY = 0;
 
-        // Width aligned to INSTRUCTIONS cell (first 2 columns)
+        // make it like the other headers
         $titleWidth = $colWidths[0] + $colWidths[1] - 5;
-        $titleHeight = $pdf->getStringHeight($titleWidth, $titleText);
+        $sqdHeaderWidth = $titleWidth - 25; // adjust this value if needed
+        $titleHeight = 5;
 
         // draw title lower WITHOUT affecting the rest of the table
         $pdf->SetXY($headerStartX, $headerBaseY + $titleOffsetY);
-        $pdf->MultiCell(
-            $titleWidth,
-            $titleHeight,
-            $titleText,
-            1,
-            'C',
-            false,
-            1
-        );
+
+        // black background + white text
+        $pdf->SetFillColor(0, 0, 0);
+        $pdf->SetTextColor(255, 255, 255);
+
+        $pdf->Cell($sqdHeaderWidth, $titleHeight, $titleText, 1, 0, 'L', true);
+
+        // reset colors
+        $pdf->SetTextColor(0, 0, 0);
+        $pdf->SetFillColor(255, 255, 255);
+
+        // remaining blank part
+        $pdf->Cell($titleWidth - $sqdHeaderWidth, $titleHeight, '', 0, 1);
 
         // keep the header row position based on the original base Y
         $titleY = $headerBaseY;
@@ -1518,10 +1536,13 @@ class CSMPageBuilder
             // AUTO FONT SIZE FOR TOP TEXT (Rating labels → Arial Narrow Regular)
             // ----------------------------
             $topText = $headers[$i];
-            $topFont = 8.5;
             $topFontMin = 4.5;
 
-            $topFont = $autoHeaderFontSize;
+            if ($topText === "Strongly Disagree") {
+                $topFont = 6.2;
+            } else {
+                $topFont = $autoHeaderFontSize;
+            }
 
             // while ($topFont > $topFontMin) {
 
@@ -1660,11 +1681,11 @@ class CSMPageBuilder
         $availableHeight = $pageHeight - $tableTopY - $bottomMargin - 35; // 35 is a buffer for content after table
 
         // Minimum and maximum font sizes
-        $maxFontSize = 9;
+        $maxFontSize = 10;
         $minFontSize = 6.5;
 
         // Minimum and maximum row heights
-        $maxRowHeight = 10;
+        $maxRowHeight = 11;
         $minRowHeight = 6;
 
         // Calculate row height and font size
