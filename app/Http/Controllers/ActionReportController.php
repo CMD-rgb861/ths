@@ -341,12 +341,10 @@ class ActionReportController extends Controller
             'sex' => ['required', 'string'],
             'age' => ['required', 'integer'],
             'date_time_visited' => ['required', 'date'],
-            'region_of_residence' => ['required', 'string'],
             'services_availed' => ['required', 'string'],
             'service_provider_name' => ['nullable', 'string'],
             'who_to_evaluate' => ['required', 'string'],
             'office_or_faculty_unit_transacted' => ['nullable', 'string'],
-            'student_program' => ['nullable', 'string'],
 
             'cc1' => ['required', 'integer'],
             // cc2/cc3 are required only if cc1 indicates awareness (values 1-3)

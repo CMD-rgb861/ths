@@ -60,15 +60,10 @@ class CSMPageBuilder
 
         $csm = $jobOrder->csm;
 
-        $drawCheck = function ($pdf, $x, $y, $w, $h, $fontSize = 6) {
-            $oldX = $pdf->GetX();
-            $oldY = $pdf->GetY();
-
+        $drawCheck = function ($pdf, $x, $y, $w, $h, $fontSize = 8.5) {
             $pdf->SetFont('dejavusans', '', $fontSize);
             $pdf->SetXY($x, $y - 0.4);
             $pdf->Cell($w, $h, '✔', 0, 0, 'C');
-
-            $pdf->SetXY($oldX, $oldY);
         };
 
         $isSame = function ($a, $b) {
@@ -113,7 +108,6 @@ class CSMPageBuilder
             7 => (int) ($csm->sqd7 ?? -1),
             8 => (int) ($csm->sqd8 ?? -1),
         ];
-
         // --------------------------------------------------------------------------
         // START SCALING TRANSFORMATION
         // --------------------------------------------------------------------------
@@ -484,7 +478,7 @@ class CSMPageBuilder
             $boxOffsetY = ($textHeight - $checkboxSize) / 2;
             $boxY = $currentY + $boxOffsetY;
 
-            $pdf->Rect($boxX, $boxY, $checkboxSize, $checkboxSize);
+            $pdf->Rect($boxX, $boxY + 0.5, $checkboxSize, $checkboxSize);
 
             if ($csm && $isSame($csm->client_type ?? '', $type)) {
                 $drawCheck($pdf, $boxX, $boxY, $checkboxSize, $checkboxSize);
@@ -509,7 +503,7 @@ class CSMPageBuilder
             $boxX = $pdf->GetX();
             $boxY = $currentY + (($textHeight - $checkboxSize) / 2);
 
-            $pdf->Rect($boxX, $boxY, $checkboxSize, $checkboxSize);
+            $pdf->Rect($boxX, $boxY + 0.5, $checkboxSize, $checkboxSize);
 
             if ($csm && $isSame($csm->sex ?? '', $option)) {
                 $drawCheck($pdf, $boxX, $boxY, $checkboxSize, $checkboxSize);
@@ -558,7 +552,7 @@ class CSMPageBuilder
             $boxX = $pdf->GetX();
             $boxY = $currentY + (($lineHeight - $checkboxSize) / 2);
 
-            $pdf->Rect($boxX, $boxY, $checkboxSize, $checkboxSize);
+            $pdf->Rect($boxX, $boxY + 0.5, $checkboxSize, $checkboxSize);
 
             if ($csm && $category !== 'Others' && $isSame($csm->client_category ?? '', $category)) {
                 $drawCheck($pdf, $boxX, $boxY, $checkboxSize, $checkboxSize);
@@ -621,7 +615,7 @@ class CSMPageBuilder
             $pdf->Rect($boxX, $boxY, $checkboxSize, $checkboxSize);
 
             if ($csm && $isSame($ageLabel, $ageOption)) {
-                $drawCheck($pdf, $boxX, $boxY, $checkboxSize, $checkboxSize);
+                $drawCheck($pdf, $boxX, $boxY - 0.5, $checkboxSize, $checkboxSize);
             }
 
             $pdf->SetXY($boxX + $checkboxSize + $checkboxGap, $currentY);
@@ -668,7 +662,7 @@ class CSMPageBuilder
             $pdf->Rect($boxX, $boxY, $checkboxSize, $checkboxSize);
 
             if ($csm && $isSame($csm->who_to_evaluate ?? '', $option)) {
-                $drawCheck($pdf, $boxX, $boxY - 0.5, $checkboxSize, $checkboxSize);
+                $drawCheck($pdf, $boxX, $boxY, $checkboxSize, $checkboxSize);
             }
 
             $currentX += $checkboxSize + 1;
@@ -747,9 +741,9 @@ class CSMPageBuilder
         $pdf->Cell($piTableWidth - 2, $textHeight, $nameText, 0, 0, 'L');
 
         if ($csm && !empty($csm->name)) {
-            $lineStartX = $nameX + 22; // adjust if needed
-            $pdf->SetFont($arialRegular, '', 8);
-            $pdf->SetXY($lineStartX, $textY - 0.5);
+            $lineStartX = $nameX + 26; // adjust if needed
+            $pdf->SetFont($arialRegular, '', 7);
+            $pdf->SetXY($lineStartX, $textY);
             $pdf->Cell(
                 $piTableWidth - ($lineStartX - $nameX) - 2,
                 $textHeight,
@@ -769,7 +763,6 @@ class CSMPageBuilder
         // --------------------------------------------------------------------------
         // Row 5: EMAIL ADDRESS (Optional)
         // --------------------------------------------------------------------------
-        $pdf->SetFont($arialRegular, '', 7);
         $emailLabel = 'EMAIL ADDRESS (Optional):';
         $emailUnderline = '_______________________________';
         $emailText = $emailLabel . $emailUnderline;
@@ -786,31 +779,19 @@ class CSMPageBuilder
         $textHeight = 3;
         $textY = $emailY + (($emailRowHeight - $textHeight) / 2);
 
-        // Draw label + underline
+       // Draw label + underline
         $pdf->SetXY($emailX + 1, $textY);
         $pdf->Cell($piTableWidth - 2, $textHeight, $emailText, 0, 0, 'L');
 
         if ($csm && !empty($csm->email_address)) {
 
-            $lineStartX = $emailX + 34; // position where email text begins
-            $maxWidth = $piTableWidth - ($lineStartX - $emailX) - 2;
+            $lineStartX = $emailX + 40; // position where email text begins
 
-            // Start with default font size
-            $fontSize = 8;
-            $pdf->SetFont($arialRegular, '', $fontSize);
+            $pdf->SetFont($arialRegular, '', 7);
+            $pdf->SetXY($lineStartX, $textY);
 
-            // Shrink font until it fits
-            while ($pdf->GetStringWidth($csm->email_address) > $maxWidth && $fontSize > 5) {
-                $fontSize -= 0.5;
-                $pdf->SetFont($arialRegular, '', $fontSize);
-            }
-
-            // Adjust vertical position slightly for bigger font
-            $adjustedTextY = $textY - (($fontSize - 7) / 2);
-
-            $pdf->SetXY($lineStartX, $adjustedTextY);
             $pdf->Cell(
-                $maxWidth,
+                $piTableWidth - ($lineStartX - $emailX) - 2,
                 $textHeight,
                 $csm->email_address,
                 0,
@@ -819,7 +800,7 @@ class CSMPageBuilder
             );
         }
 
-        // Restore cursor to next row
+        // restore cursor to next row
         $pdf->SetXY($emailX, $emailY + $emailRowHeight);
 
         // Move to true end of row
@@ -1351,7 +1332,7 @@ class CSMPageBuilder
                     $optionCode = $matches[1] ?? null;
 
                     if ($optionCode !== null && (string)($ccAnswers['CC2'] ?? '') === (string)$optionCode) {
-                        $drawCheck($pdf, $checkboxX + 0.6, $checkboxY - 1.3, $ccCheckboxSize, $ccCheckboxSize, 10);
+                        $drawCheck($pdf, $checkboxX, $checkboxY - 0.5, $ccCheckboxSize, $ccCheckboxSize, 7);
                     }
 
                     $pdf->SetFont($arialNarrow, '', $optFont);
@@ -1470,7 +1451,7 @@ class CSMPageBuilder
                     $optionCode = $matches[1] ?? '';
 
                     if (($ccAnswers[$row['label']] ?? '') === $optionCode) {
-                        $drawCheck($pdf, $checkboxX + 0.6, $checkboxY - 1.3, $ccCheckboxSize, $ccCheckboxSize, 10);
+                        $drawCheck($pdf, $checkboxX, $checkboxY - 0.5, $ccCheckboxSize, $ccCheckboxSize, 7);
                     }
 
                     $boldPart = "(Answer 'N/A' on CC2 and CC3)";
@@ -1839,6 +1820,19 @@ class CSMPageBuilder
                 $topFont = $autoHeaderFontSize;
             }
 
+            // while ($topFont > $topFontMin) {
+
+            //     $pdf->SetFont($arialNarrow, '', $topFont);
+
+            //     $textHeight = $pdf->getStringHeight($cellWidth - 1, $topText);
+
+            //     if ($textHeight <= ($cellHeight * 0.28)) {
+            //         break;
+            //     }
+
+            //     $topFont -= 0.2;
+            // }
+
             // ----------------------------
             // AUTO EMOJI SIZE
             // ----------------------------
@@ -1963,8 +1957,8 @@ class CSMPageBuilder
         $availableHeight = $pageHeight - $tableTopY - $bottomMargin - 85; // reserve more space for suggestions, thank you, footer
 
         // Minimum and maximum font sizes
-        $maxFontSize = 9.5;
-        $minFontSize = 6;
+        $maxFontSize = 8;
+        $minFontSize = 5.8;
 
         // Minimum and maximum row heights
         $maxRowHeight = 8.5;
@@ -2024,7 +2018,7 @@ class CSMPageBuilder
                 4 => 3, // Neither Agree nor Disagree
                 5 => 2, // Disagree
                 6 => 1, // Strongly Disagree
-                7 => 6, // Not Applicable
+                7 => 0, // Not Applicable
             ];
 
             for ($c = 2; $c < $cols; $c++) {
@@ -2045,15 +2039,17 @@ class CSMPageBuilder
                         $cellY + (($currentRowHeight - $checkH) / 2),
                         $colWidths[$c],
                         $checkH,
-                        10
+                        8
                     );
                 }
             }
 
-            $pdf->SetXY($rowStartX, $rowStartY + $currentRowHeight);
+            $pdf->Ln();
         }
 
-$pdf->Ln(3);
+    $sqdEndY = $pdf->GetY();
+
+$pdf->Ln(5);
         
         // --------------------------------------------------------------------------
         // SUGGESTIONS (1x1 table responsive)
@@ -2145,36 +2141,6 @@ $pdf->Ln(3);
         );
 
         // --------------------------------------------------------------------------
-        // OVERLAY SUGGESTIONS TEXT
-        // --------------------------------------------------------------------------
-        if ($csm && !empty($csm->suggestions)) {
-            $oldX = $pdf->GetX();
-            $oldY = $pdf->GetY();
-
-            $pdf->SetFont($arialNarrow, '', 7.3);
-            $pdf->SetXY($boxLeft + $padding, $lineStartY - 3.5);
-            $pdf->MultiCell(
-                $boxWidthSuggestions - ($padding * 2),
-                4,
-                $csm->suggestions,
-                0,
-                'L',
-                false,
-                1,
-                '',
-                '',
-                true,
-                0,
-                false,
-                true,
-                0,
-                'T'
-            );
-
-            $pdf->SetXY($oldX, $oldY);
-        }
-
-        // --------------------------------------------------------------------------
         // DRAW 9 UNDERLINES
         // --------------------------------------------------------------------------
         for ($i = 0; $i < $totalLines; $i++) {
@@ -2224,8 +2190,8 @@ $pdf->Ln(3);
         // --------------------------------------------------------------------------
 
         // position adjustments
-        $x = 0;   // move left (-) or right (+) from SQD left edge
-        $y = 18;   // move down (+) from bottom of SQD table
+        $x = - 2;   // move left (-) or right (+) from SQD left edge
+        $y = 24;   // move down (+) from bottom of SQD table
 
         // text content
         $textBox1Content = 'F-QMS-025 Rev. 3 (02-02-26)';
