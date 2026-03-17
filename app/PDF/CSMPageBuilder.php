@@ -1646,7 +1646,26 @@ class CSMPageBuilder
         $pdf->SetFillColor(0, 0, 0);
         $pdf->SetTextColor(255, 255, 255);
 
-        $pdf->Cell($sqdHeaderWidth, $titleHeight, $titleText, 1, 0, 'L', true);
+        $titleX = $headerStartX;
+        $titleY = $headerBaseY + $titleOffsetY;
+
+        // draw rounded filled box
+        $pdf->SetFillColor(0, 0, 0);
+        $pdf->SetTextColor(255, 255, 255);
+
+        $pdf->RoundedRect(
+            $titleX,
+            $titleY,
+            $sqdHeaderWidth,
+            $titleHeight,
+            1,
+            '1001', // top-left and top-right only
+            'DF'
+        );
+
+        // draw title text on top
+        $pdf->SetXY($titleX, $titleY);
+        $pdf->Cell($sqdHeaderWidth, $titleHeight, $titleText, 0, 0, 'L', false);
 
         // reset colors
         $pdf->SetTextColor(0, 0, 0);
@@ -1794,26 +1813,25 @@ class CSMPageBuilder
 
         // 2. Remaining header cells at fixed coordinates
         $currentX = $headerRowX + $colWidths[0] + $colWidths[1];
+        $ratingsStartX = $currentX;
+        $ratingsWidth  = array_sum(array_slice($colWidths, 2));
 
-        for ($i = 2; $i < count($headers); $i++) {
-            $pdf->SetXY($currentX, $headerRowY);
-            $pdf->MultiCell(
-                $colWidths[$i],
-                $headerRowHeight,
-                '',
-                1,
-                'C',
-                false,
-                0,
-                '',
-                '',
-                true,
-                0,
-                false,
-                true
-            );
+        // draw ONE rounded outer border for the rating header only
+        $pdf->RoundedRect(
+            $ratingsStartX,
+            $headerRowY,
+            $ratingsWidth,
+            $headerRowHeight,
+            1,
+            '1001', // top-left and top-right only
+            'D'
+        );
 
-            $currentX += $colWidths[$i];
+        // draw only INNER vertical lines
+        $lineX = $ratingsStartX;
+        for ($i = 2; $i < count($headers) - 1; $i++) {
+            $lineX += $colWidths[$i];
+            $pdf->Line($lineX, $headerRowY, $lineX, $headerRowY + $headerRowHeight);
         }
 
         // 3. Overlay emoji images and header text
@@ -1886,7 +1904,7 @@ class CSMPageBuilder
             // TOP TEXT (Rating labels → Arial Narrow Regular)
             // ----------------------------
             $pdf->SetXY($currentX, $topTextY);
-            $pdf->SetFont($arialNarrow, '', $topFont);
+            $pdf->SetFont($arialNarrowBold, '', $topFont);
 
             $pdf->MultiCell(
                 $cellWidth,
