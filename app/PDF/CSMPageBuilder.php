@@ -512,7 +512,7 @@ class CSMPageBuilder
 
         $pdf->SetFont($arialNarrow, '', 8);
         foreach ($sexOptions as $option) {
-            $pdf->SetX($row1X + $piCol1Width + $leftInset - 5);
+            $pdf->SetX($row1X + $piCol1Width + $leftInset - 3);
             $currentY   = $pdf->GetY();
             $textHeight = max($lineHeight, $pdf->getStringHeight($optionTextWidthRight, $option));
 
