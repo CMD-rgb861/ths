@@ -1990,17 +1990,19 @@ class CSMPageBuilder
             $rowText
         );
 
-        // final row height must fit text
         $currentRowHeight = max($rowHeight, $questionHeight + 2);
 
         $pdf->SetXY($rowStartX, $rowStartY);
 
-        // SQD label column → Arial Narrow Bold
+        // grey fill for the whole row
+        $pdf->SetFillColor(220, 220, 220);
+
+        // SQD label column
         $pdf->SetFont($arialNarrowBold, '', $fontSize);
         $label = 'SQD' . $rowIdx;
-        $pdf->Cell($colWidths[0], $currentRowHeight, $label, 1, 0, 'C');
+        $pdf->Cell($colWidths[0], $currentRowHeight, $label, 1, 0, 'C', true);
 
-        // Question column → Arial Narrow Bold
+        // Question column
         $pdf->SetFont($arialNarrowBold, '', $fontSize);
         $pdf->MultiCell(
             $colWidths[1],
@@ -2008,7 +2010,7 @@ class CSMPageBuilder
             $rowText,
             1,
             'L',
-            false,
+            true,
             0,
             '',
             '',
@@ -2020,40 +2022,40 @@ class CSMPageBuilder
             'M'
         );
 
-            $columnValueMap = [
-                2 => 5, // Strongly Agree
-                3 => 4, // Agree
-                4 => 3, // Neither Agree nor Disagree
-                5 => 2, // Disagree
-                6 => 1, // Strongly Disagree
-                7 => 6, // Not Applicable
-            ];
+        $columnValueMap = [
+            2 => 5,
+            3 => 4,
+            4 => 3,
+            5 => 2,
+            6 => 1,
+            7 => 6,
+        ];
 
-            for ($c = 2; $c < $cols; $c++) {
-                $cellX = $pdf->GetX();
-                $cellY = $rowStartY;
+        for ($c = 2; $c < $cols; $c++) {
+            $cellX = $pdf->GetX();
+            $cellY = $rowStartY;
 
-                $pdf->Cell($colWidths[$c], $currentRowHeight, '', 1, 0, 'C');
+            $pdf->Cell($colWidths[$c], $currentRowHeight, '', 1, 0, 'C', true);
 
-                $answer = (int)($sqdAnswers[$rowIdx] ?? -1);
-                $expected = $columnValueMap[$c] ?? null;
+            $answer = (int)($sqdAnswers[$rowIdx] ?? -1);
+            $expected = $columnValueMap[$c] ?? null;
 
-                $checkH = 3;
+            $checkH = 3;
 
-                if ($expected !== null && $answer === (int)$expected) {
-                    $drawCheck(
-                        $pdf,
-                        $cellX,
-                        $cellY + (($currentRowHeight - $checkH) / 2),
-                        $colWidths[$c],
-                        $checkH,
-                        10
-                    );
-                }
+            if ($expected !== null && $answer === (int)$expected) {
+                $drawCheck(
+                    $pdf,
+                    $cellX,
+                    $cellY + (($currentRowHeight - $checkH) / 2),
+                    $colWidths[$c],
+                    $checkH,
+                    10
+                );
             }
-
-            $pdf->SetXY($rowStartX, $rowStartY + $currentRowHeight);
         }
+
+        $pdf->SetXY($rowStartX, $rowStartY + $currentRowHeight);
+    }
 
 $pdf->Ln(3);
         
