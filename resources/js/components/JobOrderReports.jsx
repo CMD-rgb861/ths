@@ -681,24 +681,115 @@ export default function JobOrderReports() {
           )}
 
           {selectedTab === 'pie' && (
-            <div className="flex flex-col items-center py-8">
-              {Array.isArray(pieData.labels) &&
-              pieData.labels.length === 1 &&
-              pieData.labels[0] === 'No Data' ? (
-                <div className="text-center">
-                  <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  <p className="text-sm text-gray-500">No department data to display</p>
-                  <p className="text-xs text-gray-400 mt-1">Try clearing filters or adjusting the date range</p>
+          <div className="py-6">
+            {Array.isArray(pieData.labels) &&
+            pieData.labels.length === 1 &&
+            pieData.labels[0] === 'No Data' ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 py-14 px-6 text-center">
+                <svg
+                  className="mb-4 h-14 w-14 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                  />
+                </svg>
+                <p className="text-sm font-medium text-gray-600">
+                  No department data to display
+                </p>
+                <p className="mt-1 text-xs text-gray-400">
+                  Try clearing filters or adjusting the date range
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-800">
+                      Department Distribution
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Overview of department-based records
+                    </p>
+                  </div>
                 </div>
-              ) : (
-                <div className="w-full max-w-lg">
-                  <Pie data={pieData} options={getPieChartOptions('bottom')} />
+
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(320px,1fr)_320px]">
+                  {/* Chart */}
+                  <div className="flex items-center justify-center">
+                    <div className="w-full max-w-[420px]">
+                      <Pie
+                        data={pieData}
+                        options={{
+                          ...getPieChartOptions(),
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            ...getPieChartOptions()?.plugins,
+                            legend: {
+                              display: false,
+                            },
+                          },
+                        }}
+                        height={360}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Custom Legend */}
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                    <h4 className="mb-3 text-sm font-medium text-gray-700">
+                      Departments
+                    </h4>
+
+                    <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                      {pieData.labels?.map((label, index) => {
+                        const value = pieData.datasets?.[0]?.data?.[index] ?? 0;
+                        const total =
+                          pieData.datasets?.[0]?.data?.reduce(
+                            (sum, item) => sum + Number(item || 0),
+                            0
+                          ) || 0;
+                        const percentage = total ? ((value / total) * 100).toFixed(1) : 0;
+                        const color =
+                          pieData.datasets?.[0]?.backgroundColor?.[index] || "#9CA3AF";
+
+                        return (
+                          <div
+                            key={label}
+                            className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-sm"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span
+                                className="h-3 w-3 flex-shrink-0 rounded-full"
+                                style={{ backgroundColor: color }}
+                              />
+                              <span className="truncate text-sm text-gray-700" title={label}>
+                                {label}
+                              </span>
+                            </div>
+
+                            <div className="ml-3 flex-shrink-0 text-right">
+                              <div className="text-sm font-semibold text-gray-800">
+                                {value}
+                              </div>
+                              <div className="text-xs text-gray-400">{percentage}%</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
+        )}
         </div>
       </div>
     </div>
