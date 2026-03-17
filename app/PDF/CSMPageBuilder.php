@@ -136,9 +136,11 @@ class CSMPageBuilder
         $boxWidth  = $pageWidth - ($left + $right);
         $boxHeight = $pageHeight - ($top + $bottom);
 
-        $pdf->SetLineWidth(0.4);
-        $pdf->Rect($left, $top, $boxWidth, $boxHeight);
-        $pdf->SetLineWidth(0.2);
+
+        //BORDERLINE OF THE PAGE
+        // $pdf->SetLineWidth(0.4);
+        // $pdf->Rect($left, $top, $boxWidth, $boxHeight);
+        // $pdf->SetLineWidth(0.2);
 
         // Set margins - shifted to center within border
         $pdf->SetMargins(12, 15, 12);
