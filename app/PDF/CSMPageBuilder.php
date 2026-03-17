@@ -490,7 +490,7 @@ class CSMPageBuilder
                 $drawCheck($pdf, $boxX, $boxY, $checkboxSize, $checkboxSize);
             }
 
-            $pdf->SetXY($boxX + $checkboxSize + $checkboxGap, $currentY);
+            $pdf->SetXY($boxX + $checkboxSize + $checkboxGap, $currentY + 0.2);
             $pdf->MultiCell($optionTextWidthLeft, $textHeight, $type, 0, 'L', false, 1);
         }
         $row1LeftEndY = $pdf->GetY();
@@ -515,7 +515,7 @@ class CSMPageBuilder
                 $drawCheck($pdf, $boxX, $boxY, $checkboxSize, $checkboxSize);
             }
 
-            $pdf->SetXY($boxX + $checkboxSize + $checkboxGap, $currentY);
+            $pdf->SetXY($boxX + $checkboxSize + $checkboxGap, $currentY + 0.2);
             $pdf->MultiCell($optionTextWidthRight, $textHeight, $option, 0, 'L', false, 1);
         }
         $row1RightEndY = $pdf->GetY();
@@ -572,7 +572,7 @@ class CSMPageBuilder
 
             if ($category === 'Others') {
                 // Line 1: label
-                $pdf->SetXY($textX, $currentY);
+                $pdf->SetXY($textX, $currentY + 0.2);
                 $pdf->Cell($row2OptionTextWidthLeft, $lineHeight, 'Others:', 0, 1, 'L');
 
                 // Line 2: underline below label
@@ -580,7 +580,7 @@ class CSMPageBuilder
                 $underlineStartX = $textX + 1;
                 $underlineEndX = $textX + ($row2OptionTextWidthLeft * 1);
 
-                $pdf->SetXY($textX, $currentY);
+                $pdf->SetXY($textX, $currentY + 0.2);
                 $pdf->Cell($row2OptionTextWidthLeft, $lineHeight, 'Others:', 0, 1, 'L');
 
                 $underlineY = $pdf->GetY() + 2.5;
@@ -598,7 +598,7 @@ class CSMPageBuilder
                 $pdf->SetY($underlineY + 2);
             } else {
                 $textHeight = max($lineHeight, $pdf->getStringHeight($row2OptionTextWidthLeft, $category));
-                $pdf->SetXY($textX, $currentY);
+                $pdf->SetXY($textX, $currentY + 0.2);
                 $pdf->MultiCell($row2OptionTextWidthLeft, $textHeight, $category, 0, 'L', false, 1);
             }
         }
@@ -624,7 +624,7 @@ class CSMPageBuilder
                 $drawCheck($pdf, $boxX, $boxY, $checkboxSize, $checkboxSize);
             }
 
-            $pdf->SetXY($boxX + $checkboxSize + $checkboxGap, $currentY);
+            $pdf->SetXY($boxX + $checkboxSize + $checkboxGap, $currentY + 0.2);
             $pdf->MultiCell($row2OptionTextWidthRight, $textHeight, $ageOption, 0, 'L', false, 1);
         }
         $row2RightEndY = $pdf->GetY();
@@ -663,18 +663,18 @@ class CSMPageBuilder
 
         foreach ($line1Options as $option) {
             $boxX = $currentX;
-            $boxY = $line1Y + 0.5;
+            $boxY = $line1Y + 1;
 
             $pdf->Rect($boxX, $boxY, $checkboxSize, $checkboxSize);
 
             if ($csm && $isSame($csm->who_to_evaluate ?? '', $option)) {
-                $drawCheck($pdf, $boxX, $boxY - 0.5, $checkboxSize, $checkboxSize);
+                $drawCheck($pdf, $boxX, $boxY, $checkboxSize, $checkboxSize);
             }
 
             $currentX += $checkboxSize + 1;
             $labelWidth = $pdf->GetStringWidth($option);
 
-            $pdf->SetXY($currentX, $line1Y);
+            $pdf->SetXY($currentX, $line1Y + 0.2);
             $pdf->Cell($labelWidth, $lineHeight, $option, 0, 0, 'L');
 
             $currentX += $labelWidth + 6;
@@ -688,7 +688,7 @@ class CSMPageBuilder
 
         $textX = $evaluateX + $evaluateInset + $checkboxSize + 1;
 
-        $pdf->SetXY($textX, $line2Y);
+        $pdf->SetXY($textX, $line2Y + 0.2);
         $pdf->Cell(0, $lineHeight, 'Others:', 0, 0, 'L');
 
         $gapAfterLabel = 3;       // move line to the right
@@ -704,7 +704,7 @@ class CSMPageBuilder
             $drawCheck($pdf, $evaluateX + $evaluateInset, $line2Y + 0.5, $checkboxSize, $checkboxSize);
 
             $pdf->SetFont($arialNarrow, '', 7);
-            $pdf->SetXY($lineStartX + 1, $line2Y);
+            $pdf->SetXY($lineStartX + 1, $line2Y + 0.2);
             $pdf->Cell($underlineLength - 2, $lineHeight, $csm->who_to_evaluate_other, 0, 0, 'L');
         }
 
