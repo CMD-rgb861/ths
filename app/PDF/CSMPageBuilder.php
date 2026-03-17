@@ -153,10 +153,16 @@ class CSMPageBuilder
         // --------------------------------------------------------------------------
         // HEADER
         // --------------------------------------------------------------------------
+        // Left logo (LNU)
         $pdf->Ln(4);
         $logoPath = public_path('images/lnu_logo.jpg');
         if (file_exists($logoPath)) {
             $pdf->Image($logoPath, 53, 14, 15);
+        }
+        // Right logo (ISO)
+        $isoLogoPath = public_path('images/iso_logo.png');
+        if (file_exists($isoLogoPath)) {
+            $pdf->Image($isoLogoPath, 140, 14, 30);
         }
 
         // "LEYTE NORMAL UNIVERSITY" → Times New Roman Bold
@@ -269,6 +275,7 @@ class CSMPageBuilder
         $pdf->SetXY($row1X, $row1Y + $rowHeight);
         
         // Row 2: SERVICE/S AVAILED | value
+        $pdf->SetFont($arialNarrowBold, '', 8.5);
         $pdf->SetFillColor(255, 255, 255);
 
         $row2X = $pdf->GetX();
@@ -295,6 +302,7 @@ class CSMPageBuilder
         
         // custom widths for DATE/TIME row
         // Row 3: DATE VISITED | value | TIME VISITED | value
+        $pdf->SetFont($arialNarrowBold, '', 8.5);
         $pdf->SetFillColor(220, 220, 220);
 
         // make sure row starts at the left edge of the table
@@ -344,7 +352,7 @@ class CSMPageBuilder
         
         $providerLabel = "NAME OF SERVICE PROVIDER\n(OPTIONAL):";
 
-        $rowHeight = max(8, $pdf->getStringHeight($col1Width - 2, $providerLabel) + 2);
+        $rowHeight = max(8, $pdf->getStringHeight($col1Width - 2, $providerLabel) + 1.5);
 
         $rowX = $pdf->GetX();
         $rowY = $pdf->GetY();
@@ -355,7 +363,7 @@ class CSMPageBuilder
 
         // left cell label
         $pdf->SetFont($arialNarrowBold, '', 8);
-        $pdf->SetXY($rowX + 1, $rowY + 1);
+        $pdf->SetXY($rowX, $rowY + 1);
         $pdf->MultiCell(
             $col1Width - 2,
             4,
