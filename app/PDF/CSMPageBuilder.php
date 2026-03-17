@@ -285,7 +285,7 @@ class CSMPageBuilder
         $pdf->Cell($col2Width, $rowHeight, '', 1, 1, 'L');
 
         if ($csm) {
-            $pdf->SetFont($arialNarrow, '', 8);
+            $pdf->SetFont($arialNarrow, '', 9);
             $pdf->SetXY($row2X + $col1Width + 1, $row2Y + 1);
             $pdf->Cell(
                 $col2Width - 2,
@@ -324,7 +324,7 @@ class CSMPageBuilder
         $pdf->Cell($row3Col4Width, $rowHeight, '', 1, 1, 'L', true);
 
         if ($csm && $csm->date_time_visited) {
-            $pdf->SetFont($arialNarrow, '', 8);
+            $pdf->SetFont($arialNarrow, '', 9);
 
             $pdf->SetXY($row3X + $row3Col1Width + 1, $row3Y + 1);
             $pdf->Cell(
@@ -376,8 +376,8 @@ class CSMPageBuilder
 
         // right cell value
         if ($csm) {
-            $pdf->SetFont($arialNarrow, '', 8);
-            $pdf->SetXY($rowX + $col1Width + 1, $rowY + 1);
+            $pdf->SetFont($arialNarrow, '', 8.5);
+            $pdf->SetXY($rowX + $col1Width + 1, $rowY + 2);
             $pdf->MultiCell(
                 $col2Width - 2,
                 4,
@@ -582,16 +582,16 @@ class CSMPageBuilder
 
             if ($category === 'Others') {
                 // Line 1: label
+                $pdf->SetFont($arialNarrow, '', 8);
+
                 $pdf->SetXY($textX, $currentY + 0.2);
                 $pdf->Cell($row2OptionTextWidthLeft, $lineHeight, 'Others:', 0, 1, 'L');
 
-                // Line 2: underline below label
                 $underlineY = $pdf->GetY() + 2.5;
                 $underlineStartX = $textX + 1;
-                $underlineEndX = $textX + ($row2OptionTextWidthLeft * 1);
+                $underlineEndX = $textX + ($row2OptionTextWidthLeft);
 
-                $pdf->SetXY($textX, $currentY + 0.2);
-                $pdf->Cell($row2OptionTextWidthLeft, $lineHeight, 'Others:', 0, 1, 'L');
+                $pdf->Line($underlineStartX, $underlineY, $underlineEndX, $underlineY);
 
                 $underlineY = $pdf->GetY() + 2.5;
                 $underlineStartX = $textX + 1;
@@ -936,15 +936,15 @@ class CSMPageBuilder
         // --------------------------------------------------------------------------
         $pdf->SetXY($ccTableX, $piTableStartY + $titleHeight);
 
-        $ccInstructions = 'INSTRUCTIONS: Check mark (✔) your answer to the Citizen\'s Charter (CC) questions. The Citizen\'s Charter is an official document that reflects the services of a government agency/office including its requirements, fees, and processing times among others.';
-        $instructionsHeight = 18;
+        $ccInstructions = 'INSTRUCTIONS: Check mark (<span style="font-family:dejavusans;">✔</span>) your answer to the Citizen\'s Charter (CC) questions. The Citizen\'s Charter is an official document that reflects the services of a government agency/office including its requirements, fees, and processing times among others.';
+        $instructionsHeight = 18.5;
 
         $ccInstructionFont = $fitFontToBox(
             $pdf,
             $arialNarrow,
             '',
-            9,
-            4.5,
+            11.5,
+            6,
             $ccTableWidth - ($ccCellPadX * 2),
             $ccInstructions,
             $instructionsHeight - ($ccCellPadY * 2),
@@ -953,22 +953,18 @@ class CSMPageBuilder
 
         $pdf->SetFont($arialNarrow, '', $ccInstructionFont);
         $pdf->SetFillColor(220, 220, 220);
-        $pdf->MultiCell(
+        $pdf->writeHTMLCell(
             $ccTableWidth,
             $instructionsHeight,
+            '',
+            '',
             $ccInstructions,
             1,
-            'L',
-            true,
             1,
-            '',
-            '',
             true,
-            0,
-            false,
             true,
-            $instructionsHeight,
-            'M'
+            'L',
+            true
         );
 
         // --------------------------------------------------------------------------
@@ -1676,7 +1672,7 @@ class CSMPageBuilder
 
         // --- Auto-adjust header font size ---
         $headerFontMin = 5.5;
-        $headerFontMax = 8.5;
+        $headerFontMax = 10;
         $headerFontSizes = [];
 
         for ($i = 2; $i < count($headers); $i++) {
@@ -1725,7 +1721,7 @@ class CSMPageBuilder
         $headerRowHeight = $maxHeaderHeight;
 
         // --- Auto-adjust font size for INSTRUCTIONS cell ---
-        $instructionsCellText = "INSTRUCTIONS: For SQD 0-8, please put a check mark on the column that best corresponds to your answer.";
+        $instructionsCellText = 'INSTRUCTIONS: For SQD 0-8, please put a check mark (<span style="font-family:dejavusans;">✔</span>) on the column that best corresponds to your answer.';
         $instructionsCellWidth = $colWidths[0] + $colWidths[1];
         $instructionsFont = $headerFontMax;
 
@@ -1782,22 +1778,18 @@ class CSMPageBuilder
         // Instructions → Arial Narrow Regular
         $pdf->SetFont($arialNarrow, '', $instructionsAutoFont);
         $pdf->SetXY($headerRowX + 1, $instructionsY + 1);
-        $pdf->MultiCell(
+        $pdf->writeHTMLCell(
             $innerWidth,
             0,
+            '',
+            '',
             $instructionsCellText,
             0,
+            0,
+            false,
+            true,
             'L',
-            false,
-            0,
-            '',
-            '',
-            true,
-            0,
-            false,
-            true,
-            0,
-            'T'
+            true
         );
 
         // 2. Remaining header cells at fixed coordinates
