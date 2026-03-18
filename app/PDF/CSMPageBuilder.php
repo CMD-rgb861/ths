@@ -543,9 +543,10 @@ class CSMPageBuilder
         // --------------------------------------------------------------------------
         // Row 2: CLIENT CATEGORY | AGE
         // --------------------------------------------------------------------------
-        $clientCategories = ['Student', 'Visitor', 'Faculty', 'Admin/Personnel', 'Others'];
+        $clientCategories = ['Student', 'Faculty', 'Visitor', 'Admin/Personnel', 'Others'];
         $ageOptions = ['Below 18 y/o', '18-24 y/o', '25-34 y/o', '35-44 y/o', '45-54 y/o', '55-64 y/o', '65 y/o & above'];
 
+        
         $row2Col1Width = $piTableWidth * 0.40; // narrower Client Category
         $row2Col2Width = $piTableWidth - $row2Col1Width; // wider Age
 
@@ -565,7 +566,7 @@ class CSMPageBuilder
             $pdf->SetX($row2X + $leftInset);
             $currentY = $pdf->GetY();
 
-            $boxX = $pdf->GetX();
+            $boxX = $pdf->GetX();   
             $boxY = $currentY + (($lineHeight - $checkboxSize) / 2);
 
             $pdf->Rect($boxX, $boxY, $checkboxSize, $checkboxSize);
@@ -587,13 +588,13 @@ class CSMPageBuilder
                 $pdf->SetXY($textX, $currentY + 0.2);
                 $pdf->Cell($row2OptionTextWidthLeft, $lineHeight, 'Others:', 0, 1, 'L');
 
-                $underlineY = $pdf->GetY() + 2.5;
-                $underlineStartX = $textX + 1;
-                $underlineEndX = $textX + ($row2OptionTextWidthLeft);
+                // $underlineY = $pdf->GetY() + 2.5;
+                // $underlineStartX = $textX + 1;
+                // $underlineEndX = $textX + ($row2OptionTextWidthLeft);
 
-                $pdf->Line($underlineStartX, $underlineY, $underlineEndX, $underlineY);
+                // $pdf->Line($underlineStartX, $underlineY, $underlineEndX, $underlineY);
 
-                $underlineY = $pdf->GetY() + 2.5;
+                $underlineY = $pdf->GetY() + 3;
                 $underlineStartX = $textX + 1;
                 $underlineEndX = $textX + ($row2OptionTextWidthLeft * 1);
 
@@ -601,7 +602,7 @@ class CSMPageBuilder
 
                 if ($csm && !empty($csm->client_category_other)) {
                     $pdf->SetFont($arialNarrow, '', 7.5);
-                    $pdf->SetXY($underlineStartX + 1, $underlineY - 3);
+                    $pdf->SetXY($underlineStartX + 1, $underlineY - 3.5);
                     $pdf->Cell($underlineEndX - $underlineStartX - 2, 3, $csm->client_category_other, 0, 0, 'L');
                 }
 
@@ -706,15 +707,15 @@ class CSMPageBuilder
 
         $lineStartX = $textX + $pdf->GetStringWidth('Others:') + $gapAfterLabel;
         $lineEndX   = $lineStartX + $underlineLength;
-        $lineY      = $line2Y + $lineHeight - 0.5;
+        $lineY      = $line2Y + 0.5 + $lineHeight - 0.5;
 
         $pdf->Line($lineStartX, $lineY, $lineEndX, $lineY);
 
         if ($csm && !empty($csm->who_to_evaluate_other)) {
             $drawCheck($pdf, $evaluateX + $evaluateInset, $line2Y + 0.5, $checkboxSize, $checkboxSize);
 
-            $pdf->SetFont($arialNarrow, '', 7);
-            $pdf->SetXY($lineStartX + 1, $line2Y + 0.2);
+            $pdf->SetFont($arialNarrow, '', 8.5);
+            $pdf->SetXY($lineStartX + 1, $line2Y - 0.5);
             $pdf->Cell($underlineLength - 2, $lineHeight, $csm->who_to_evaluate_other, 0, 0, 'L');
         }
 
@@ -1983,7 +1984,7 @@ class CSMPageBuilder
         $availableHeight = $pageHeight - $tableTopY - $bottomMargin - 85; // reserve more space for suggestions, thank you, footer
 
         // Minimum and maximum font sizes
-        $maxFontSize = 9.5;
+        $maxFontSize = 8.5;
         $minFontSize = 6;
 
         // Minimum and maximum row heights
@@ -1993,7 +1994,7 @@ class CSMPageBuilder
         // Calculate row height and font size
         $rowHeight = max($minRowHeight, min($maxRowHeight, $availableHeight / max(1, $numRows)));
         // Font size is proportional to row height
-        $fontSize = max($minFontSize, min($maxFontSize, $rowHeight * 1.1));
+        $fontSize = max($minFontSize, min($maxFontSize, $rowHeight * 1.3));
 
         // SQD questions → Arial Narrow Regular
         foreach ($sqdRows as $rowIdx => $rowText) {
@@ -2247,7 +2248,7 @@ $pdf->Ln(3);
 
         // position adjustments
         $x = 0;   // move left (-) or right (+) from SQD left edge
-        $y = 18;   // move down (+) from bottom of SQD table
+        $y = 28;   // move down (+) from bottom of SQD table
 
         // text content
         $textBox1Content = 'F-QMS-025 Rev. 3 (02-02-26)';
