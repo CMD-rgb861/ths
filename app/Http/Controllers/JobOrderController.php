@@ -36,8 +36,9 @@ class JobOrderController extends Controller
             'clientSatisfactionMeasurements',
         ]);
 
-        // Check if filtering by Completed status
-        $isCompletedFilter = $request->filled('status') && $request->status === 'Completed';
+        // Check if filtering by a status that depends on action_reports timestamps
+        $statusFilter = $request->input('status');
+        $isActionReportStatusFilter = in_array($statusFilter, ['Completed', 'Ongoing', 'Cancelled', 'Unserviceable']);
 
         // Default sort
         $sortBy = $request->input('sort', 'newest');
@@ -45,36 +46,41 @@ class JobOrderController extends Controller
         // Apply sorting
         switch ($sortBy) {
             case 'oldest':
-                if ($isCompletedFilter) {
+                if ($isActionReportStatusFilter) {
                     $query->join('action_reports', 'job_orders.id', '=', 'action_reports.job_order_id')
-                          ->orderBy('action_reports.confirmed_at', 'asc')
-                          ->select('job_orders.*');
+                        ->orderBy('action_reports.updated_at', 'asc')
+                        ->select('job_orders.*');
                 } else {
                     $query->orderBy('job_orders.created_at', 'asc');
                 }
                 break;
+
             case 'department_asc':
                 $query->join('departments', 'job_orders.department_id', '=', 'departments.id')
-                      ->orderBy('departments.name', 'asc')
-                      ->select('job_orders.*');
+                    ->orderBy('departments.name', 'asc')
+                    ->select('job_orders.*');
                 break;
+
             case 'department_desc':
                 $query->join('departments', 'job_orders.department_id', '=', 'departments.id')
-                      ->orderBy('departments.name', 'desc')
-                      ->select('job_orders.*');
+                    ->orderBy('departments.name', 'desc')
+                    ->select('job_orders.*');
                 break;
+
             case 'job_order_asc':
                 $query->orderBy('job_orders.job_order_no', 'asc');
                 break;
+
             case 'job_order_desc':
                 $query->orderBy('job_orders.job_order_no', 'desc');
                 break;
+
             case 'newest':
             default:
-                if ($isCompletedFilter) {
+                if ($isActionReportStatusFilter) {
                     $query->join('action_reports', 'job_orders.id', '=', 'action_reports.job_order_id')
-                          ->orderBy('action_reports.confirmed_at', 'desc')
-                          ->select('job_orders.*');
+                        ->orderBy('action_reports.updated_at', 'desc')
+                        ->select('job_orders.*');
                 } else {
                     $query->orderBy('job_orders.created_at', 'desc');
                 }

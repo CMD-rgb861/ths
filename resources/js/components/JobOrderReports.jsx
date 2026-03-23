@@ -268,7 +268,9 @@ export default function JobOrderReports() {
                         itDirector?.name || '';
       const servicedBy = order.action_report?.serviced_by?.name || 
                         order.action_report?.serviced_by || '';
-      const cancelledBy = order.action_report?.cancelled_by_user?.name || '';
+      const cancelledBy = order.action_report?.cancelled_by?.name || 
+                        itDirector?.user?.name || 
+                        itDirector?.name;
       const dateCreated = order.created_at 
         ? new Date(order.created_at).toLocaleString('en-US', {
             year: 'numeric',
@@ -524,7 +526,9 @@ export default function JobOrderReports() {
                                  itDirector?.name;
               const servicedBy = order.action_report?.serviced_by?.name || 
                                  order.action_report?.serviced_by;
-              const cancelledBy = order.action_report?.cancelled_by_user?.name;
+              const cancelledBy = order.action_report?.cancelled_by?.name || 
+                                itDirector?.user?.name || 
+                                itDirector?.name;
 
               return (
                 <div

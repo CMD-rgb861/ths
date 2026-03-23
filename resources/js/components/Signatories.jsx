@@ -149,7 +149,7 @@ const Signatories = ({ showNotification }) => {
           {/* Form Section */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              IT Director Name <span className="text-red-500">*</span>
+              ITS Director Name <span className="text-red-500">*</span>
             </label>
             <input
               value={name}

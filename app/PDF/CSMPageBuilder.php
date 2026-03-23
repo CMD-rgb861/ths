@@ -1407,7 +1407,7 @@ class CSMPageBuilder
                     $optionCode = $matches[1] ?? '';
 
                     if (($ccAnswers['CC2'] ?? '') === $optionCode) {
-                        $drawCheck($pdf, $checkboxX, $checkboxY, $ccCheckboxSize, $ccCheckboxSize, 7);
+                        $drawCheck($pdf, $checkboxX + 0.6, $checkboxY - 1.3, $ccCheckboxSize, $ccCheckboxSize, 10);
                     }
 
                     $pdf->SetFont($arialNarrow, '', $optFont);
