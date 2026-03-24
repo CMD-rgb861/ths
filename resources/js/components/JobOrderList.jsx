@@ -76,26 +76,22 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         next_page_url: pageValue < totalPages
       });
 
-      // Track new pending jobs (admin only)
+      // Always update newPendingJobs from backend data (admin only)
       if (isAdmin) {
         const currentPendingJobs = data.filter(
           job => job.action_report?.status === 'Pending' && !job.notified
         );
-
-        const newPending = currentPendingJobs.filter(
-          job => !newPendingJobs.some(existingJob => existingJob.id === job.id)
-        );
-
-        setNewPendingJobs(prev => [...prev, ...newPending]);
+        setNewPendingJobs(currentPendingJobs);
       }
     } catch (error) {
       console.error("Failed to fetch job orders:", error);
       setJobs([]);
       setMeta({});
+      if (isAdmin) setNewPendingJobs([]);
     } finally {
       setLoading(false);
     }
-  }, [search, page, loading, isAdmin, userId, newPendingJobs, setNewPendingJobs]);
+  }, [search, page, loading, isAdmin, userId, setNewPendingJobs]);
 
   // Load jobs when search or page changes
   useEffect(() => {
@@ -149,16 +145,21 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
 
   const handleNewJobsModalClose = () => {
     setIsNewJobsModalOpen(false);
+    // Do NOT mark as notified here!
+  };
 
-    if (newPendingJobs.length > 0) {
-      axios.post('/job-orders/mark-pending-notified', {
-        jobs: newPendingJobs.map(job => job.id)
-      })
+  const handleMarkAllViewed = () => {
+    const jobIds = newPendingJobs.map(job => job.id);
+
+    axios.post('/job-orders/mark-pending-notified', { jobs: jobIds })
       .then(() => {
-        fetchJobs(search, page);
+        setNewPendingJobs([]);
+        setIsNewJobsModalOpen(false);
+        fetchJobs(search, page); // Refresh jobs to update notified state
       })
-      .catch(err => console.error('Failed to mark jobs as notified:', err));
-    }
+      .catch(error => {
+        console.error('Error marking jobs as notified:', error);
+      });
   };
 
   const isJobNew = (jobId) => {
@@ -175,19 +176,6 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
       setSelectedJob(job);
       setModalOpen(true);
     }
-  };
-
-  const handleMarkAllViewed = () => {
-    const jobIds = newPendingJobs.map(job => job.id);
-
-    axios.post('/job-orders/mark-pending-notified', { jobs: jobIds })
-      .then(() => {
-        setNewPendingJobs([]);
-        setIsNewJobsModalOpen(false);
-      })
-      .catch(error => {
-        console.error('Error marking jobs as notified:', error);
-      });
   };
 
   return (

@@ -7,7 +7,6 @@ import JobOrderStatusPage from './JobOrderStatusPage';
 import UserList from './UserList';
 import Signatories from './Signatories';
 import Login from './Login';
-import ForgotPassword from './ForgotPassword';
 import Notification from './Notification';
 import UserJobHistory from './UserJobHistory';
 
@@ -50,7 +49,6 @@ export default function App() {
   const mainContent = useMemo(() => (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/forgot_pass" element={<ForgotPassword />} />
 
       <Route
         path="/*"

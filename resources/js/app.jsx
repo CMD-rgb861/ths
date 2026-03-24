@@ -13,10 +13,19 @@ import axios from 'axios';
 |--------------------------------------------------------------------------
 */
 
-axios.defaults.baseURL = 'http://ths.test/api';
-axios.defaults.withCredentials = false;
+axios.defaults.baseURL = '/api';
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
+// CSRF (optional)
+const csrfToken = document
+  .querySelector('meta[name="csrf-token"]')
+  ?.getAttribute('content');
+
+if (csrfToken) {
+  axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken;
+}
+
+// Bearer token
 axios.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
 
