@@ -36,6 +36,10 @@ class ActionReport extends Model
         'noted_by_its',       // Noted by ITS field
         'noted_by_pc',        // Noted by Property Custodian field
         'unserviceable_date', // Date field for unserviceable status
+        'serial_number',
+        'brand_name',
+        'brand_model',
+        'software_name',
     ];
 
 

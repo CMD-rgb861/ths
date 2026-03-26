@@ -23,11 +23,12 @@ class DatabaseSeeder extends Seeder
         //]);
 
         $this->call([
+            RolesTableSeeder::class,
             AdminUserSeeder::class,
             NormalUserSeeder::class,
             DepartmentSeeder::class,    
             CategorySeeder::class,
-            TechnicianSeeder::class
+            TechnicianSeeder::class,
         ]);
         
 

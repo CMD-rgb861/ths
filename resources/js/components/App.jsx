@@ -9,16 +9,46 @@ import Signatories from './Signatories';
 import Login from './Login';
 import Notification from './Notification';
 import UserJobHistory from './UserJobHistory';
+import WelcomePage from './WelcomePage';
+
+// Utility function for role check
+function isRole(user, roleName) {
+  if (!user) return false;
+  if (Array.isArray(user.roles)) {
+    // roles can be array of strings or objects
+    return user.roles.some(r => (typeof r === 'string' ? r : r.name) === roleName);
+  }
+  return false;
+}
 
 export default function App() {
   const location = useLocation();
   const [notifications, setNotifications] = useState([]);
   const [newPendingJobs, setNewPendingJobs] = useState([]);
   const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user'));
+  const userRaw = localStorage.getItem('user');
+  let user = null;
+  try {
+    user = userRaw ? JSON.parse(userRaw) : null;
+  } catch (e) {
+    user = null;
+  }
 
+  // Use preferredRole if set and user has both roles
+  const preferredRole = localStorage.getItem('preferredRole');
+  const roles = user?.roles || [];
+  let isAdmin = false;
+  let isTechnician = false;
+
+  if (roles.includes('admin') && roles.includes('technician') && preferredRole) {
+    isAdmin = preferredRole === 'admin';
+    isTechnician = preferredRole === 'technician';
+  } else {
+    isAdmin = roles.includes('admin');
+    isTechnician = roles.includes('technician');
+  }
+  const isPrivileged = isAdmin || isTechnician;
   const isAuthPage = location.pathname === '/login' || location.pathname === '/forgot_pass';
-  const isAdmin = user?.role === 'admin';
 
   const showNotification = useCallback((type, title, message) => {
     const id = Date.now();
@@ -38,6 +68,13 @@ export default function App() {
       ? 'px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white shadow-sm transition-all duration-200'
       : 'px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200';
 
+  const RequirePrivileged = ({ children }) => {
+    if (!isPrivileged) {
+      return <Navigate to="/" replace />;
+    }
+    return children;
+  };
+
   const RequireAdmin = ({ children }) => {
     if (!isAdmin) {
       return <Navigate to="/" replace />;
@@ -49,7 +86,7 @@ export default function App() {
   const mainContent = useMemo(() => (
     <Routes>
       <Route path="/login" element={<Login />} />
-
+      <Route path="/welcome" element={<WelcomePage />} />
       <Route
         path="/*"
         element={
@@ -80,21 +117,27 @@ export default function App() {
 
                       {/* User Info & Logout */}
                       <div className="flex items-center space-x-4">
-                        <div className="hidden sm:flex items-center space-x-3 px-3 py-2 bg-gray-50 rounded-lg">
-                          <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
-                            <span className="text-sm font-semibold text-blue-700">
-                              {user?.name?.charAt(0).toUpperCase() || 'U'}
-                            </span>
+                        {user && (
+                          <div className="hidden sm:flex items-center space-x-3 px-3 py-2 bg-gray-50 rounded-lg">
+                            <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
+                              <span className="text-sm font-semibold text-blue-700">
+                                {user?.name?.charAt(0).toUpperCase() || 'U'}
+                              </span>
+                            </div>
+                            <div className="text-left">
+                              <p className="text-sm font-medium text-gray-900 leading-tight">
+                                {user?.name || 'User'}
+                              </p>
+                              <p className="text-xs text-gray-500 leading-tight capitalize">
+                                {Array.isArray(user?.roles)
+                                  ? user.roles.map(r => typeof r === 'string' ? r : r.name).join(', ')
+                                  : (typeof user?.role === 'object'
+                                    ? user.role?.name
+                                    : user?.role || 'Staff')}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-left">
-                            <p className="text-sm font-medium text-gray-900 leading-tight">
-                              {user?.name || 'User'}
-                            </p>
-                            <p className="text-xs text-gray-500 leading-tight capitalize">
-                              {user?.role || 'Staff'}
-                            </p>
-                          </div>
-                        </div>
+                        )}
                         <button
                           onClick={() => {
                             localStorage.removeItem('token');
@@ -130,7 +173,7 @@ export default function App() {
                             <span>New Request</span>
                           </span>
                         </NavLink>
-                        {!isAdmin && (
+                        {!isPrivileged && (
                           <NavLink to="/history" className={navLinkClass}>
                             <span className="flex items-center space-x-2">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -140,7 +183,7 @@ export default function App() {
                             </span>
                           </NavLink>
                         )}
-                        {isAdmin && (
+                        {isPrivileged && (
                           <>
                             <NavLink to="/reports" className={navLinkClass}>
                               <span className="flex items-center space-x-2">
@@ -150,22 +193,26 @@ export default function App() {
                                 <span>Reports</span>
                               </span>
                             </NavLink>
-                            <NavLink to="/users" className={navLinkClass}>
-                              <span className="flex items-center space-x-2">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                </svg>
-                                <span>Users</span>
-                              </span>
-                            </NavLink>
-                            <NavLink to="/signatories" className={navLinkClass}>
-                              <span className="flex items-center space-x-2">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                <span>Signatories</span>
-                              </span>
-                            </NavLink>
+                            {isAdmin && (
+                              <>
+                                <NavLink to="/users" className={navLinkClass}>
+                                  <span className="flex items-center space-x-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                    </svg>
+                                    <span>Users</span>
+                                  </span>
+                                </NavLink>
+                                <NavLink to="/signatories" className={navLinkClass}>
+                                  <span className="flex items-center space-x-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                    <span>Signatories</span>
+                                  </span>
+                                </NavLink>
+                              </>
+                            )}
                           </>
                         )}
                       </nav>
@@ -179,7 +226,16 @@ export default function App() {
                   <Routes>
                     <Route
                       path="/"
-                      element={<JobOrderList showNotification={showNotification} setNewPendingJobs={setNewPendingJobs} newPendingJobs={newPendingJobs} />}
+                      element={
+                        <JobOrderList
+                          showNotification={showNotification}
+                          setNewPendingJobs={setNewPendingJobs}
+                          newPendingJobs={newPendingJobs}
+                          isAdmin={isPrivileged} // <-- use isPrivileged here
+                          isTechnician={isTechnician}
+                          user={user}
+                        />
+                      }
                     />
                     <Route
                       path="/create"
@@ -201,9 +257,9 @@ export default function App() {
                     <Route
                       path="/reports"
                       element={
-                        <RequireAdmin>
-                          <JobOrderReports />
-                        </RequireAdmin>
+                        <RequirePrivileged>
+                          <JobOrderReports isAdmin={isPrivileged} user={user} showNotification={showNotification} />
+                        </RequirePrivileged>
                       }
                     />
                     <Route
@@ -247,7 +303,7 @@ export default function App() {
         }
       />
     </Routes>
-  ), [token, isAuthPage, isAdmin, user, navLinkClass, showNotification, newPendingJobs]);
+  ), [token, isAuthPage, isPrivileged, isTechnician, isAdmin, user, navLinkClass, showNotification, newPendingJobs]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">

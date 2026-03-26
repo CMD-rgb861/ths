@@ -28,6 +28,16 @@ const Field = memo(({ title, description, children }) => (
 
 Field.displayName = 'Field';
 
+function isRole(user, roleName) {
+  if (!user) return false;
+  if (Array.isArray(user.roles)) {
+    return user.roles.some(r => (typeof r === 'string' ? r : r.name) === roleName);
+  }
+  if (typeof user.role === 'string') return user.role === roleName;
+  if (typeof user.role === 'object' && user.role?.name) return user.role.name === roleName;
+  return false;
+}
+
 export default function JobOrderOngoingModal({
   jobId,
   isOpen,
@@ -37,7 +47,13 @@ export default function JobOrderOngoingModal({
   isAdmin,
   isEditable = true
 }) {
-  const currentUser = JSON.parse(localStorage.getItem('user'));
+  let currentUser = null;
+  try {
+    const userRaw = localStorage.getItem('user');
+    currentUser = userRaw ? JSON.parse(userRaw) : null;
+  } catch (e) {
+    currentUser = null;
+  }
 
   const [job, setJob] = useState(null);
   const [users, setUsers] = useState([]);
@@ -64,15 +80,26 @@ export default function JobOrderOngoingModal({
     remarks: '',
   });
 
+  // Add these state hooks at the top of your component function
+  const [hardwareFields, setHardwareFields] = useState({
+    serial_number: '',
+    brand_name: '',
+    brand_model: '',
+  });
+  const [softwareName, setSoftwareName] = useState('');
+
   // Computed states
   const isCompleted = job?.action_report?.status === 'Completed';
   const isUnserviceable = job?.action_report?.status === 'Unserviceable';
   const isCancelled = job?.action_report?.status === 'Cancelled';
   const isConfirmed = !!job?.action_report?.confirmed_at;
   const isRequester = job?.requester?.id === currentUser?.id;
-  const requesterIsUser = job?.requester?.role === 'user';
+  const requesterIsUser = isRole(job?.requester, 'user');
 
-  const readOnly = !isAdmin || !isEditable || isCompleted;
+  const isTechnician = isRole(currentUser, 'technician');
+  const isPrivileged = isAdmin || isTechnician;
+
+  const readOnly = !isPrivileged || !isEditable || isCompleted;
 
   const showConfirmButtonUser =
     !isAdmin &&
@@ -163,6 +190,14 @@ export default function JobOrderOngoingModal({
         const csmDone = !!ar?.csm_completed;
         setCsmCompleted(csmDone);
         setCsmChecked(csmDone);
+
+        // If you store these fields in job.action_report or job, update here accordingly
+        setHardwareFields({
+          serial_number: ar?.serial_number || '',
+          brand_name: ar?.brand_name || '',
+          brand_model: ar?.brand_model || '',
+        });
+        setSoftwareName(ar?.software_name || '');
       })
       .catch((err) => console.error('Load job failed:', err))
       .finally(() => setLoading(false));
@@ -264,35 +299,34 @@ export default function JobOrderOngoingModal({
 
     setSaving(true);
 
-    const updatedForm = { ...form, conformed: false };
+    // Merge hardware/software fields into the payload
+    const payload = {
+      ...form,
+      conformed: false,
+      serial_number: hardwareFields.serial_number,
+      brand_name: hardwareFields.brand_name,
+      brand_model: hardwareFields.brand_model,
+      software_name: softwareName,
+    };
 
     try {
-      const actionReportData = {
-        diagnosis: form.diagnosis,
-        action_taken: form.action_taken,
-        serviced_by: form.serviced_by,
-        date_started: form.date_started,
-        date_finished: form.date_finished,
-        remarks: form.remarks,
-      };
-
       // Handle cancel
       if (form.cancel) {
         await Promise.all([
-          axios.put(`/job-orders/${job.id}/action-report`, actionReportData),
+          axios.put(`/job-orders/${job.id}/action-report`, payload),
           axios.put(`/job-orders/${job.id}`, { status: "Cancelled" }),
         ]);
       }
       // Handle unserviceable
       else if (form.unserviceable) {
         await Promise.all([
-          axios.put(`/job-orders/${job.id}/action-report`, actionReportData),
+          axios.put(`/job-orders/${job.id}/action-report`, payload),
           axios.put(`/job-orders/${job.id}`, { status: "Unserviceable" }),
         ]);
       }
       // Normal save
       else {
-        await axios.put(`/job-orders/${job.id}/action-report`, updatedForm);
+        await axios.put(`/job-orders/${job.id}/action-report`, payload);
       }
 
       showNotification(
@@ -486,6 +520,13 @@ export default function JobOrderOngoingModal({
 
   if (!isOpen || !job) return null;
 
+  // Helper: Get category names for this job
+  const categoryNames = job?.categories?.map(c => c.name) || [];
+
+  // Helper: Show hardware fields if any of these are checked
+  const showHardwareFields = ['Computer Desktop', 'Printer', 'Laptop'].some(name => categoryNames.includes(name));
+  const showSoftwareField = categoryNames.includes('Software');
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white w-full max-w-7xl rounded-lg shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
@@ -639,292 +680,351 @@ export default function JobOrderOngoingModal({
 
             {/* Right Side - Action Report */}
             <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4 flex items-center">
+              {/* Current Status at the top right */}
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center">
                   <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                   </svg>
                   Action Report
                 </h3>
-
-                {/* Tabs */}
-                <div className="flex space-x-1 border-b border-gray-200 mb-6">
-                  {TABS.map((tab) => (
+                {/* Current Status pill and report button */}
+                <div className="flex items-center gap-2">
+                  {/* Add label for current status */}
+                  <span className="text-sm font-bold text-gray-700 mr-2">
+                    Status:
+                  </span>
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg -blue-100 text-blue-700">
+                    {form.status || '—'}
+                  </span>
+                  {isCompleted && (
                     <button
-                      key={tab}
-                      className={`px-4 py-2 text-sm font-medium transition-colors ${
-                        activeTab === tab
-                          ? 'text-blue-600 border-b-2 border-blue-600'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                      onClick={() => setActiveTab(tab)}
+                      onClick={() =>
+                        window.open(
+                          `/job-orders/${jobId}/completed/pdf`,
+                          "_blank"
+                        )
+                      }
+                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
                     >
-                      {tab}
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      View Report
                     </button>
-                  ))}
+                  )}
                 </div>
+              </div>
 
-                <div className="space-y-6">
-                  {activeTab === 'Details' && (
-                    <div className="space-y-4">
-                      <Field title="Diagnosis">
-                        {readOnly ? (
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
-                            {form.diagnosis || '—'}
-                          </div>
-                        ) : (
-                          <textarea
-                            name="diagnosis"
-                            value={form.diagnosis}
-                            onChange={handleChange}
-                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            rows="3"
-                            disabled={readOnly}
-                            placeholder="Enter diagnosis details..."
-                          />
-                        )}
-                      </Field>
+              {/* Tabs */}
+              <div className="flex space-x-1 border-b border-gray-200 mb-6">
+                {TABS.map((tab) => (
+                  <button
+                    key={tab}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      activeTab === tab
+                        ? 'text-blue-600 border-b-2 border-blue-600'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                    onClick={() => setActiveTab(tab)}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
 
-                      <Field title="Action Taken">
-                        {readOnly ? (
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
-                            {form.action_taken || '—'}
-                          </div>
-                        ) : (
-                          <textarea
-                            name="action_taken"
-                            value={form.action_taken}
-                            onChange={handleChange}
-                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            rows="3"
-                            disabled={readOnly}
-                            placeholder="Describe actions taken..."
-                          />
-                        )}
-                      </Field>
-
-                      <Field title="Current Status">
-                        <div className="flex items-center justify-between">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
-                            {form.status || '—'}
-                          </span>
-
-                          {isCompleted && (
-                            <button
-                              onClick={() =>
-                                window.open(
-                                  `/job-orders/${jobId}/completed/pdf`,
-                                  "_blank"
-                                )
-                              }
-                              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
-                            >
-                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              View Report
-                            </button>
-                          )}
+              <div className="space-y-6">
+                {activeTab === 'Details' && (
+                  <div className="space-y-4">
+                    {/* Assigned To: (Technician) - move to top */}
+                    <Field title="Assign To:">
+                      {readOnly ? (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                          {job?.action_report?.serviced_by?.name || '—'}
                         </div>
-                      </Field>
-
-                      {/* Cancellation / Unserviceable Checkboxes */}
-                      {isAdmin && (
-                        <Field title="Job Actions">
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                              <div className="flex items-center space-x-6">
-                                <label className="flex items-center cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    id="cancel"
-                                    name="cancel"
-                                    checked={form.cancel}
-                                    onChange={handleChange}
-                                    className="mr-2 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
-                                    disabled={readOnly}
-                                  />
-                                  <span className="text-sm font-medium text-gray-700">
-                                    Cancel Job Order
-                                  </span>
-                                </label>
-
-                                <label className="flex items-center cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    id="unserviceable"
-                                    name="unserviceable"
-                                    checked={form.unserviceable}
-                                    onChange={handleUnserviceableChange}
-                                    className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                    disabled={readOnly}
-                                  />
-                                  <span className="text-sm font-medium text-gray-700">
-                                    Mark as Unserviceable
-                                  </span>
-                                </label>
-                              </div>
-
-                              {isUnserviceable && (
-                                <button
-                                  onClick={() =>
-                                    window.open(
-                                      `/job-orders/${jobId}/unserviceable/pdf`,
-                                      "_blank"
-                                    )
-                                  }
-                                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all"
-                                >
-                                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
-                                  View Report
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </Field>
+                      ) : (
+                        <select
+                          name="serviced_by"
+                          value={form.serviced_by}
+                          onChange={handleChange}
+                          className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          disabled={readOnly}
+                        >
+                          <option value="">Select Personnel</option>
+                          {users.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name}
+                            </option>
+                          ))}
+                        </select>
                       )}
+                    </Field>
 
-                      <UnserviceableModal
-                        isOpen={isUnserviceableModalOpen}
-                        jobId={jobId}
-                        showNotification={showNotification}
-                        onClose={() => setIsUnserviceableModalOpen(false)}
-                        onSaved={() => {
-                          setIsUnserviceableModalOpen(false);
-                          setForm((prev) => ({
-                            ...prev,
-                            cancel: false,
-                            unserviceable: true,
-                          }));
-                        }}
-                      />
-
-                      <Field title="Assigned Technician">
-                        {readOnly ? (
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
-                            {job?.action_report?.serviced_by?.name || '—'}
-                          </div>
-                        ) : (
-                          <select
-                            name="serviced_by"
-                            value={form.serviced_by}
-                            onChange={handleChange}
-                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            disabled={readOnly}
-                          >
-                            <option value="">Select Technician</option>
-                            {users.map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </Field>
-
-                      {(form.remarks || !readOnly) && (
-                        <Field title="Remarks">
+                    {/* Show the rest of the Action Report fields only if a technician is selected */}
+                    {(form.serviced_by || readOnly) && (
+                      <>
+                        <Field title="Diagnosis">
                           {readOnly ? (
                             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
-                              {form.remarks || '—'}
+                              {form.diagnosis || '—'}
                             </div>
                           ) : (
                             <textarea
-                              name="remarks"
-                              value={form.remarks}
+                              name="diagnosis"
+                              value={form.diagnosis}
                               onChange={handleChange}
                               className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               rows="3"
                               disabled={readOnly}
-                              placeholder="Additional remarks or notes..."
+                              placeholder="Enter diagnosis details..."
                             />
                           )}
                         </Field>
+
+                        {/* Action Taken field first */}
+                        <Field title="Action Taken">
+                          {readOnly ? (
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                              {form.action_taken || '—'}
+                            </div>
+                          ) : (
+                            <>
+                              <select
+                                name="action_taken"
+                                value={form.action_taken}
+                                onChange={handleChange}
+                                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                disabled={readOnly}
+                              >
+                                {/* No empty option, so default to Diagnosed */}
+                                <option value="Diagnosed">Diagnosed</option>
+                                <option value="Unserviceable with Form">Unserviceable with Form</option>
+                                <option value="Unserviceable without form">Unserviceable without form</option>
+                                <option value="Serviced">Serviced</option>
+                              </select>
+                              {/* Always show optional remarks since Diagnosed is always selected */}
+                              <div className="mt-2 space-y-2">
+                                {/* Show Unserviceable Form button if selected */}
+                                {form.action_taken === "Unserviceable with Form" && (
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all"
+                                    onClick={() => setIsUnserviceableModalOpen(true)}
+                                  >
+                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Fill Up Unserviceable Form
+                                  </button>
+                                )}
+                                {/* Label for optional remarks */}
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                  Remarks <span className="text-gray-500 font-medium">(optional)</span>
+                                </label>
+                                <textarea
+                                  name="remarks"
+                                  value={form.remarks}
+                                  onChange={handleChange}
+                                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  rows={2}
+                                  disabled={readOnly}
+                                  placeholder="Optional: Add details or remarks for this action"
+                                />
+                              </div>
+                            </>
+                          )}
+                        </Field>
+
+                        {/* Hardware extra fields - moved after Action Taken */}
+                        {showHardwareFields && (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                Serial Number
+                              </label>
+                              {readOnly ? (
+                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
+                                  {hardwareFields.serial_number || '—'}
+                                </div>
+                              ) : (
+                                <input
+                                  type="text"
+                                  name="serial_number"
+                                  value={hardwareFields.serial_number}
+                                  onChange={e =>
+                                    setHardwareFields(f => ({ ...f, serial_number: e.target.value }))
+                                  }
+                                  className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                                  placeholder="Enter Serial Number"
+                                />
+                              )}
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                Brand Name
+                              </label>
+                              {readOnly ? (
+                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
+                                  {hardwareFields.brand_name || '—'}
+                                </div>
+                              ) : (
+                                <input
+                                  type="text"
+                                  name="brand_name"
+                                  value={hardwareFields.brand_name}
+                                  onChange={e =>
+                                    setHardwareFields(f => ({ ...f, brand_name: e.target.value }))
+                                  }
+                                  className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                                  placeholder="Enter Brand Name"
+                                />
+                              )}
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                Brand Model
+                              </label>
+                              {readOnly ? (
+                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
+                                  {hardwareFields.brand_model || '—'}
+                                </div>
+                              ) : (
+                                <input
+                                  type="text"
+                                  name="brand_model"
+                                  value={hardwareFields.brand_model}
+                                  onChange={e =>
+                                    setHardwareFields(f => ({ ...f, brand_model: e.target.value }))
+                                  }
+                                  className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                                  placeholder="Enter Brand Model"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Software extra field - moved after Action Taken */}
+                        {showSoftwareField && (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                Software Name
+                              </label>
+                              {readOnly ? (
+                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
+                                  {softwareName || '—'}
+                                </div>
+                              ) : (
+                                <input
+                                  type="text"
+                                  name="software_name"
+                                  value={softwareName}
+                                  onChange={e => setSoftwareName(e.target.value)}
+                                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="Enter Software Name"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Show remarks in read-only mode if present */}
+                        {readOnly && form.remarks && (
+                          <div className="mt-2">
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">
+                              Remarks
+                            </label>
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                              {form.remarks}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'Dates' && (
+                  <div className="space-y-4">
+                    <Field title="Date Accepted">
+                      {readOnly ? (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                          {formatDisplayDate(form.date_accepted) || '—'}
+                        </div>
+                      ) : (
+                        <input
+                          type="datetime-local"
+                          value={form.date_accepted || ''}
+                          disabled
+                          className="w-full border border-gray-300 rounded-lg p-3 text-sm bg-gray-100 cursor-not-allowed"
+                        />
                       )}
-                    </div>
-                  )}
+                    </Field>
 
-                  {activeTab === 'Dates' && (
-                    <div className="space-y-4">
-                      <Field title="Date Accepted">
-                        {readOnly ? (
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
-                            {formatDisplayDate(form.date_accepted) || '—'}
-                          </div>
-                        ) : (
-                          <input
-                            type="datetime-local"
-                            value={form.date_accepted || ''}
-                            disabled
-                            className="w-full border border-gray-300 rounded-lg p-3 text-sm bg-gray-100 cursor-not-allowed"
-                          />
-                        )}
-                      </Field>
+                    <Field title="Date Started">
+                      {readOnly ? (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                          {formatDisplayDate(form.date_started) || '—'}
+                        </div>
+                      ) : (
+                        <input
+                          type="datetime-local"
+                          name="date_started"
+                          value={form.date_started || ''}
+                          onChange={handleChange}
+                          disabled={readOnly}
+                          className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      )}
+                    </Field>
 
-                      <Field title="Date Started">
-                        {readOnly ? (
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
-                            {formatDisplayDate(form.date_started) || '—'}
-                          </div>
-                        ) : (
-                          <input
-                            type="datetime-local"
-                            name="date_started"
-                            value={form.date_started || ''}
-                            onChange={handleChange}
-                            disabled={readOnly}
-                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        )}
-                      </Field>
+                    <Field title="Date Finished">
+                      {readOnly ? (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                          {formatDisplayDate(form.date_finished) || '—'}
+                        </div>
+                      ) : (
+                        <input
+                          type="datetime-local"
+                          name="date_finished"
+                          value={form.date_finished || ''}
+                          onChange={handleChange}
+                          disabled={readOnly}
+                          className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      )}
+                    </Field>
 
-                      <Field title="Date Finished">
-                        {readOnly ? (
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
-                            {formatDisplayDate(form.date_finished) || '—'}
+                    <Field title="Confirmed At">
+                      {isConfirmed ? (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                          <div className="flex items-center">
+                            <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="text-sm font-medium text-green-900">
+                              {formatDisplayDate(job?.action_report?.confirmed_at)}
+                            </span>
                           </div>
-                        ) : (
-                          <input
-                            type="datetime-local"
-                            name="date_finished"
-                            value={form.date_finished || ''}
-                            onChange={handleChange}
-                            disabled={readOnly}
-                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        )}
-                      </Field>
-
-                      <Field title="Confirmed At">
-                        {isConfirmed ? (
-                          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                            <div className="flex items-center">
-                              <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span className="text-sm font-medium text-green-900">
-                                {formatDisplayDate(job?.action_report?.confirmed_at)}
-                              </span>
-                            </div>
+                        </div>
+                      ) : (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                          <div className="flex items-center">
+                            <svg className="w-5 h-5 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="text-sm font-medium text-yellow-900">
+                              Awaiting confirmation
+                            </span>
                           </div>
-                        ) : (
-                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                            <div className="flex items-center">
-                              <svg className="w-5 h-5 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span className="text-sm font-medium text-yellow-900">
-                                Awaiting confirmation
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </Field>
-                    </div>
-                  )}
-                </div>
+                        </div>
+                      )}
+                    </Field>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -969,25 +1069,26 @@ export default function JobOrderOngoingModal({
               )}
             </div>
 
+            {/* --- Always show CSM checkbox and confirm button for user when confirming --- */}
             {showConfirmButtonUser && (
               <div className="flex items-center gap-4">
-                {requesterIsUser && isRequester && (
-                  <label className="inline-flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={csmChecked}
-                      onChange={handleCsmCheckboxChange}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Complete CSM Survey</span>
-                  </label>
-                )}
+                {/* CSM Checkbox */}
+                <label className="inline-flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={csmChecked}
+                    onChange={handleCsmCheckboxChange}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Complete CSM Survey</span>
+                </label>
 
+                {/* Confirm Button */}
                 <button
                   onClick={handleConfirm}
-                  disabled={confirming || (requesterIsUser && !csmCompleted)}
+                  disabled={confirming || !csmCompleted}
                   className={`inline-flex items-center px-6 py-2.5 rounded-lg text-white text-sm font-medium transition-all ${
-                    confirming || (requesterIsUser && !csmCompleted)
+                    confirming || !csmCompleted
                       ? 'bg-gray-400 cursor-not-allowed'
                       : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
                   }`}
@@ -1017,6 +1118,21 @@ export default function JobOrderOngoingModal({
           onSave={handleCsmSave}
           onCancel={handleCsmCancel}
           showNotification={showNotification}
+        />
+        {/* Unserviceable Modal */}
+        <UnserviceableModal
+          isOpen={isUnserviceableModalOpen}
+          jobId={jobId}
+          showNotification={showNotification}
+          onClose={() => setIsUnserviceableModalOpen(false)}
+          onSaved={() => {
+            setIsUnserviceableModalOpen(false);
+            setForm((prev) => ({
+              ...prev,
+              cancel: false,
+              unserviceable: true,
+            }));
+          }}
         />
       </div>
     </div>

@@ -92,7 +92,7 @@ class JobOrderController extends Controller
             $query->where('job_orders.created_at', '>', $request->input('created_after'));
         }
 
-        if (!$request->user()->isAdmin()) {
+        if (!$request->user()->isAdmin() && !$request->user()->isTechnician()) {
             $query->where('job_orders.requested_by', $request->user()->id);
         }
 
@@ -101,7 +101,8 @@ class JobOrderController extends Controller
             $query->whereIn('job_orders.status', [
                 'Completed',
                 'Cancelled',
-                'Unserviceable'
+                'Unserviceable',
+                'Cancelled by User' // <-- add this
             ]);
         }
 
@@ -118,7 +119,11 @@ class JobOrderController extends Controller
 
         // 🔥 STATUS FILTER
         if ($request->filled('status')) {
-            $query->where('job_orders.status', $request->status);
+            if ($request->status === 'Cancelled') {
+                $query->whereIn('job_orders.status', ['Cancelled', 'Cancelled by User']); // <-- update here
+            } else {
+                $query->where('job_orders.status', $request->status);
+            }
         }
 
         // 🔥 DATE RANGE FILTER
@@ -135,7 +140,7 @@ class JobOrderController extends Controller
 
         // Compute totals for each status (based on full dataset, not user filter)
         $allJobsQuery = JobOrder::query();
-        if (!$request->user()->isAdmin()) {
+        if (!$request->user()->isAdmin() && !$request->user()->isTechnician()) {
             $allJobsQuery->where('requested_by', $request->user()->id);
         }
 
@@ -143,7 +148,7 @@ class JobOrderController extends Controller
             'Pending' => (clone $allJobsQuery)->where('status', 'Pending')->count(),
             'Ongoing' => (clone $allJobsQuery)->where('status', 'Ongoing')->count(),
             'Completed' => (clone $allJobsQuery)->where('status', 'Completed')->count(),
-            'Cancelled' => (clone $allJobsQuery)->where('status', 'Cancelled')->count(),
+            'Cancelled' => (clone $allJobsQuery)->whereIn('status', ['Cancelled', 'Cancelled by User'])->count(),
             'Unserviceable' => (clone $allJobsQuery)->where('status', 'Unserviceable')->count(),
         ];
 
@@ -153,7 +158,8 @@ class JobOrderController extends Controller
         // If per_page is set to a high number (e.g., 1000) or -1, get all results
         if ($perPage == -1 || $perPage >= 1000) {
             $jobs = $query->get();
-            
+            $jobs = $this->transformJobs($jobs);
+
             return response()->json([
                 'data' => $jobs,
                 'meta' => [
@@ -168,9 +174,10 @@ class JobOrderController extends Controller
 
         // Paginated data
         $jobs = $query->paginate($perPage);
+        $jobsTransformed = $this->transformJobs($jobs->items());
 
         return response()->json([
-            'data' => $jobs->items(),
+            'data' => $jobsTransformed,
             'meta' => [
                 'current_page' => $jobs->currentPage(),
                 'last_page' => $jobs->lastPage(),
@@ -187,19 +194,28 @@ class JobOrderController extends Controller
     */
     public function show(JobOrder $jobOrder)
     {
-        return $jobOrder->load([
+        $jobOrder = $jobOrder->load([
             'department',
             'requester',
             'creator',
             'approver',
             'conformer',
             'categories',
-            'attachments', // 🔥 include attachments
+            'attachments',
             'actionReport.servicedBy',
             'actionReport.acceptedBy',
             'actionReport.cancelledBy',
             'clientSatisfactionMeasurements',
         ]);
+
+        // Transform related users
+        foreach (['requester', 'creator', 'approver', 'conformer'] as $relation) {
+            if ($jobOrder->$relation && $jobOrder->$relation->relationLoaded('role')) {
+                $jobOrder->$relation->role = $jobOrder->$relation->role ? $jobOrder->$relation->role->name : null;
+            }
+        }
+
+        return $jobOrder;
     }
 
     /*
@@ -286,7 +302,9 @@ class JobOrderController extends Controller
             // Only send notification if the job order is "Pending" and has not been notified yet
             if ($jobOrder->status === 'Pending' && !$jobOrder->notified) {
                 // Send notification to all admin users about the new pending job order
-                $admins = User::where('role', 'admin')->get(); // Get all admins
+                $admins = User::whereHas('roles', function ($q) {
+                    $q->where('name', 'admin');
+                })->get();
                 foreach ($admins as $admin) {
                     $admin->notify(new JobOrderPendingNotification($jobOrder)); // Send the notification
                 }
@@ -295,7 +313,7 @@ class JobOrderController extends Controller
                 $jobOrder->update(['notified' => true]);
             }
 
-            return $jobOrder->load([
+            $jobOrder = $jobOrder->load([
                 'department',
                 'requester',
                 'categories',
@@ -303,6 +321,15 @@ class JobOrderController extends Controller
                 'actionReport',
                 'clientSatisfactionMeasurements',
             ]);
+
+            // Transform related users
+            foreach (['requester', 'creator', 'approver', 'conformer'] as $relation) {
+                if ($jobOrder->$relation && $jobOrder->$relation->relationLoaded('role')) {
+                    $jobOrder->$relation->role = $jobOrder->$relation->role ? $jobOrder->$relation->role->name : null;
+                }
+            }
+
+            return $jobOrder;
         });
     }
 
@@ -314,7 +341,7 @@ class JobOrderController extends Controller
     public function update(Request $request, JobOrder $jobOrder)
     {
         $validated = $request->validate([
-            'status' => ['required', 'in:Pending,Ongoing,Cancelled,Unserviceable'],
+            'status' => ['required', 'in:Pending,Ongoing,Cancelled,Unserviceable,Cancelled by User'],
             'diagnosis' => ['nullable', 'string'],
             'action_taken' => ['nullable', 'string'],
             'remarks' => ['nullable', 'string'],
@@ -407,6 +434,15 @@ class JobOrderController extends Controller
                 ]);
             }
 
+            if ($validated['status'] === 'Cancelled by User') {
+                $jobOrder->update(['status' => 'Cancelled by User']);
+                $actionReport->update([
+                    'status' => 'Cancelled by User',
+                    'cancelled_by' => $request->user()->id,
+                    'cancelled_at' => now(),
+                ]);
+            }
+
             // If an admin changed the status to Ongoing or Cancelled, apply the configured IT Director signatory
             if ($request->user()->isAdmin() && in_array($validated['status'], ['Ongoing', 'Cancelled'])) {
                 $signatory = Signatory::where('role', 'it_director')->first();
@@ -420,17 +456,26 @@ class JobOrderController extends Controller
 
 
             // ✅ RETURN RESPONSE (FIX)
+            $jobOrder = $jobOrder->load([
+                'department',
+                'requester',
+                'categories',
+                'attachments',
+                'actionReport.servicedBy',
+                'clientSatisfactionMeasurements',
+                'actionReport.acceptedBy',
+                'actionReport.cancelledBy',
+            ]);
+
+            // Transform related users
+            foreach (['requester', 'creator', 'approver', 'conformer'] as $relation) {
+                if ($jobOrder->$relation && $jobOrder->$relation->relationLoaded('role')) {
+                    $jobOrder->$relation->role = $jobOrder->$relation->role ? $jobOrder->$relation->role->name : null;
+                }
+            }
+
             return response()->json(
-                $jobOrder->load([
-                    'department',
-                    'requester',
-                    'categories',
-                    'attachments',
-                        'actionReport.servicedBy',
-                        'clientSatisfactionMeasurements',
-                    'actionReport.acceptedBy',
-                    'actionReport.cancelledBy',
-                ]),
+                $jobOrder,
                 200
             );
         });
@@ -508,4 +553,16 @@ class JobOrderController extends Controller
         );
     }
 
+    private function transformJobs($jobs)
+    {
+        return collect($jobs)->map(function ($job) {
+            // Transform related users if loaded
+            foreach (['requester', 'creator', 'approver', 'conformer'] as $relation) {
+                if ($job->$relation && $job->$relation->relationLoaded('role')) {
+                    $job->$relation->role = $job->$relation->role ? $job->$relation->role->name : null;
+                }
+            }
+            return $job;
+        });
+    }
 }

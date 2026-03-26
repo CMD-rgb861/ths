@@ -7,7 +7,7 @@ export default function CategorySelector({ value = [], onChange }) {
 
   // Define default categories in case API call fails
   const defaultCategories = [
-    { id: 1, name: 'Computer Hardware' },
+    { id: 1, name: 'Computer Desktop' },
     { id: 2, name: 'Information System' },
     { id: 3, name: 'Internet Connection' },
     { id: 4, name: 'Laptop' },
@@ -15,7 +15,8 @@ export default function CategorySelector({ value = [], onChange }) {
     { id: 6, name: 'Local Area Network' },
     { id: 7, name: 'Printer' },
     { id: 8, name: 'Software' },
-    { id: 9, name: 'Others' },  // The 'Others' category can also be included for description input
+    { id: 9, name: 'Institutional Email Request' }, // newly added
+    { id: 10, name: 'Others' },
   ];
 
   /* ---------------- FETCH CATEGORIES ---------------- */
@@ -79,11 +80,17 @@ export default function CategorySelector({ value = [], onChange }) {
       {/* Categories List - Two Column Layout */}
       {!loading && mergedCategories.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column: Computer Hardware to IP/VoIP Phone */}
+          {/* Left Column: Computer Desktop to IP/VoIP Phone */}
           <div className="space-y-3">
             {mergedCategories
-              .filter(cat => 
-                ['Computer Hardware', 'Information System', 'Internet Connection', 'Laptop', 'IP/VoIP Phone'].includes(cat.name)
+              .filter(cat =>
+                [
+                  'Computer Desktop',
+                  'Information System',
+                  'Internet Connection',
+                  'Laptop',
+                  'IP/VoIP Phone'
+                ].includes(cat.name)
               )
               .map(cat => {
                 const selected = value.find(v => v.id === cat.id);
@@ -118,8 +125,14 @@ export default function CategorySelector({ value = [], onChange }) {
           {/* Right Column: Rest of categories */}
           <div className="space-y-3">
             {mergedCategories
-              .filter(cat => 
-                !['Computer Hardware', 'Information System', 'Internet Connection', 'Laptop', 'IP/VoIP Phone'].includes(cat.name)
+              .filter(cat =>
+                [
+                  'Local Area Network',
+                  'Printer',
+                  'Software',
+                  'Institutional Email Request',
+                  'Others'
+                ].includes(cat.name)
               )
               .map(cat => {
                 const selected = value.find(v => v.id === cat.id);

@@ -36,7 +36,9 @@ class ActionReportController extends Controller
         // Validate technician
         if (!empty($validated['serviced_by'])) {
             $technician = User::where('id', $validated['serviced_by'])
-                ->where('role', 'technician')
+                ->whereHas('roles', function ($q) {
+                    $q->where('name', 'technician');
+                })
                 ->first();
 
             if (!$technician) {
@@ -52,7 +54,9 @@ class ActionReportController extends Controller
         $actionReport = $jobOrder->actionReport()->create($validated);
 
         // Send notification to the admin about the new pending job order
-        $admins = User::where('role', 'admin')->get();
+        $admins = User::whereHas('roles', function ($q) {
+            $q->where('name', 'admin');
+        })->get();
         foreach ($admins as $admin) {
             $admin->notify(new JobOrderPendingNotification($jobOrder));
         }
@@ -84,12 +88,18 @@ class ActionReportController extends Controller
             'date_started'  => ['nullable', 'date'],
             'date_finished' => ['nullable', 'date'],
             'remarks'       => ['nullable', 'string'],
+            'serial_number' => ['nullable', 'string'],
+            'brand_name' => ['nullable', 'string'],
+            'brand_model' => ['nullable', 'string'],
+            'software_name' => ['nullable', 'string'],
         ]);
 
         // Validate technician
         if (!empty($validated['serviced_by'])) {
             $technician = User::where('id', $validated['serviced_by'])
-                ->where('role', 'technician')
+                ->whereHas('roles', function ($q) {
+                    $q->where('name', 'technician');
+                })
                 ->first();
 
             if (!$technician) {
@@ -104,7 +114,9 @@ class ActionReportController extends Controller
         $actionReport->update($validated);
 
         // Send notification to the admin about the updated job order (status is Ongoing)
-        $admins = User::where('role', 'admin')->get();
+        $admins = User::whereHas('roles', function ($q) {
+            $q->where('name', 'admin');
+        })->get(); // 1 = admin
         foreach ($admins as $admin) {
             $admin->notify(new JobOrderPendingNotification($jobOrder));
         }

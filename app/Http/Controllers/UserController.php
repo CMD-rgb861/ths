@@ -11,7 +11,7 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $query = User::query();
+        $query = User::with('roles'); // eager load roles
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -24,15 +24,28 @@ class UserController extends Controller
 
         $limit = $request->limit ?? ($request->filled('search') ? 10 : 50);
 
-        return $query
+        $users = $query
             ->orderBy('name')
             ->limit($limit)
             ->get(['id', 'name', 'email']);
+
+        // Map to include all roles
+        return $users->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'roles' => $user->roles->pluck('name')->toArray(),
+            ];
+        });
     }
 
     public function technicians()
     {
-        return User::where('role', 'technician')
+        // Get users who have the 'technician' role
+        return User::whereHas('roles', function ($q) {
+                $q->where('name', 'technician');
+            })
             ->orderBy('name')
             ->get(['id', 'name']);
     }

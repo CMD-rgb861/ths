@@ -11,7 +11,7 @@ class CategorySeeder extends Seeder
     {
         // Define a list of categories to seed
         $categories = [
-            'Computer Hardware',
+            'Computer Desktop',
             'Information System',
             'Internet Connection',
             'Laptop',

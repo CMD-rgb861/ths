@@ -36,14 +36,11 @@ class LoginController extends Controller
 
         // Return the token and user information
         return response()->json([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'roles' => $user->roles->pluck('name')->toArray(),
             'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'id_number' => $user->id_number,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role, // Ensure role is returned
-            ]
         ]);
     }
 
@@ -58,3 +55,4 @@ class LoginController extends Controller
         ]);
     }
 }
+

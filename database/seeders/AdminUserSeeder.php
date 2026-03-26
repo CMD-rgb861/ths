@@ -10,16 +10,18 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        User::updateOrCreate(
-            ['id_number' => 'ADMIN001'], // must match unique column
+        // Create or update the admin user without role_id
+        $user = User::updateOrCreate(
+            ['id_number' => 'ADMIN001'],
             [
                 'name' => 'System Administrator',
                 'email' => 'admin@local.system',
-                'password' => Hash::make('Admin@123456'),
+                'password' => bcrypt('password'),
                 'email_verified_at' => now(),
-                'role' => 'admin', // ✅ IMPORTANT
             ]
         );
+        // Assign the admin role (assuming 1 = admin)
+        $user->roles()->syncWithoutDetaching([1]);
     }
 }
-    
+

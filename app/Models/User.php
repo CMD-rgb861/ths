@@ -35,13 +35,19 @@ class User extends Authenticatable
     | Role Helper Methods
     |---------------------------------------------------------------------------
     */
-    public function isAdmin(): bool
+    public function isAdmin()
     {
-        return $this->role === 'admin';
+        return $this->hasRole('admin');
     }
+
     public function isTechnician()
     {
-        return $this->role === 'technician';
+        return $this->hasRole('technician');
+    }
+
+    public function isUser()
+    {
+        return $this->hasRole('user');
     }
 
     /*
@@ -73,6 +79,16 @@ class User extends Authenticatable
     public function servicedActionReports()
     {
         return $this->hasMany(ActionReport::class, 'serviced_by');
+    }
+
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class);
+    }
+
+    public function hasRole($roleName)
+    {
+        return $this->roles->contains('name', $roleName);
     }
 }
 

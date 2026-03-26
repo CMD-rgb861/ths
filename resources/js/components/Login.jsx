@@ -24,13 +24,23 @@ export default function Login() {
 
       // Store the token and user data in localStorage
       localStorage.setItem('token', res.data.token);
-      localStorage.setItem('user', JSON.stringify(res.data.user));
+      const { token, ...userObj } = res.data;
+      localStorage.setItem('user', JSON.stringify(userObj));
 
       // Optionally, set the Authorization header globally
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
 
-      // Navigate to the home page or wherever the user should go after login
-      navigate('/');
+      // Determine roles and redirect accordingly
+      const roles = userObj.roles || [];
+      if (roles.includes('admin') && roles.includes('technician')) {
+        navigate('/welcome');
+      } else if (roles.includes('admin')) {
+        navigate('/'); // admin landing page
+      } else if (roles.includes('technician')) {
+        navigate('/'); // technician landing page
+      } else {
+        navigate('/'); // user landing page
+      }
 
     } catch (err) {
       if (err.response && err.response.status === 401) {

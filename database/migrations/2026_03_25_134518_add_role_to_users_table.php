@@ -9,14 +9,16 @@ return new class extends Migration
     public function up()
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->string('role')->default('user');
+            $table->unsignedBigInteger('role_id')->default(3)->after('id');
+            $table->foreign('role_id')->references('id')->on('roles');
         });
     }
 
     public function down()
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('role');
+            $table->dropForeign(['role_id']);
+            $table->dropColumn('role_id');
         });
     }
 };

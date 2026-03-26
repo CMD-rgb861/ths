@@ -198,12 +198,15 @@ export default function UserJobHistory({ showNotification }) {
                         <span
                           className={`px-3 py-1 text-xs font-semibold rounded-full ${
                             order.action_report?.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                            order.action_report?.status === 'Cancelled' ? 'bg-red-100 text-red-800' :
+                            (order.action_report?.status === 'Cancelled' || order.action_report?.status === 'Cancelled by User') ? 'bg-red-100 text-red-800' :
                             order.action_report?.status === 'Unserviceable' ? 'bg-gray-200 text-gray-800' :
                             'bg-gray-100 text-gray-600'
                           }`}
                         >
-                          {order.action_report?.status || order.status}
+                          {/* Show "Cancelled" for both "Cancelled" and "Cancelled by User" */}
+                          {order.action_report?.status === 'Cancelled by User'
+                            ? 'Cancelled'
+                            : (order.action_report?.status || order.status)}
                         </span>
                       </div>
                       <div className="flex items-center text-sm text-gray-600">

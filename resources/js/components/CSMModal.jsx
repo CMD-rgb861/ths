@@ -107,6 +107,15 @@ export default function CSMModal({
       if (!form[key]) newErrors[key] = 'This item is required.';
     }
 
+    // Email validation (optional, but if filled, must be valid)
+    if (form.email_address) {
+      // Simple email regex for validation
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailPattern.test(form.email_address)) {
+        newErrors.email_address = 'Please enter a valid email address.';
+      }
+    }
+
     return newErrors;
   };
 

@@ -10,6 +10,7 @@ const STATUS_BADGE_STYLES = {
   Ongoing: 'bg-blue-100 text-blue-800',
   Completed: 'bg-green-100 text-green-800',
   Cancelled: 'bg-red-100 text-red-800',
+  'Cancelled by User': 'bg-red-100 text-red-800',
   Unserviceable: 'bg-gray-200 text-gray-800',
 };
 
@@ -17,7 +18,20 @@ export default function JobOrderStatusPage({ showNotification }) {
   const { status } = useParams();
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user'));
-  const isAdmin = user?.role === 'admin';
+
+  const formattedStatus = status?.charAt(0).toUpperCase() + status?.slice(1);
+
+  function isRole(user, roleName) {
+    if (!user) return false;
+    if (Array.isArray(user.roles)) {
+      return user.roles.some(r => (typeof r === 'string' ? r : r.name) === roleName);
+    }
+    if (typeof user.role === 'string') return user.role === roleName;
+    if (typeof user.role === 'object' && user.role?.name) return user.role.name === roleName;
+    return false;
+  }
+  const isAdmin = isRole(user, 'admin');
+  const isTechnician = isRole(user, 'technician');
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -32,10 +46,8 @@ export default function JobOrderStatusPage({ showNotification }) {
   const [sortBy, setSortBy] = useState('newest');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
-  const formattedStatus = status?.charAt(0).toUpperCase() + status?.slice(1);
-
   // Redirect non-admin users
-  if (!isAdmin) {
+  if (!isAdmin && !isTechnician) {
     return <Navigate to="/" replace />;
   }
 

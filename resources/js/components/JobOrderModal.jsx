@@ -1,6 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import axios from 'axios';
 
+function isRole(user, roleName) {
+  if (!user) return false;
+  if (Array.isArray(user.roles)) {
+    return user.roles.some(r => (typeof r === 'string' ? r : r.name) === roleName);
+  }
+  if (typeof user.role === 'string') return user.role === roleName;
+  if (typeof user.role === 'object' && user.role?.name) return user.role.name === roleName;
+  return false;
+}
+
 export default function JobOrderModal({
   isOpen,
   job,
@@ -9,10 +19,18 @@ export default function JobOrderModal({
   showNotification,
 }) {
   const [loadingAction, setLoadingAction] = useState(null);
-  const user = JSON.parse(localStorage.getItem('user'));
-
-  const isAdmin = user?.role === 'admin';
+  let user = null;
+  try {
+    const userRaw = localStorage.getItem('user');
+    user = userRaw ? JSON.parse(userRaw) : null;
+  } catch (e) {
+    user = null;
+  }
+  const isAdmin = isRole(user, 'admin');
+  const isUser = isRole(user, 'user');
   const isLoading = loadingAction !== null;
+  const isOwnJob = job?.requester?.id === user?.id;
+  const canUserCancel = isUser && isOwnJob && ['Pending', 'Ongoing'].includes(job?.status);
 
   const formattedDate = useMemo(() => {
     if (!job?.date) return '—';
@@ -60,6 +78,31 @@ export default function JobOrderModal({
         'error',
         'Error',
         'Failed to update job order status.'
+      );
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleUserCancel = async () => {
+    if (!window.confirm('Are you sure you want to cancel this job request?')) return;
+    setLoadingAction('Cancelled by User');
+    try {
+      const response = await axios.put(`/job-orders/${job.id}`, { status: 'Cancelled by User' });
+      const updatedJob = response.data;
+      showNotification(
+        'success',
+        'Job Order Cancelled',
+        'Your job order has been cancelled.'
+      );
+      onStatusChange(updatedJob, false);
+      onClose();
+    } catch (error) {
+      console.error('Failed to cancel job order:', error);
+      showNotification(
+        'error',
+        'Error',
+        'Failed to cancel job order.'
       );
     } finally {
       setLoadingAction(null);
@@ -292,14 +335,26 @@ export default function JobOrderModal({
                 </button>
               </>
             ) : (
-              <button
-                type="button"
-                onClick={handleClose}
-                disabled={isLoading}
-                className="ml-auto px-6 py-2.5 bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all disabled:opacity-50"
-              >
-                Close
-              </button>
+              <div className="flex gap-3 ml-auto">
+                {canUserCancel && (
+                  <button
+                    type="button"
+                    onClick={handleUserCancel}
+                    disabled={isLoading}
+                    className="px-6 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all disabled:opacity-50"
+                  >
+                    Cancel Request
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={isLoading}
+                  className="px-6 py-2.5 bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all disabled:opacity-50"
+                >
+                  Close
+                </button>
+              </div>
             )}
           </div>
         </div>
