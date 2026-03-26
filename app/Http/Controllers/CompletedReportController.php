@@ -183,7 +183,7 @@ class CompletedReportController extends Controller
         $boxWidth = 5; $boxHeight = 3; $gap = 2;
 
         $leftCats = [
-            'Computer Hardware',
+            'Computer Desktop', // <-- updated from 'Computer Hardware'
             'Information System',
             'Internet Connection',
             'Laptop',
@@ -193,6 +193,7 @@ class CompletedReportController extends Controller
             'Local Area Network',
             'Printer',
             'Software',
+            'Institutional Email Request', // <-- Add this line
             'Others: _________',
         ];
 
@@ -443,7 +444,12 @@ class CompletedReportController extends Controller
         $pdf->SetFont($arialNB, '', 10);
         $pdf->Cell(0, 6, '*Action Taken:', 0, 1, 'L');
 
+        // Combine action_taken and remarks for display
         $actText = $jobOrder->actionReport->action_taken ?? '';
+        $remarks = $jobOrder->actionReport->remarks ?? '';
+        if ($remarks) {
+            $actText .= ' - ' . $remarks;
+        }
         $actWidth = $rightCol['width'] - 8;
         $lineHeight = 4;
         $minLines = 4; // minimum lines to show

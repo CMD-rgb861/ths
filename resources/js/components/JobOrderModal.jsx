@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import axios from 'axios';
+import ConfirmModal from './ConfirmModal';
 
 function isRole(user, roleName) {
   if (!user) return false;
@@ -19,6 +20,7 @@ export default function JobOrderModal({
   showNotification,
 }) {
   const [loadingAction, setLoadingAction] = useState(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   let user = null;
   try {
     const userRaw = localStorage.getItem('user');
@@ -85,7 +87,6 @@ export default function JobOrderModal({
   };
 
   const handleUserCancel = async () => {
-    if (!window.confirm('Are you sure you want to cancel this job request?')) return;
     setLoadingAction('Cancelled by User');
     try {
       const response = await axios.put(`/job-orders/${job.id}`, { status: 'Cancelled by User' });
@@ -339,7 +340,7 @@ export default function JobOrderModal({
                 {canUserCancel && (
                   <button
                     type="button"
-                    onClick={handleUserCancel}
+                    onClick={() => setShowCancelConfirm(true)}
                     disabled={isLoading}
                     className="px-6 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all disabled:opacity-50"
                   >
@@ -358,6 +359,20 @@ export default function JobOrderModal({
             )}
           </div>
         </div>
+
+        {/* ConfirmModal for Cancel Request */}
+        <ConfirmModal
+          isOpen={showCancelConfirm}
+          title="Cancel Request"
+          message="Are you sure you want to cancel this job order request? This action cannot be undone."
+          confirmText="Yes, Cancel"
+          cancelText="No"
+          onConfirm={() => {
+            setShowCancelConfirm(false);
+            handleUserCancel();
+          }}
+          onCancel={() => setShowCancelConfirm(false)}
+        />
 
       </div>
     </div>

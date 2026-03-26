@@ -47,8 +47,12 @@ class LoginController extends Controller
     // Logout method to invalidate the current token
     public function logout(Request $request)
     {
-        // Delete the current access token
-        $request->user()->currentAccessToken()->delete();
+        /** @var \Laravel\Sanctum\PersonalAccessToken|null $token */
+        $token = $request->user()->currentAccessToken();
+        if ($token) {
+            // @phpstan-ignore-next-line
+            $token->delete();
+        }
 
         return response()->json([
             'message' => 'Logged out successfully'

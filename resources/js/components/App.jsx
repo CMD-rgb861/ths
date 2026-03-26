@@ -10,6 +10,7 @@ import Login from './Login';
 import Notification from './Notification';
 import UserJobHistory from './UserJobHistory';
 import WelcomePage from './WelcomePage';
+import ConfirmModal from './ConfirmModal';
 
 // Utility function for role check
 function isRole(user, roleName) {
@@ -25,6 +26,7 @@ export default function App() {
   const location = useLocation();
   const [notifications, setNotifications] = useState([]);
   const [newPendingJobs, setNewPendingJobs] = useState([]);
+  const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
   const token = localStorage.getItem('token');
   const userRaw = localStorage.getItem('user');
   let user = null;
@@ -39,8 +41,9 @@ export default function App() {
   const roles = user?.roles || [];
   let isAdmin = false;
   let isTechnician = false;
+  const hasDualRole = roles.includes('admin') && roles.includes('technician');
 
-  if (roles.includes('admin') && roles.includes('technician') && preferredRole) {
+  if (hasDualRole && preferredRole) {
     isAdmin = preferredRole === 'admin';
     isTechnician = preferredRole === 'technician';
   } else {
@@ -137,6 +140,16 @@ export default function App() {
                               </p>
                             </div>
                           </div>
+                        )}
+                        {/* Switch Role button for dual-role users */}
+                        {hasDualRole && (
+                          <button
+                            onClick={() => setShowSwitchConfirm(true)}
+                            className="px-4 py-2 text-sm font-medium text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                            title="Switch Role"
+                          >
+                            Switch Role
+                          </button>
                         )}
                         <button
                           onClick={() => {
@@ -303,7 +316,7 @@ export default function App() {
         }
       />
     </Routes>
-  ), [token, isAuthPage, isPrivileged, isTechnician, isAdmin, user, navLinkClass, showNotification, newPendingJobs]);
+  ), [token, isAuthPage, isPrivileged, isTechnician, isAdmin, user, navLinkClass, showNotification, newPendingJobs, showSwitchConfirm]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -328,6 +341,21 @@ export default function App() {
       </div>
 
       {mainContent}
+
+      {/* Confirmation Modal for Switch Role */}
+      <ConfirmModal
+        isOpen={showSwitchConfirm}
+        title="Switch Role"
+        message="Are you sure you want to switch your role? You will be redirected to the role selection page."
+        confirmText="Yes, Switch"
+        cancelText="Cancel"
+        onConfirm={() => {
+          setShowSwitchConfirm(false);
+          localStorage.removeItem('preferredRole');
+          window.location.href = '/welcome';
+        }}
+        onCancel={() => setShowSwitchConfirm(false)}
+      />
     </div>
   );
 }

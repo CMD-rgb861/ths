@@ -96,10 +96,7 @@ export default function JobOrderOngoingModal({
   const isRequester = job?.requester?.id === currentUser?.id;
   const requesterIsUser = isRole(job?.requester, 'user');
 
-  const isTechnician = isRole(currentUser, 'technician');
-  const isPrivileged = isAdmin || isTechnician;
-
-  const readOnly = !isPrivileged || !isEditable || isCompleted;
+  const readOnly = !isAdmin || !isEditable || isCompleted;
 
   const showConfirmButtonUser =
     !isAdmin &&
@@ -256,6 +253,17 @@ export default function JobOrderOngoingModal({
     }
   };
 
+  // Auto-set action_taken to "Diagnosed" when technician is assigned and action_taken is empty
+  useEffect(() => {
+    if (form.serviced_by && !form.action_taken) {
+      setForm(prev => ({ ...prev, action_taken: "Diagnosed" }));
+    }
+    // Optionally, reset action_taken if technician is unassigned
+    if (!form.serviced_by && form.action_taken) {
+      setForm(prev => ({ ...prev, action_taken: "" }));
+    }
+  }, [form.serviced_by]);
+
   // Save action report
   const handleSave = async () => {
     if (!job?.id || saving) return;
@@ -270,11 +278,20 @@ export default function JobOrderOngoingModal({
       return;
     }
 
-    if (!form.diagnosis || !form.action_taken) {
+    // Only check for empty string (no need to trim for select)
+    if (!form.diagnosis || !form.diagnosis.trim()) {
       showNotification(
         "error",
         "Validation Failed",
-        "Diagnosis and Action Taken are required."
+        "Diagnosis is required."
+      );
+      return;
+    }
+    if (!form.action_taken) {
+      showNotification(
+        "error",
+        "Validation Failed",
+        "Action Taken is required."
       );
       return;
     }

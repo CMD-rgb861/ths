@@ -28,36 +28,47 @@ export default function WelcomePage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 to-blue-300">
-      <div className="bg-white rounded-2xl shadow-xl p-10 max-w-lg w-full text-center">
-        <img
-          src="/images/cmt-logo.png"
-          alt="Logo"
-          className="mx-auto w-24 mb-6"
-        />
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 relative">
+      {/* Optional: Subtle background image overlay */}
+      <div
+        className="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none"
+        style={{ backgroundImage: "url('/images/school-bg.png')" }}
+        aria-hidden="true"
+      />
+      <div className="w-full max-w-md mx-auto bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200 p-10 relative z-10">
+        <div className="flex flex-col items-center">
+          <img
+            src="/images/cmt-logo.png"
+            alt="CMT Logo"
+            className="w-28 sm:w-32 md:w-40 mb-6 object-contain"
+          />
 
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Welcome{user?.name ? `, ${user.name}` : ''}!
-        </h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">
+            Welcome{user?.name ? `, ${user.name}` : ''}!
+          </h1>
+          <p className="text-sm text-gray-600 mb-6">
+            You have successfully logged in to the Technical Hardware System Job Order Portal.
+          </p>
+          <p className="text-xs text-gray-500 mb-8">
+            Please select how you want to proceed:
+          </p>
 
-        <p className="text-gray-600 mb-6">
-          You have successfully logged in to the Technical Hardware System Job Order Portal.
-        </p>
-
-        <div className="flex gap-4 justify-center">
-          <button
-            onClick={() => handleRoleSelect('technician')}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg text-lg font-medium hover:bg-green-700 transition"
-          >
-            Proceed as Technician
-          </button>
-
-          <button
-            onClick={() => handleRoleSelect('admin')}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg text-lg font-medium hover:bg-blue-700 transition"
-          >
-            Proceed as Admin
-          </button>
+          <div className="flex gap-4 w-full">
+            <button
+              onClick={() => handleRoleSelect('technician')}
+              className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg text-base font-medium hover:bg-green-700 focus:ring-2 focus:ring-green-400 focus:outline-none transition shadow"
+              tabIndex={0}
+            >
+              Proceed as Technician
+            </button>
+            <button
+              onClick={() => handleRoleSelect('admin')}
+              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg text-base font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-400 focus:outline-none transition shadow"
+              tabIndex={0}
+            >
+              Proceed as Admin
+            </button>
+          </div>
         </div>
       </div>
     </div>
