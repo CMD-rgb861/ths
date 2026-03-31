@@ -17,7 +17,7 @@ class UnserviceableReportController extends Controller
             abort(404, 'Action report not found.');
         }
 
-        $pdf = new TCPDF();
+        $pdf = new \TCPDF();
         $pdf->SetTitle('Unserviceable Report');
         $pdf->SetMargins(15, 15, 15);
         $pdf->AddPage();
@@ -184,7 +184,9 @@ class UnserviceableReportController extends Controller
         $pdf->SetFont($arialN, '', 11);
 
         $pdf->SetXY($x + $valueOffsetX, $y + $cellPaddingY);
-        $pdf->Cell(130, 6, $job->status, 0);
+        // If action_taken is "Unserviceable with Form", show "Unserviceable" instead
+        $statusText = ($data->action_taken === 'Unserviceable with Form') ? 'Unserviceable' : $data->action_taken;
+        $pdf->Cell(130, 6, $statusText, 0);
 
         $y += $defaultRowHeight;
 

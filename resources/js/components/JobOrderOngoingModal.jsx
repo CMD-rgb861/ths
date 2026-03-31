@@ -787,6 +787,7 @@ export default function JobOrderOngoingModal({
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
                     {getJobOrderStatusName()}
                   </span>
+                  {/* Show Completed Report button */}
                   {isCompleted && (
                     <button
                       onClick={() =>
@@ -803,6 +804,7 @@ export default function JobOrderOngoingModal({
                       View Report
                     </button>
                   )}
+                  {/* Remove Unserviceable Report button from here */}
                 </div>
               </div>
 
@@ -911,8 +913,29 @@ export default function JobOrderOngoingModal({
                             {/* Action Taken field first */}
                             <Field title="Action Taken">
                               {readOnly ? (
-                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
-                                  {form.action_taken || '—'}
+                                <div className="flex items-center gap-2">
+                                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                                    {form.action_taken || '—'}
+                                  </div>
+                                  {/* Show Unserviceable Report button if Unserviceable with Form and Completed */}
+                                  {job?.action_report?.action_taken === "Unserviceable with Form" &&
+                                    (job?.request_status?.name === "Completed" ||
+                                      job?.status === "Completed") && (
+                                    <button
+                                      onClick={() =>
+                                        window.open(
+                                          `/job-orders/${jobId}/unserviceable/pdf`,
+                                          "_blank"
+                                        )
+                                      }
+                                      className="inline-flex items-center px-4 py-2 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all ml-2"
+                                    >
+                                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                      </svg>
+                                      View Unserviceable Form
+                                    </button>
+                                  )}
                                 </div>
                               ) : (
                                 <>

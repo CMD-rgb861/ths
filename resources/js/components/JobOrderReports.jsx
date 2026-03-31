@@ -592,7 +592,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
                           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
-                          <span className="font-medium">Serviced by:</span> {servicedBy}
+                          <span className="font-medium mr-1">Serviced by:</span> {servicedBy}
                         </div>
                       )}
 
@@ -601,7 +601,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
                           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
-                          <span className="font-medium">Cancelled by:</span> {cancelledBy}
+                          <span className="font-medium mr-1">Cancelled by:</span>{cancelledBy}
                         </div>
                       )}
                     </div>
