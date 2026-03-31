@@ -320,7 +320,6 @@ export default function JobOrderOngoingModal({
       return;
     }
 
-    // Only check for empty string (no need to trim for select)
     if (!form.diagnosis || !form.diagnosis.trim()) {
       showNotification(
         "error",
@@ -398,9 +397,18 @@ export default function JobOrderOngoingModal({
       ) {
         await axios.put(`/job-orders/${job.id}/action-report`, payload);
       }
-      // Normal save
+      // If action_taken is changed to something else, clear unserviceable columns in backend
       else {
         await axios.put(`/job-orders/${job.id}/action-report`, payload);
+        // Clear unserviceable columns if they exist
+        await axios.put(`/job-orders/${job.id}/action-report/unserviceable`, {
+          item: '',
+          findings: '',
+          noted_by_its: '',
+          noted_by_pc: '',
+          date: '',
+          clear: true // optional flag for backend
+        });
       }
 
       showNotification(

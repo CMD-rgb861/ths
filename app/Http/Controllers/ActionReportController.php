@@ -293,14 +293,6 @@ class ActionReportController extends Controller
 
     public function updateUnserviceable(Request $request, JobOrder $jobOrder)
     {
-        $validated = $request->validate([
-            'item' => ['required', 'string'],
-            'findings' => ['required', 'string'],
-            'noted_by_its' => ['required', 'string'],
-            'noted_by_pc' => ['required', 'string'],
-            'date' => ['required', 'date'],
-        ]);
-
         $actionReport = $jobOrder->actionReport;
 
         if (!$actionReport) {
@@ -309,6 +301,37 @@ class ActionReportController extends Controller
             ], 404);
         }
 
+        // If "clear" flag is set, blank out unserviceable columns
+        if ($request->has('clear') && $request->boolean('clear')) {
+            $actionReport->update([
+                'item' => null,
+                'findings' => null,
+                'noted_by_its' => null,
+                'noted_by_pc' => null,
+                'unserviceable_date' => null,
+            ]);
+            return response()->json(
+                $jobOrder->fresh()->load([
+                    'department',
+                    'requester',
+                    'categories',
+                    'attachments',
+                    'actionReport.servicedBy',
+                    'actionReport.acceptedBy',
+                    'actionReport.cancelledBy',
+                ]),
+                200
+            );
+        }
+
+        $validated = $request->validate([
+            'item' => ['required', 'string'],
+            'findings' => ['required', 'string'],
+            'noted_by_its' => ['required', 'string'],
+            'noted_by_pc' => ['required', 'string'],
+            'date' => ['required', 'date'],
+        ]);
+
         $actionReport->update([
             'item' => $validated['item'],
             'findings' => $validated['findings'],
@@ -316,7 +339,6 @@ class ActionReportController extends Controller
             'noted_by_pc' => $validated['noted_by_pc'],
             'unserviceable_date' => $validated['date'],
         ]);
-
 
         return response()->json(
             $jobOrder->fresh()->load([

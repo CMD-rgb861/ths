@@ -37,6 +37,31 @@ export default function UnserviceableModal({
     }
   }, [isOpen]);
 
+  // Populate form fields if data is available from backend
+  useEffect(() => {
+    if (isOpen && jobId) {
+      axios
+        .get(`/job-orders/${jobId}`)
+        .then((res) => {
+          const ar = res.data?.action_report;
+          if (ar) {
+            setForm((prev) => ({
+              ...prev,
+              item: ar.item || '',
+              findings: ar.findings || '',
+              noted_by_its: ar.noted_by_its || prev.noted_by_its || '',
+              noted_by_pc: ar.noted_by_pc || '',
+              date: ar.unserviceable_date || '',
+            }));
+          }
+        })
+        .catch((err) => {
+          // Optionally handle error
+          console.error('Failed to fetch job order for unserviceable modal:', err);
+        });
+    }
+  }, [isOpen, jobId]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prevForm) => ({
@@ -61,6 +86,7 @@ export default function UnserviceableModal({
       return;
     }
 
+    // Save unserviceable details to the backend
     axios
       .put(`/job-orders/${jobId}/action-report/unserviceable`, form)
       .then((res) => {
