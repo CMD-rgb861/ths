@@ -67,6 +67,9 @@ export default function JobOrderModal({
 
   // Helper to get status name by id
   const getStatusName = (statusId) => {
+    // Prefer job.request_status.name if available
+    if (job?.request_status?.name) return job.request_status.name;
+    // Fallback to statusOptions lookup
     const found = statusOptions.find(s => s.id === statusId);
     return found ? found.name : statusId;
   };

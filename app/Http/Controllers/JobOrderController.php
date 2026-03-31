@@ -156,6 +156,12 @@ class JobOrderController extends Controller
             $jobs = $query->get();
             $jobs = $this->transformJobs($jobs);
 
+            // --- Add status_name to each job ---
+            $jobs = $jobs->map(function ($job) {
+                $job->status_name = $job->requestStatus->name ?? $job->status;
+                return $job;
+            });
+
             return response()->json([
                 'data' => $jobs,
                 'meta' => [
@@ -171,6 +177,12 @@ class JobOrderController extends Controller
         // Paginated data
         $jobs = $query->paginate($perPage);
         $jobsTransformed = $this->transformJobs($jobs->items());
+
+        // --- Add status_name to each job ---
+        $jobsTransformed = collect($jobsTransformed)->map(function ($job) {
+            $job->status_name = $job->requestStatus->name ?? $job->status;
+            return $job;
+        });
 
         return response()->json([
             'data' => $jobsTransformed,

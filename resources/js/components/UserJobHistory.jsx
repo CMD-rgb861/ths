@@ -220,10 +220,11 @@ export default function UserJobHistory({ showNotification }) {
                             'bg-gray-100 text-gray-600'
                           }`}
                         >
-                          {/* Show "Cancelled" for both "Cancelled" and "Cancelled by User" */}
-                          {order.action_report?.status === 'Cancelled by User'
-                            ? 'Cancelled'
-                            : (order.action_report?.status || order.status)}
+                          {/* Always show the status name from backend */}
+                          {order.status_name ||
+                            (order.action_report?.status === 'Cancelled by User'
+                              ? 'Cancelled'
+                              : (order.action_report?.status || order.status))}
                         </span>
                       </div>
                       <div className="flex items-center text-sm text-gray-600">
