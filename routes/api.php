@@ -37,6 +37,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Reference data routes
     Route::get('/departments', [DepartmentController::class, 'index']);
     Route::get('/categories', [CategoryController::class, 'index']);
+    Route::get('/request-statuses', [\App\Http\Controllers\RequestStatusController::class, 'index']); // <-- add this
 
     // Job Orders routes
     Route::get('/job-orders', [JobOrderController::class, 'index']);
@@ -52,6 +53,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/job-orders/{jobOrder}/action-report', [ActionReportController::class, 'update']);
     Route::post('/job-orders/{jobOrder}/action-report/csm', [ActionReportController::class, 'storeCsm']);
     Route::put('/job-orders/{jobOrder}/action-report/unserviceable', [ActionReportController::class, 'updateUnserviceable']);  
+
+    // Service Statuses for action_taken dropdown
+    Route::get('/service-statuses', [ActionReportController::class, 'serviceStatuses']);
 
     // Upload supporting files
     Route::post('/job-orders/{jobOrder}/upload-files', [ActionReportController::class, 'uploadFiles']);

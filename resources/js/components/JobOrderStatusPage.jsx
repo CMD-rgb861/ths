@@ -19,8 +19,7 @@ export default function JobOrderStatusPage({ showNotification }) {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user'));
 
-  const formattedStatus = status?.charAt(0).toUpperCase() + status?.slice(1);
-
+  // Move isRole and role checks here before using isAdmin/isTechnician
   function isRole(user, roleName) {
     if (!user) return false;
     if (Array.isArray(user.roles)) {
@@ -32,6 +31,10 @@ export default function JobOrderStatusPage({ showNotification }) {
   }
   const isAdmin = isRole(user, 'admin');
   const isTechnician = isRole(user, 'technician');
+
+  // --- NEW: store status id, not name ---
+  const [statusOptions, setStatusOptions] = useState([]);
+  const [selectedStatusId, setSelectedStatusId] = useState(status || '');
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -55,10 +58,14 @@ export default function JobOrderStatusPage({ showNotification }) {
   const loadOrders = useCallback(() => {
     setLoading(true);
 
+    // Only include status if selectedStatusId is not empty
+    const params = { page, search, sort: sortBy };
+    if (selectedStatusId) {
+      params.status = selectedStatusId;
+    }
+
     axios
-      .get('/job-orders', {
-        params: { page, search, status: formattedStatus, sort: sortBy }
-      })
+      .get('/job-orders', { params })
       .then((res) => {
         const rows = Array.isArray(res.data?.data) ? res.data.data : [];
         setOrders(rows);
@@ -70,11 +77,38 @@ export default function JobOrderStatusPage({ showNotification }) {
         setLastPage(1);
       })
       .finally(() => setLoading(false));
-  }, [page, search, formattedStatus, sortBy]);
+  }, [page, search, selectedStatusId, sortBy]);
 
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
+  useEffect(() => {
+    axios.get('/request-statuses')
+      .then(res => setStatusOptions(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setStatusOptions([]));
+  }, []);
+
+  // --- NEW: update selectedStatusId when route param changes ---
+  useEffect(() => {
+    // If status param is a number, use as is. If it's a name, map to id.
+    if (!status) {
+      setSelectedStatusId('');
+      return;
+    }
+    // If already a number string, use as is
+    if (!isNaN(status)) {
+      setSelectedStatusId(status);
+      return;
+    }
+    // Otherwise, map status name to id
+    const found = statusOptions.find(s => s.name.toLowerCase() === status.toLowerCase());
+    if (found) {
+      setSelectedStatusId(String(found.id));
+    } else {
+      setSelectedStatusId('');
+    }
+  }, [status, statusOptions]);
 
   // Handle view button click
   const handleView = (job) => {
@@ -99,6 +133,32 @@ export default function JobOrderStatusPage({ showNotification }) {
     { value: 'job_order_desc', label: 'Job Order No: High to Low' },
   ];
 
+  // Helper to get status name by id or from backend relation
+  const getStatusName = (order) => {
+    // If cancelled and cancelled_by is the requester, show "Cancelled by User"
+    if (
+      (order.request_status?.name === 'Cancelled' || order.action_report?.status === 'Cancelled') &&
+      order.action_report?.cancelled_by &&
+      order.requester &&
+      (
+        // cancelled_by can be an object or an id
+        (typeof order.action_report.cancelled_by === 'object'
+          ? order.action_report.cancelled_by.id
+          : order.action_report.cancelled_by
+        ) === order.requester.id
+      )
+    ) {
+      return 'Cancelled by User';
+    }
+    if (order.request_status?.name) return order.request_status.name;
+    if (typeof order.status === 'string') return order.status;
+    if (order.action_report?.status) return order.action_report.status;
+    return '—';
+  };
+
+  // --- NEW: get status name from id for header ---
+  const formattedStatus = statusOptions.find(s => String(s.id) === String(selectedStatusId))?.name || '';
+
   return (
     <div className="space-y-6">
       {/* Back Button */}
@@ -115,10 +175,10 @@ export default function JobOrderStatusPage({ showNotification }) {
       {/* Header Card */}
       <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
         <h1 className="text-2xl font-bold text-gray-900">
-          {formattedStatus} Job Orders
+          {formattedStatus ? `${formattedStatus} Job Orders` : 'Job Orders'}
         </h1>
         <p className="text-gray-600 mt-1">
-          View and manage {formattedStatus.toLowerCase()} job orders
+          View and manage {formattedStatus ? formattedStatus.toLowerCase() : ''} job orders
         </p>
       </div>
 
@@ -177,6 +237,29 @@ export default function JobOrderStatusPage({ showNotification }) {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Status Filter */}
+            <div className="relative">
+              <select
+                value={selectedStatusId}
+                onChange={e => {
+                  const value = e.target.value;
+                  setSelectedStatusId(value);
+                  if (value) {
+                    navigate(`/reports/status/${value}`);
+                  } else {
+                    navigate(`/reports/status`);
+                  }
+                  setPage(1);
+                }}
+                className="block appearance-none w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              >
+                <option value="">All Status</option>
+                {statusOptions.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -258,10 +341,10 @@ export default function JobOrderStatusPage({ showNotification }) {
                       <div className="flex flex-col items-start gap-2">
                         <span
                           className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                            STATUS_BADGE_STYLES[order.action_report?.status]
+                            STATUS_BADGE_STYLES[getStatusName(order)]
                           }`}
                         >
-                          {order.action_report?.status}
+                          {getStatusName(order)}
                         </span>
 
                         {order.action_report && (

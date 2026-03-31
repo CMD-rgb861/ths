@@ -47,7 +47,6 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   }
   const isAdmin = typeof isAdminProp === 'boolean' ? isAdminProp : isRole(user, 'admin');
   const isTechnician = isRole(user, 'technician');
-  const isPrivileged = isAdmin || isTechnician; // Add this line
   const userId = user?.id;
 
   // Fetch job orders with filters
@@ -69,7 +68,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
       );
 
       // Only normal users see their own jobs
-      if (!isPrivileged) {
+      if (!isAdmin && !isTechnician) {
         data = data.filter(job => job.requested_by === userId);
       }
 
@@ -97,8 +96,8 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         next_page_url: pageValue < totalPages
       });
 
-      // Always update newPendingJobs from backend data (privileged only)
-      if (isPrivileged) {
+      // Always update newPendingJobs from backend data (admin only)
+      if (isAdmin) {
         const currentPendingJobs = data.filter(
           job => job.action_report?.status === 'Pending' && !job.notified
         );
@@ -108,11 +107,11 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
       console.error("Failed to fetch job orders:", error);
       setJobs([]);
       setMeta({});
-      if (isPrivileged) setNewPendingJobs([]);
+      if (isAdmin) setNewPendingJobs([]);
     } finally {
       setLoading(false);
     }
-  }, [search, page, loading, isPrivileged, isTechnician, userId, setNewPendingJobs]);
+  }, [search, page, loading, isAdmin, isTechnician, userId, setNewPendingJobs]);
 
   // Load jobs when search or page changes
   useEffect(() => {
@@ -150,7 +149,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
     fetchJobs();
   };
 
-  // Calculated counts (privileged only)
+  // Calculated counts (admin only)
   const pendingCount = jobs.filter(
     job => job.action_report?.status === 'Pending'
   ).length;
@@ -214,7 +213,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
           </div>
           
           {/* Admin Summary Stats - Inline */}
-          {isPrivileged && (
+          {isAdmin && (
             <div className="flex items-center space-x-6">
               <div className="text-center relative">
                 <div className="flex items-center space-x-2">
@@ -309,7 +308,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Categories
                   </th>
-                  {isPrivileged && (
+                  {isAdmin && (
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Requester
                     </th>
@@ -364,7 +363,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                       </div>
                     </td>
 
-                    {isPrivileged && (
+                    {isAdmin && (
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-gray-700">{job.requester?.name || '—'}</span>
                       </td>
@@ -461,7 +460,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         onClose={closeOngoingModal}
         onStatusChange={handleStatusChange}
         showNotification={showNotification}
-        isAdmin={isPrivileged}
+        isAdmin={isAdmin}
       />
 
       <NewJobOrdersModal

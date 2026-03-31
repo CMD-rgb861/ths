@@ -6,6 +6,7 @@ use App\Models\JobOrder;
 use App\Models\ActionReport;
 use App\Models\User;
 use App\Models\Signatory;
+use App\Models\RequestStatus;
 use App\Notifications\DiagnosisPopulatedNotification; 
 use App\Notifications\DiagnosisConfirmedNotification;
 use App\Notifications\JobOrderPendingNotification;
@@ -34,6 +35,7 @@ class JobOrderController extends Controller
             'actionReport.acceptedBy',
             'actionReport.cancelledBy',
             'clientSatisfactionMeasurements',
+            'requestStatus', // <-- eager load status relation
         ]);
 
         // Check if filtering by a status that depends on action_reports timestamps
@@ -98,12 +100,10 @@ class JobOrderController extends Controller
 
         // 🔥 HISTORY FILTER (NEW)
         if ($request->boolean('history')) {
-            $query->whereIn('job_orders.status', [
-                'Completed',
-                'Cancelled',
-                'Unserviceable',
-                'Cancelled by User' // <-- add this
-            ]);
+            // Fix: Use status IDs for Completed, Cancelled, Unserviceable, Cancelled by User
+            $statusNames = ['Completed', 'Cancelled', 'Unserviceable', 'Cancelled by User'];
+            $statusIds = DB::table('request_statuses')->whereIn('name', $statusNames)->pluck('id')->toArray();
+            $query->whereIn('job_orders.status', $statusIds);
         }
 
         if ($request->filled('search')) {
@@ -119,11 +119,7 @@ class JobOrderController extends Controller
 
         // 🔥 STATUS FILTER
         if ($request->filled('status')) {
-            if ($request->status === 'Cancelled') {
-                $query->whereIn('job_orders.status', ['Cancelled', 'Cancelled by User']); // <-- update here
-            } else {
-                $query->where('job_orders.status', $request->status);
-            }
+            $query->where('job_orders.status', $request->status); // status is now an id
         }
 
         // 🔥 DATE RANGE FILTER
@@ -138,19 +134,19 @@ class JobOrderController extends Controller
         // Clone query to compute totals without affecting pagination
         $totalsQuery = clone $query;
 
-        // Compute totals for each status (based on full dataset, not user filter)
+        // Fetch all request statuses from the database
+        $allStatuses = DB::table('request_statuses')->pluck('name', 'id')->toArray();
+
+        // Compute totals for each status by id
         $allJobsQuery = JobOrder::query();
         if (!$request->user()->isAdmin() && !$request->user()->isTechnician()) {
             $allJobsQuery->where('requested_by', $request->user()->id);
         }
 
-        $totals = [
-            'Pending' => (clone $allJobsQuery)->where('status', 'Pending')->count(),
-            'Ongoing' => (clone $allJobsQuery)->where('status', 'Ongoing')->count(),
-            'Completed' => (clone $allJobsQuery)->where('status', 'Completed')->count(),
-            'Cancelled' => (clone $allJobsQuery)->whereIn('status', ['Cancelled', 'Cancelled by User'])->count(),
-            'Unserviceable' => (clone $allJobsQuery)->where('status', 'Unserviceable')->count(),
-        ];
+        $totals = [];
+        foreach ($allStatuses as $id => $name) {
+            $totals[$name] = (clone $allJobsQuery)->where('status', $id)->count();
+        }
 
         // Check if per_page is provided and handle accordingly
         $perPage = $request->input('per_page', 10);
@@ -206,6 +202,7 @@ class JobOrderController extends Controller
             'actionReport.acceptedBy',
             'actionReport.cancelledBy',
             'clientSatisfactionMeasurements',
+            'requestStatus', // <-- add this
         ]);
 
         // Transform related users
@@ -236,6 +233,7 @@ class JobOrderController extends Controller
             'files' => ['nullable', 'array', 'max:3'],
             'files.*' => ['file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
             'diagnosis' => ['nullable', 'string'],
+            'status' => ['nullable', 'integer', 'exists:request_statuses,id'],
         ]);
 
         return DB::transaction(function () use ($validated, $request) {
@@ -255,7 +253,7 @@ class JobOrderController extends Controller
                 'request_description' => $validated['request_description'],
                 'contact_no' => $validated['contact_no'],
                 'signature_name' => $signatureName,
-                'status' => 'Pending',
+                'status' => $validated['status'] ?? 1, // 1 = Pending (id)
                 'notified' => false,  // New field to mark if the job has been notified
             ]);
 
@@ -341,7 +339,7 @@ class JobOrderController extends Controller
     public function update(Request $request, JobOrder $jobOrder)
     {
         $validated = $request->validate([
-            'status' => ['required', 'in:Pending,Ongoing,Cancelled,Unserviceable,Cancelled by User'],
+            'status' => ['required', 'integer', 'exists:request_statuses,id'],
             'diagnosis' => ['nullable', 'string'],
             'action_taken' => ['nullable', 'string'],
             'remarks' => ['nullable', 'string'],
@@ -357,55 +355,25 @@ class JobOrderController extends Controller
                 ], 404);
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Update Diagnosis & Action Taken
-            |--------------------------------------------------------------------------
-            */
+            // Get the status name from the id
+            $statusName = RequestStatus::find($validated['status'])?->name;
 
+            // Only update action report fields, not job order status, unless it's not "Completed"
             $actionReport->update([
                 'diagnosis' => $validated['diagnosis'] ?? $actionReport->diagnosis,
                 'action_taken' => $validated['action_taken'] ?? $actionReport->action_taken,
                 'remarks' => $validated['remarks'] ?? $actionReport->remarks,
+                // Optionally, you may want to update a local status field for the action report (e.g., "Ongoing", "Cancelled", etc.)
+                'status' => $statusName !== 'Completed' ? $statusName : $actionReport->status,
             ]);
 
-            /*
-            |--------------------------------------------------------------------------
-            | Move to Pending Confirmation ONLY if BOTH filled
-            |--------------------------------------------------------------------------
-            */
-
-            $diagnosisFilled = !empty(trim($actionReport->diagnosis));
-            $actionTakenFilled = !empty(trim($actionReport->action_taken));
-
-            if ($diagnosisFilled && $actionTakenFilled && !$actionReport->conformed) {
-
-                $jobOrder->update(['status' => 'Ongoing']);
-
-                $actionReport->update([
-                    'status' => 'Ongoing'
-                ]);
-
-                // Notify requester
-                $requestedByUser = User::find($jobOrder->requested_by);
-
-                if ($requestedByUser) {
-                    $requestedByUser->notify(
-                        new DiagnosisPopulatedNotification($jobOrder)
-                    );
-                }
+            // Only update job order status if not transitioning to "Completed" (which should be done by confirmation)
+            if ($statusName !== 'Completed') {
+                $jobOrder->update(['status' => $validated['status']]);
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Normal Status Handling
-            |--------------------------------------------------------------------------
-            */
-
-            if ($validated['status'] === 'Ongoing') {
-
-                $jobOrder->update(['status' => 'Ongoing']);
-
+            // Handle special transitions (Ongoing, Cancelled, Unserviceable, Cancelled by User)
+            if ($statusName === 'Ongoing') {
                 $actionReport->update([
                     'status' => 'Ongoing',
                     'accepted_by' => $request->user()->id,
@@ -413,10 +381,7 @@ class JobOrderController extends Controller
                 ]);
             }
 
-            if ($validated['status'] === 'Cancelled') {
-
-                $jobOrder->update(['status' => 'Cancelled']);
-
+            if ($statusName === 'Cancelled') {
                 $actionReport->update([
                     'status' => 'Cancelled',
                     'cancelled_by' => $request->user()->id,
@@ -424,18 +389,13 @@ class JobOrderController extends Controller
                 ]);
             }
 
-            if ($validated['status'] === 'Unserviceable') {
-
-                $jobOrder->update(['status' => 'Unserviceable']);
-
+            if ($statusName === 'Unserviceable') {
                 $actionReport->update([
                     'status' => 'Unserviceable',
-                    // You can handle additional logic here for Unserviceable, if required.
                 ]);
             }
 
-            if ($validated['status'] === 'Cancelled by User') {
-                $jobOrder->update(['status' => 'Cancelled by User']);
+            if ($statusName === 'Cancelled by User') {
                 $actionReport->update([
                     'status' => 'Cancelled by User',
                     'cancelled_by' => $request->user()->id,
@@ -444,7 +404,7 @@ class JobOrderController extends Controller
             }
 
             // If an admin changed the status to Ongoing or Cancelled, apply the configured IT Director signatory
-            if ($request->user()->isAdmin() && in_array($validated['status'], ['Ongoing', 'Cancelled'])) {
+            if ($request->user()->isAdmin() && in_array($statusName, ['Ongoing', 'Cancelled'])) {
                 $signatory = Signatory::where('role', 'it_director')->first();
                 if ($signatory) {
                     $jobOrder->update([
@@ -454,8 +414,6 @@ class JobOrderController extends Controller
                 }
             }
 
-
-            // ✅ RETURN RESPONSE (FIX)
             $jobOrder = $jobOrder->load([
                 'department',
                 'requester',
@@ -467,7 +425,6 @@ class JobOrderController extends Controller
                 'actionReport.cancelledBy',
             ]);
 
-            // Transform related users
             foreach (['requester', 'creator', 'approver', 'conformer'] as $relation) {
                 if ($jobOrder->$relation && $jobOrder->$relation->relationLoaded('role')) {
                     $jobOrder->$relation->role = $jobOrder->$relation->role ? $jobOrder->$relation->role->name : null;

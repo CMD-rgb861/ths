@@ -2,15 +2,16 @@
 
 import { useNavigate } from 'react-router-dom';
 
-export default function JobOrderStatusSummary({ totals = {} }) {
+export default function JobOrderStatusSummary({ totals = {}, statusOptions = [] }) {
   const navigate = useNavigate();
 
-  const counts = {
-    Pending: totals.Pending || 0,
-    Ongoing: totals.Ongoing || 0,
-    Completed: totals.Completed || 0,
-    Cancelled: totals.Cancelled || 0,
-    Unserviceable: totals.Unserviceable || 0,
+  // Define the desired order for the cards
+  const CARD_ORDER = ['Pending', 'Ongoing', 'Cancelled', 'Completed'];
+
+  // Helper to get id by name
+  const getStatusIdByName = (name) => {
+    const found = statusOptions.find(s => s.name === name);
+    return found ? found.id : name.toLowerCase();
   };
 
   const styles = {
@@ -34,23 +35,37 @@ export default function JobOrderStatusSummary({ totals = {} }) {
       text: 'text-red-700',
       badge: 'bg-red-100 text-red-800',
     },
-    Unserviceable: { // ✅ ADDED
+    Unserviceable: {
+      bg: 'bg-gray-50',
+      text: 'text-gray-700',
+      badge: 'bg-gray-200 text-gray-800',
+    },
+    // fallback style
+    Default: {
       bg: 'bg-gray-50',
       text: 'text-gray-700',
       badge: 'bg-gray-200 text-gray-800',
     },
   };
 
+  // Sort status names according to CARD_ORDER, then append any others
+  const statusNames = [
+    ...CARD_ORDER.filter(status => Object.keys(totals).includes(status)),
+    ...Object.keys(totals).filter(status => !CARD_ORDER.includes(status)),
+  ];
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-      {Object.entries(counts).map(([status, count]) => {
-        const style = styles[status];
+      {statusNames.map((status) => {
+        const count = totals[status] || 0;
+        const style = styles[status] || styles.Default;
+        const statusId = getStatusIdByName(status);
 
         return (
           <button
             key={status}
             onClick={() =>
-              navigate(`/reports/status/${status.toLowerCase()}`)
+              navigate(`/reports/status/${statusId}`)
             }
             className={`rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition text-left ${style.bg}`}
           >

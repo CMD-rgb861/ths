@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
 import ConfirmModal from './ConfirmModal';
 
@@ -21,6 +21,9 @@ export default function JobOrderModal({
 }) {
   const [loadingAction, setLoadingAction] = useState(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showCancelRemarks, setShowCancelRemarks] = useState(false);
+  const [cancelRemarks, setCancelRemarks] = useState('');
+  const [statusOptions, setStatusOptions] = useState([]);
   let user = null;
   try {
     const userRaw = localStorage.getItem('user');
@@ -32,7 +35,8 @@ export default function JobOrderModal({
   const isUser = isRole(user, 'user');
   const isLoading = loadingAction !== null;
   const isOwnJob = job?.requester?.id === user?.id;
-  const canUserCancel = isUser && isOwnJob && ['Pending', 'Ongoing'].includes(job?.status);
+  // Show cancel if user is requester and job.status === 1 (Pending id)
+  const canUserCancel = isUser && isOwnJob && job?.status === 1;
 
   const formattedDate = useMemo(() => {
     if (!job?.date) return '—';
@@ -45,15 +49,38 @@ export default function JobOrderModal({
     });
   }, [job?.date]);
 
-  const handleAction = async (status) => {
-    setLoadingAction(status);
+  useEffect(() => {
+    axios.get('/request-statuses')
+      .then(res => {
+        if (Array.isArray(res.data)) setStatusOptions(res.data);
+        else if (Array.isArray(res.data?.data)) setStatusOptions(res.data.data);
+        else setStatusOptions([]);
+      })
+      .catch(() => setStatusOptions([]));
+  }, []);
+
+  // Helper to get status id by name
+  const getStatusId = (statusName) => {
+    const found = statusOptions.find(s => s.name === statusName);
+    return found ? found.id : statusName;
+  };
+
+  // Helper to get status name by id
+  const getStatusName = (statusId) => {
+    const found = statusOptions.find(s => s.id === statusId);
+    return found ? found.name : statusId;
+  };
+
+  const handleAction = async (statusName) => {
+    setLoadingAction(statusName);
 
     try {
-      const response = await axios.put(`/job-orders/${job.id}`, { status });
+      const statusId = getStatusId(statusName);
+      const response = await axios.put(`/job-orders/${job.id}`, { status: statusId });
       const updatedJob = response.data;
 
       // Clear confirmation flag when admin accepts job
-      if (status === 'Ongoing' && isAdmin) {
+      if (statusName === 'Ongoing' && isAdmin) {
         if (updatedJob.action_report) {
           updatedJob.action_report.conformed = undefined;
         }
@@ -67,11 +94,11 @@ export default function JobOrderModal({
           .catch(err => console.error('Failed to mark as notified:', err));
       }
 
-      onStatusChange(updatedJob, status === 'Ongoing');
+      onStatusChange(updatedJob, statusName === 'Ongoing');
       showNotification(
         'success',
         'Job Order Updated',
-        `Job Order ${status} successfully.`
+        `Job Order ${statusName} successfully.`
       );
       onClose();
     } catch (error) {
@@ -89,7 +116,8 @@ export default function JobOrderModal({
   const handleUserCancel = async () => {
     setLoadingAction('Cancelled by User');
     try {
-      const response = await axios.put(`/job-orders/${job.id}`, { status: 'Cancelled by User' });
+      const statusId = getStatusId('Cancelled by User');
+      const response = await axios.put(`/job-orders/${job.id}`, { status: statusId });
       const updatedJob = response.data;
       showNotification(
         'success',
@@ -107,6 +135,37 @@ export default function JobOrderModal({
       );
     } finally {
       setLoadingAction(null);
+    }
+  };
+
+  // New: handle admin cancel with remarks and confirmation
+  const handleAdminCancel = async () => {
+    setLoadingAction('Cancelled');
+    try {
+      const statusId = getStatusId('Cancelled');
+      // First, update the action report with remarks
+      await axios.put(`/job-orders/${job.id}/action-report`, { remarks: cancelRemarks });
+      // Then, update the job order status
+      const response = await axios.put(`/job-orders/${job.id}`, { status: statusId });
+      const updatedJob = response.data;
+      showNotification(
+        'success',
+        'Job Order Cancelled',
+        'The job order has been cancelled.'
+      );
+      onStatusChange(updatedJob, false);
+      onClose();
+    } catch (error) {
+      console.error('Failed to cancel job order:', error);
+      showNotification(
+        'error',
+        'Error',
+        'Failed to cancel job order.'
+      );
+    } finally {
+      setLoadingAction(null);
+      setShowCancelRemarks(false);
+      setCancelRemarks('');
     }
   };
 
@@ -143,7 +202,7 @@ export default function JobOrderModal({
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Status</p>
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
-                  {job.status || 'Pending'}
+                  {getStatusName(job.status) || 'Pending'}
                 </span>
               </div>
             </div>
@@ -315,7 +374,7 @@ export default function JobOrderModal({
                   </button>
 
                   <button
-                    onClick={() => handleAction('Cancelled')}
+                    onClick={() => setShowCancelRemarks(true)}
                     disabled={isLoading}
                     className="inline-flex items-center px-6 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -337,6 +396,7 @@ export default function JobOrderModal({
               </>
             ) : (
               <div className="flex gap-3 ml-auto">
+                {/* Show cancel button for user if allowed */}
                 {canUserCancel && (
                   <button
                     type="button"
@@ -360,9 +420,62 @@ export default function JobOrderModal({
           </div>
         </div>
 
-        {/* ConfirmModal for Cancel Request */}
+        {/* Cancel Remarks Modal */}
+        {showCancelRemarks && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+              <h2 className="text-lg font-bold mb-2 text-gray-900">Deny Request</h2>
+              <p className="text-sm text-gray-700 mb-4">
+                Please provide a reason for denying this job order request.
+              </p>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+                rows={4}
+                placeholder="Enter remarks..."
+                value={cancelRemarks}
+                onChange={e => setCancelRemarks(e.target.value)}
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  className="px-4 py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  onClick={() => {
+                    setShowCancelRemarks(false);
+                    setCancelRemarks('');
+                  }}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-4 py-2 rounded-lg text-sm bg-red-600 text-white hover:bg-red-700"
+                  disabled={isLoading || !cancelRemarks.trim()}
+                  onClick={() => setShowCancelConfirm(true)}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ConfirmModal for Cancel Request (admin) */}
         <ConfirmModal
           isOpen={showCancelConfirm}
+          title="Deny Request"
+          message="Are you sure you want to deny this job order request? This action cannot be undone."
+          confirmText="Yes, Deny"
+          cancelText="No"
+          onConfirm={() => {
+            setShowCancelConfirm(false);
+            handleAdminCancel();
+          }}
+          onCancel={() => setShowCancelConfirm(false)}
+        />
+
+        {/* ConfirmModal for Cancel Request (user) */}
+        <ConfirmModal
+          isOpen={showCancelConfirm && !isAdmin}
           title="Cancel Request"
           message="Are you sure you want to cancel this job order request? This action cannot be undone."
           confirmText="Yes, Cancel"

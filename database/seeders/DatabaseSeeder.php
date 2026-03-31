@@ -29,6 +29,8 @@ class DatabaseSeeder extends Seeder
             DepartmentSeeder::class,    
             CategorySeeder::class,
             TechnicianSeeder::class,
+            ServiceStatusSeeder::class,
+            RequestStatusSeeder::class,
         ]);
         
 

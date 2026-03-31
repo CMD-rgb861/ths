@@ -88,4 +88,9 @@ class JobOrder extends Model
         return $this->hasOne(ClientSatisfactionMeasurement::class);
     }
 
+    public function requestStatus()
+    {
+        return $this->belongsTo(\App\Models\RequestStatus::class, 'status');
+    }
+
 }

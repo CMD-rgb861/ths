@@ -14,8 +14,16 @@ export default function UserJobHistory({ showNotification }) {
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({});
+  const [statusOptions, setStatusOptions] = useState([]);
 
   const token = localStorage.getItem('token'); // Get the auth token
+
+  // Fetch request statuses for dynamic status filter options
+  useEffect(() => {
+    axios.get('/request-statuses')
+      .then(res => setStatusOptions(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setStatusOptions([]));
+  }, []);
 
   // 🔥 Auto Fetch (Debounced Search)
   useEffect(() => {
@@ -29,19 +37,22 @@ export default function UserJobHistory({ showNotification }) {
   const fetchHistory = async () => {
     setLoading(true);
     try {
+      // Fix: Use correct parameter names for backend filtering
+      const params = {
+        search,
+        page,
+        history: true, // Apply 'history' filter for Completed, Cancelled, Unserviceable
+      };
+      if (status) params.status = status;
+      if (category) params.category = category;
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+
       const response = await axios.get('/job-orders', {
-        params: {
-          search,
-          status,
-          category,
-          dateFrom,
-          dateTo,
-          page,
-          history: true,  // Apply 'history' filter for Completed, Cancelled, Unserviceable
-        },
+        params,
         headers: {
-          Authorization: `Bearer ${token}`, // Send auth token for authenticated requests
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, // CSRF token from meta tag (Laravel)
+          Authorization: `Bearer ${token}`,
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
         },
       });
 
@@ -54,10 +65,10 @@ export default function UserJobHistory({ showNotification }) {
       setOrders(safeOrders);
       setPagination(safePagination);
 
-      // Console log to check if the user has job orders
+      // Add console logs for debugging
       console.log("Fetched Job Orders:", safeOrders);
       console.log("Pagination:", safePagination);
-      console.log("User has job requests: ", safeOrders.length > 0);  // Check if there are job orders for the current user
+      console.log("User has job requests: ", safeOrders.length > 0);
 
     } catch (error) {
       console.error('Error fetching job history:', error);
@@ -69,6 +80,12 @@ export default function UserJobHistory({ showNotification }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper to get status name by id
+  const getStatusName = (statusId) => {
+    const found = statusOptions.find(s => String(s.id) === String(statusId));
+    return found ? found.name : statusId;
   };
 
   return (
@@ -118,9 +135,9 @@ export default function UserJobHistory({ showNotification }) {
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               >
                 <option value="">All Status</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
-                <option value="Unserviceable">Unserviceable</option>
+                {statusOptions.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
               </select>
             </div>
 

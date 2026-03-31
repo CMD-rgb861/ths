@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Storage;
 use setasign\Fpdi\Tcpdf\Fpdi;
 use App\Notifications\JobOrderPendingNotification;
 use App\Models\ClientSatisfactionMeasurement;
+use App\Models\ServiceStatus;
+use App\Models\RequestStatus;
 
 class ActionReportController extends Controller
 {
@@ -27,7 +29,7 @@ class ActionReportController extends Controller
 
         $validated = $request->validate([
             'diagnosis'     => ['nullable', 'string'],
-            'action_taken'  => ['nullable', 'string'],
+            'action_taken'  => ['nullable', 'string', 'exists:service_statuses,name'],
             'serviced_by'   => ['nullable', 'exists:users,id'],
             'date_started'  => ['nullable', 'date'],
             'remarks'       => ['nullable', 'string'],
@@ -83,7 +85,7 @@ class ActionReportController extends Controller
 
         $validated = $request->validate([
             'diagnosis'     => ['nullable', 'string'],
-            'action_taken'  => ['nullable', 'string'],
+            'action_taken'  => ['nullable', 'string', 'exists:service_statuses,name'],
             'serviced_by'   => ['nullable', 'exists:users,id'],
             'date_started'  => ['nullable', 'date'],
             'date_finished' => ['nullable', 'date'],
@@ -163,20 +165,20 @@ class ActionReportController extends Controller
         }
 
         DB::transaction(function () use ($actionReport, $jobOrder) {
-
             // ✅ Update action report
             $actionReport->update([
                 'conformed'     => true,
                 'status'        => 'Completed',
-                'confirmed_at'  => now(),  // Automatically set the confirmation date and time
+                'confirmed_at'  => now(),
                 'confirmed_by'  => Auth::id(),
-                'date_finished' => now(),  // Set the date finished to the confirmation time
+                'date_finished' => now(),
             ]);
 
-            // ✅ Update job order
-            $jobOrder->update([
-                'status' => 'Completed'
-            ]);
+            // ✅ Update job order status by id (not name)
+            $completedStatusId = RequestStatus::where('name', 'Completed')->value('id');
+            if ($completedStatusId) {
+                $jobOrder->update(['status' => $completedStatusId]);
+            }
         });
 
         // Generate final PDF AFTER transaction
@@ -390,5 +392,15 @@ class ActionReportController extends Controller
             'message' => 'CSM saved',
             'data' => $csm,
         ], 201);
+    }
+
+    /**
+     * Get all service statuses for the action_taken dropdown
+     */
+    public function serviceStatuses()
+    {
+        return response()->json(
+            ServiceStatus::orderBy('name')->get(['id', 'name'])
+        );
     }
 }

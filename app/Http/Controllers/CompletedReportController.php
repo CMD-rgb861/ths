@@ -14,7 +14,12 @@ class CompletedReportController extends Controller
     {
         // Fetch the job order by ID, must be completed
         $jobOrder = JobOrder::where('id', $id)
-            ->where('status', 'completed')
+            // Change this line:
+            // ->where('status', 'completed')
+            // To this:
+            ->whereHas('requestStatus', function($q) {
+                $q->where('name', 'Completed');
+            })
             ->with([
                 'department',
                 'categories',

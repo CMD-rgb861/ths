@@ -78,4 +78,9 @@ class ActionReport extends Model
     {
         return $this->belongsTo(User::class, 'cancelled_by');
     }
+
+    public function serviceStatus()
+    {
+        return $this->belongsTo(\App\Models\ServiceStatus::class, 'action_taken', 'name');
+    }
 }

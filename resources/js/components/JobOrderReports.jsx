@@ -17,7 +17,7 @@ const STATUS_STYLES = {
   Cancelled: 'bg-red-100 text-red-800',
 };
 
-export default function JobOrderReports() {
+export default function JobOrderReports({ isAdmin, user, showNotification }) {
   const navigate = useNavigate();
   
   const [orders, setOrders] = useState([]);
@@ -35,28 +35,24 @@ export default function JobOrderReports() {
   const [search, setSearch] = useState('');
   const [selectedTab, setSelectedTab] = useState('distribution');
   const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [statusOptions, setStatusOptions] = useState([]);
+  const [status, setStatus] = useState('');
 
-  // Fetch job orders data
+  // Fetch job orders data (for dashboard/summary only)
   useEffect(() => {
     setLoading(true);
 
-    // Try different approaches to get all data
     const fetchAllOrders = async () => {
       try {
-        // First, try with per_page parameter
+        // Only fetch all for dashboard/summary
         let response = await axios.get('/job-orders', {
-          params: { per_page: 1000 } // or use -1 if Laravel supports it
+          params: { per_page: 1000 }
         });
-        
         const rows = Array.isArray(response.data?.data) ? response.data.data : [];
-        console.log('Total job orders fetched:', rows.length);
-        console.log('Ongoing orders:', rows.filter(o => o.action_report?.status === 'Ongoing').length);
-        
         setOrders(rows);
         setFiltered(rows);
         setTotals(response.data.totals || {});
       } catch (error) {
-        console.error('Error fetching orders:', error);
         setOrders([]);
         setFiltered([]);
         setTotals({});
@@ -73,6 +69,17 @@ export default function JobOrderReports() {
     axios.get('/signatory/it-director')
       .then(res => setItDirector(res.data))
       .catch(() => setItDirector(null));
+  }, []);
+
+  // Fetch request statuses for dynamic filtering
+  useEffect(() => {
+    axios.get('/request-statuses')
+      .then(res => {
+        if (Array.isArray(res.data)) setStatusOptions(res.data);
+        else if (Array.isArray(res.data?.data)) setStatusOptions(res.data.data);
+        else setStatusOptions([]);
+      })
+      .catch(() => setStatusOptions([]));
   }, []);
 
   // Apply filters to job orders
@@ -319,6 +326,12 @@ export default function JobOrderReports() {
     setShowExportDropdown(false);
   };
 
+  // Helper to get status name by id
+  const getStatusName = (statusId) => {
+    const found = statusOptions.find(s => String(s.id) === String(statusId));
+    return found ? found.name : statusId;
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -389,7 +402,7 @@ export default function JobOrderReports() {
       </div>
 
       {/* Status Summary */}
-      <JobOrderStatusSummary totals={totals} />
+      <JobOrderStatusSummary totals={totals} statusOptions={statusOptions} />
 
       {/* Filter Panel */}
       <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
@@ -434,12 +447,13 @@ export default function JobOrderReports() {
             </label>
             <select
               id="status"
+              value={status}
+              onChange={e => setStatus(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              onChange={e => handleFilterChange('status', e.target.value)}
             >
               <option value="">All Status</option>
-              {STATUSES.map(s => (
-                <option key={s} value={s}>{s}</option>
+              {statusOptions.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           </div>
