@@ -1,3 +1,5 @@
+import React from 'react';
+
 export default function JobOrderDepartmentSummary({ orders = [] }) {
   /* ---------------- AGGREGATE COUNTS ---------------- */
   const counts = {};
@@ -69,90 +71,48 @@ export default function JobOrderDepartmentSummary({ orders = [] }) {
 
   /* ---------------- RENDER ---------------- */
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      {/* Header */}
-      <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/95 px-4 py-3 backdrop-blur">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">
-              Department Summary
-            </h3>
-            <p className="mt-0.5 text-xs text-gray-500">
-              Job orders grouped by department
-            </p>
-          </div>
-
-          <div className="rounded-xl bg-blue-50 px-3 py-2 text-right">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-blue-600">
-              Total
-            </div>
-            <div className="text-lg font-bold leading-none text-blue-700">
-              {total}
-            </div>
-          </div>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800">
+            Department Distribution
+          </h3>
+          <p className="text-xs text-gray-500">
+            Overview of department-based records
+          </p>
         </div>
       </div>
-
-      {/* Scrollable List */}
-      <div className="max-h-[420px] overflow-y-auto px-4 py-3">
-        <div className="space-y-2.5">
-          {visibleDepartments.map(([department, count], index) => {
-            const percentage = total > 0 ? (count / total) * 100 : 0;
-            const relativeWidth = maxCount > 0 ? (count / maxCount) * 100 : 0;
-
-            return (
-              <div
-                key={`${department}-${index}`}
-                className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 transition hover:border-gray-200 hover:bg-gray-100/70"
-              >
-                <div className="mb-2 flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-[11px] font-bold text-gray-700">
-                        {index + 1}
-                      </span>
-
-                      <span
-                        className="truncate text-sm font-semibold text-gray-900"
-                        title={department}
-                      >
-                        {department}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-shrink-0 items-center gap-2">
-                    <span className="text-xs font-medium text-gray-500">
-                      {percentage.toFixed(1)}%
-                    </span>
-                    <span className="inline-flex min-w-[48px] items-center justify-center rounded-full bg-blue-100 px-2.5 py-1 text-sm font-bold text-blue-700">
-                      {count}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500 ease-out"
-                    style={{ width: `${relativeWidth}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-            Departments Shown
-          </span>
-          <span className="text-sm font-bold text-gray-900">
-            {visibleDepartments.length}
-          </span>
-        </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
+                Department
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
+                Count
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {sorted.length === 0 ? (
+              <tr>
+                <td className="px-6 py-4 text-gray-500 italic" colSpan={2}>
+                  No department data
+                </td>
+              </tr>
+            ) : (
+              sorted.map(([dept, count]) => (
+                <tr key={dept}>
+                  <td className="px-6 py-4 text-sm text-gray-700">{dept}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900 font-semibold">
+                    {count}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

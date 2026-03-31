@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import JobOrderStatusSummary from './JobOrderStatusSummary';
 import JobOrderDepartmentSummary from './JobOrderDepartmentSummary';
+import JobOrderCategorySummary from './JobOrderCategorySummary';
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
@@ -55,11 +56,27 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
       } catch (error) {
         setOrders([]);
         setFiltered([]);
-        setTotals({});
+        // Set all status counts to null for loading state in cards
+        setTotals({
+          Pending: null,
+          Ongoing: null,
+          Completed: null,
+          Cancelled: null,
+          Unserviceable: null,
+        });
       } finally {
         setLoading(false);
       }
     };
+
+    // Set all status counts to null for loading state in cards
+    setTotals({
+      Pending: null,
+      Ongoing: null,
+      Completed: null,
+      Cancelled: null,
+      Unserviceable: null,
+    });
 
     fetchAllOrders();
   }, []);
@@ -158,6 +175,50 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
   };
 
   const pieData = useMemo(() => getDepartmentPieData(filtered), [filtered]);
+
+  // Generate category distribution data
+  const getCategoryPieData = (data) => {
+    const categoryCounts = {};
+    data.forEach(order => {
+      if (Array.isArray(order.categories)) {
+        order.categories.forEach(cat => {
+          if (cat?.name) {
+            categoryCounts[cat.name] = (categoryCounts[cat.name] || 0) + 1;
+          }
+        });
+      }
+    });
+
+    const labels = Object.keys(categoryCounts);
+    const values = Object.values(categoryCounts);
+
+    if (!labels.length) {
+      return {
+        labels: ['No Data'],
+        datasets: [{
+          data: [100],
+          backgroundColor: ['#FF6384']
+        }]
+      };
+    }
+
+    return {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: [
+          '#FF6384', 
+          '#36A2EB', 
+          '#FFCE56', 
+          '#4BC0C0', 
+          '#9966FF', 
+          '#FF9F40'
+        ],
+      }],
+    };
+  };
+
+  const categoryPieData = useMemo(() => getCategoryPieData(filtered), [filtered]);
 
   // Pie chart configuration options
   const getPieChartOptions = (legendPosition = 'top') => ({
@@ -531,84 +592,57 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
         )}
 
         {!loading && paginated.length > 0 && (
-          <div className="divide-y divide-gray-200">
-            {paginated.map(order => {
-              const status = order.action_report?.status || 'Pending';
-              const requestedBy = order.requester?.name;
-              const acceptedBy = order.action_report?.accepted_by_user?.name || 
-                                 itDirector?.user?.name || 
-                                 itDirector?.name;
-              const servicedBy = order.action_report?.serviced_by?.name || 
-                                 order.action_report?.serviced_by;
-              const cancelledBy = order.action_report?.cancelled_by?.name || 
-                                itDirector?.user?.name || 
-                                itDirector?.name;
-
-              return (
-                <div
-                  key={order.id}
-                  className="p-6 hover:bg-gray-50 transition-colors duration-150"
-                >
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center space-x-3">
-                        <div className="font-semibold text-gray-900 text-sm">
-                          {order.job_order_no}
-                        </div>
-                        {statusBadge(status)}
-                      </div>
-
-                      <div className="text-sm text-gray-600">
-                        <span className="font-medium">Department:</span> {order.department?.name || '—'}
-                      </div>
-
-                      <div className="text-sm text-gray-600 space-y-1">
-                        {order.signature_name && order.requester?.role === 'admin' && (
-                          <div>
-                            <span className="font-medium">Signatory:</span> {order.signature_name}
-                          </div>
-                        )}
-
-                        <div>
-                          <span className="font-medium">Requested by:</span> {requestedBy ? (
-                            order.signature_name && order.requester?.role === 'admin' 
-                              ? `(${requestedBy})` 
-                              : requestedBy
-                          ) : '—'}
-                        </div>
-                      </div>
-
-                      {status === 'Ongoing' && acceptedBy && (
-                        <div className="flex items-center text-sm text-blue-700">
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <span className="font-medium">Accepted by:</span> {acceptedBy}
-                        </div>
-                      )}
-
-                      {status === 'Completed' && servicedBy && (
-                        <div className="flex items-center text-sm text-green-700">
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span className="font-medium mr-1">Serviced by:</span> {servicedBy}
-                        </div>
-                      )}
-
-                      {status === 'Cancelled' && cancelledBy && (
-                        <div className="flex items-center text-sm text-red-700">
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                          <span className="font-medium mr-1">Cancelled by:</span>{cancelledBy}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">Job Order ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">Department</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">Requested By</th>
+                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">Service Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">Serviced By</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {paginated.map(order => {
+                  const requestStatus = order.request_status?.name || order.status || '—';
+                  const serviceStatus = order.action_report?.action_taken || '—';
+                  const servicedBy =
+                    order.action_report?.serviced_by?.name ||
+                    order.action_report?.serviced_by ||
+                    '—';
+                  const requestedBy =
+                    order.signature_name && order.requester?.role === 'admin'
+                      ? `(${order.requester?.name})`
+                      : order.requester?.name || '—';
+                  return (
+                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                        {order.job_order_no}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {order.department?.name || '—'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {requestedBy}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                          {requestStatus}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {serviceStatus}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {servicedBy}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -655,161 +689,164 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
         </div>
       )}
 
-      {/* Department Distribution */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center">
-            <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            Department Distribution
-          </h2>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b border-gray-200">
-          <div className="flex px-6">
-            <button
-              onClick={() => setSelectedTab('distribution')}
-              className={`py-3 px-4 text-sm font-medium transition-colors ${
-                selectedTab === 'distribution' 
-                  ? 'border-b-2 border-blue-600 text-blue-600' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Distribution
-            </button>
-            <button
-              onClick={() => setSelectedTab('pie')}
-              className={`py-3 px-4 text-sm font-medium transition-colors ${
-                selectedTab === 'pie' 
-                  ? 'border-b-2 border-blue-600 text-blue-600' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Graph
-            </button>
+      {/* Distribution Section: Department & Category side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Department Distribution Card */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col h-full">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800">
+                Department Distribution
+              </h3>
+              <p className="text-xs text-gray-500">
+                Overview of department-based records
+              </p>
+            </div>
           </div>
-        </div>
-
-        {/* Tab Content */}
-        <div className="p-6">
-          {selectedTab === 'distribution' && (
-            <JobOrderDepartmentSummary orders={filtered} />
-          )}
-
-          {selectedTab === 'pie' && (
-          <div className="py-6">
-            {Array.isArray(pieData.labels) &&
-            pieData.labels.length === 1 &&
-            pieData.labels[0] === 'No Data' ? (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 py-14 px-6 text-center">
-                <svg
-                  className="mb-4 h-14 w-14 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                  />
-                </svg>
-                <p className="text-sm font-medium text-gray-600">
-                  No department data to display
-                </p>
-                <p className="mt-1 text-xs text-gray-400">
-                  Try clearing filters or adjusting the date range
-                </p>
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Chart */}
+            <div className="flex-1 flex items-center justify-center">
+              <div className="w-full max-w-[320px]">
+                <Pie
+                  data={pieData}
+                  options={{
+                    ...getPieChartOptions(),
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      ...getPieChartOptions()?.plugins,
+                      legend: { display: false },
+                    },
+                  }}
+                  height={260}
+                />
               </div>
-            ) : (
-              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-800">
-                      Department Distribution
-                    </h3>
-                    <p className="text-xs text-gray-500">
-                      Overview of department-based records
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(320px,1fr)_320px]">
-                  {/* Chart */}
-                  <div className="flex items-center justify-center">
-                    <div className="w-full max-w-[420px]">
-                      <Pie
-                        data={pieData}
-                        options={{
-                          ...getPieChartOptions(),
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            ...getPieChartOptions()?.plugins,
-                            legend: {
-                              display: false,
-                            },
-                          },
-                        }}
-                        height={360}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Custom Legend */}
-                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                    <h4 className="mb-3 text-sm font-medium text-gray-700">
-                      Departments
-                    </h4>
-
-                    <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
-                      {pieData.labels?.map((label, index) => {
-                        const value = pieData.datasets?.[0]?.data?.[index] ?? 0;
-                        const total =
-                          pieData.datasets?.[0]?.data?.reduce(
-                            (sum, item) => sum + Number(item || 0),
-                            0
-                          ) || 0;
-                        const percentage = total ? ((value / total) * 100).toFixed(1) : 0;
-                        const color =
-                          pieData.datasets?.[0]?.backgroundColor?.[index] || "#9CA3AF";
-
-                        return (
-                          <div
-                            key={label}
-                            className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-sm"
-                          >
-                            <div className="flex min-w-0 items-center gap-3">
-                              <span
-                                className="h-3 w-3 flex-shrink-0 rounded-full"
-                                style={{ backgroundColor: color }}
-                              />
-                              <span className="truncate text-sm text-gray-700" title={label}>
-                                {label}
-                              </span>
-                            </div>
-
-                            <div className="ml-3 flex-shrink-0 text-right">
-                              <div className="text-sm font-semibold text-gray-800">
-                                {value}
-                              </div>
-                              <div className="text-xs text-gray-400">{percentage}%</div>
-                            </div>
+            </div>
+            {/* Legend */}
+            <div className="flex-1">
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <h4 className="mb-3 text-sm font-medium text-gray-700">
+                  Departments
+                </h4>
+                <div className="max-h-[260px] space-y-2 overflow-y-auto pr-1">
+                  {pieData.labels?.map((label, index) => {
+                    const value = pieData.datasets?.[0]?.data?.[index] ?? 0;
+                    const total =
+                      pieData.datasets?.[0]?.data?.reduce(
+                        (sum, item) => sum + Number(item || 0),
+                        0
+                      ) || 0;
+                    const percentage = total ? ((value / total) * 100).toFixed(1) : 0;
+                    const color =
+                      pieData.datasets?.[0]?.backgroundColor?.[index] || "#9CA3AF";
+                    return (
+                      <div
+                        key={label}
+                        className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-sm"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span
+                            className="h-3 w-3 flex-shrink-0 rounded-full"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span className="truncate text-sm text-gray-700" title={label}>
+                            {label}
+                          </span>
+                        </div>
+                        <div className="ml-3 flex-shrink-0 text-right">
+                          <div className="text-sm font-semibold text-gray-800">
+                            {value}
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                          <div className="text-xs text-gray-400">{percentage}%</div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            )}
+            </div>
           </div>
-        )}
+        </div>
+
+        {/* Category Distribution Card */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col h-full">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800">
+                Category Distribution
+              </h3>
+              <p className="text-xs text-gray-500">
+                Overview of category-based records
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Chart */}
+            <div className="flex-1 flex items-center justify-center">
+              <div className="w-full max-w-[320px]">
+                <Pie
+                  data={categoryPieData}
+                  options={{
+                    ...getPieChartOptions(),
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      ...getPieChartOptions()?.plugins,
+                      legend: { display: false },
+                    },
+                  }}
+                  height={260}
+                />
+              </div>
+            </div>
+            {/* Legend */}
+            <div className="flex-1">
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <h4 className="mb-3 text-sm font-medium text-gray-700">
+                  Categories
+                </h4>
+                <div className="max-h-[260px] space-y-2 overflow-y-auto pr-1">
+                  {categoryPieData.labels?.map((label, index) => {
+                    const value = categoryPieData.datasets?.[0]?.data?.[index] ?? 0;
+                    const total =
+                      categoryPieData.datasets?.[0]?.data?.reduce(
+                        (sum, item) => sum + Number(item || 0),
+                        0
+                      ) || 0;
+                    const percentage = total ? ((value / total) * 100).toFixed(1) : 0;
+                    const color =
+                      categoryPieData.datasets?.[0]?.backgroundColor?.[index] || "#9CA3AF";
+                    return (
+                      <div
+                        key={label}
+                        className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-sm"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span
+                            className="h-3 w-3 flex-shrink-0 rounded-full"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span className="truncate text-sm text-gray-700" title={label}>
+                            {label}
+                          </span>
+                        </div>
+                        <div className="ml-3 flex-shrink-0 text-right">
+                          <div className="text-sm font-semibold text-gray-800">
+                            {value}
+                          </div>
+                          <div className="text-xs text-gray-400">{percentage}%</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+
