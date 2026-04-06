@@ -69,7 +69,7 @@ export default function JobOrderStatusPage({ showNotification }) {
     if (isServiceStatus && SERVICE_STATUS_KEYS.includes(selectedStatusId)) {
       // Fetch by service status
       axios
-        .get('/job-orders/service-status', { params: { service_status: selectedStatusId } })
+        .get('/job-orders/service-status', { params: { service_status: selectedStatusId, search, sort: sortBy } })
         .then((res) => {
           const rows = Array.isArray(res.data?.data) ? res.data.data : [];
           setOrders(rows);
@@ -81,7 +81,7 @@ export default function JobOrderStatusPage({ showNotification }) {
         })
         .finally(() => setLoading(false));
     } else {
-      // Only include status if selectedStatusId is not empty
+      // Always send page, search, sort, and status (if set)
       const params = { page, search, sort: sortBy };
       if (selectedStatusId) {
         params.status = selectedStatusId;
@@ -199,6 +199,22 @@ export default function JobOrderStatusPage({ showNotification }) {
     ? getServiceStatusLabel(selectedStatusId)
     : statusOptions.find(s => String(s.id) === String(selectedStatusId))?.name || '';
 
+  // --- NEW: get request status and service status for each order ---
+  const getRequestStatus = (order) => {
+    if (order.request_status?.name) return order.request_status.name;
+    if (typeof order.status === 'string') return order.status;
+    return '—';
+  };
+  const getServiceStatus = (order) => {
+    if (order.action_report?.action_taken) return order.action_report.action_taken;
+    return '—';
+  };
+
+  // --- FIX: Reset page to 1 when search or status filter changes ---
+  useEffect(() => {
+    setPage(1);
+  }, [search, selectedStatusId, isServiceStatus]);
+
   return (
     <div className="space-y-6">
       {/* Back Button */}
@@ -287,12 +303,12 @@ export default function JobOrderStatusPage({ showNotification }) {
                   onChange={e => {
                     const value = e.target.value;
                     setSelectedStatusId(value);
+                    setPage(1);
                     if (value) {
                       navigate(`/reports/status/${value}`);
                     } else {
                       navigate(`/reports/status`);
                     }
-                    setPage(1);
                   }}
                   className="block appearance-none w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 >
@@ -338,8 +354,12 @@ export default function JobOrderStatusPage({ showNotification }) {
                   <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Categories
                   </th>
+                  {/* --- CHANGED: Show both Request Status and Service Status --- */}
                   <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
-                    Status
+                    Request Status
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Service Status
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Actions
@@ -379,24 +399,21 @@ export default function JobOrderStatusPage({ showNotification }) {
                       </div>
                     </td>
 
+                    {/* --- NEW: Request Status column --- */}
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col items-start gap-2">
-                        <span
-                          className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                            STATUS_BADGE_STYLES[getStatusName(order)]
-                          }`}
-                        >
-                          {getStatusName(order)}
-                        </span>
-
-                        {order.action_report && (
-                          <StatusIndicator
-                            status={order.action_report?.status}
-                            actionReport={order.action_report}
-                            requesterId={order.requester?.id}
-                          />
-                        )}
-                      </div>
+                      <span
+                        className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                          STATUS_BADGE_STYLES[getRequestStatus(order)]
+                        }`}
+                      >
+                        {getRequestStatus(order)}
+                      </span>
+                    </td>
+                    {/* --- NEW: Service Status column --- */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">
+                        {getServiceStatus(order)}
+                      </span>
                     </td>
 
                     <td className="px-6 py-4 whitespace-nowrap">

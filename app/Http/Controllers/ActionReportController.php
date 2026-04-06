@@ -111,8 +111,27 @@ class ActionReportController extends Controller
             }
         }
 
-        $validated['status'] = 'Ongoing';
+        // --- CHANGED: If admin is denying, set Completed/Closed ---
+        if (
+            $request->user()->isAdmin() &&
+            isset($validated['action_taken']) &&
+            strtolower($validated['action_taken']) === 'cancelled'
+        ) {
+            $completedStatusId = RequestStatus::where('name', 'Completed')->value('id');
+            $jobOrder->update(['status' => $completedStatusId]);
+            $actionReport->update([
+                'status' => 'Completed',
+                'action_taken' => 'Closed',
+                'remarks' => $validated['remarks'] ?? $actionReport->remarks,
+            ]);
+            return $actionReport->fresh()->load([
+                'servicedBy',
+                'acceptedBy',
+                'cancelledBy',
+            ]);
+        }
 
+        $validated['status'] = 'Ongoing';
         $actionReport->update($validated);
 
         // Send notification to the admin about the updated job order (status is Ongoing)

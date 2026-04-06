@@ -119,8 +119,12 @@ export default function JobOrderModal({
   const handleUserCancel = async () => {
     setLoadingAction('Cancelled by User');
     try {
-      const statusId = getStatusId('Cancelled by User');
-      const response = await axios.put(`/job-orders/${job.id}`, { status: statusId });
+      // Always use the backend "Cancelled" status for DB, and let backend handle service status
+      const statusId = Number(getStatusId('Cancelled'));
+      const response = await axios.put(`/job-orders/${job.id}`, {
+        status: statusId,
+        remarks: cancelRemarks,
+      });
       const updatedJob = response.data;
       showNotification(
         'success',
@@ -145,25 +149,32 @@ export default function JobOrderModal({
   const handleAdminCancel = async () => {
     setLoadingAction('Cancelled');
     try {
-      const statusId = getStatusId('Cancelled');
-      // First, update the action report with remarks
-      await axios.put(`/job-orders/${job.id}/action-report`, { remarks: cancelRemarks });
-      // Then, update the job order status
-      const response = await axios.put(`/job-orders/${job.id}`, { status: statusId });
+      // Always use "Completed" status and "Closed" service status for admin deny
+      const statusId = getStatusId('Completed');
+      // First, update the action report with remarks and action_taken = Closed
+      await axios.put(`/job-orders/${job.id}/action-report`, {
+        remarks: cancelRemarks,
+        action_taken: 'Closed',
+      });
+      // Then, update the job order status to Completed
+      const response = await axios.put(`/job-orders/${job.id}`, {
+        status: statusId,
+        action_taken: 'Closed', // ensure this is sent in case backend expects it
+      });
       const updatedJob = response.data;
       showNotification(
         'success',
-        'Job Order Cancelled',
-        'The job order has been cancelled.'
+        'Job Order Denied',
+        'The job order has been denied and marked as completed/closed.'
       );
       onStatusChange(updatedJob, false);
       onClose();
     } catch (error) {
-      console.error('Failed to cancel job order:', error);
+      console.error('Failed to deny job order:', error);
       showNotification(
         'error',
         'Error',
-        'Failed to cancel job order.'
+        'Failed to deny job order.'
       );
     } finally {
       setLoadingAction(null);

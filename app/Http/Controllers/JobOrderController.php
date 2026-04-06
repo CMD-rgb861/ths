@@ -358,16 +358,78 @@ class JobOrderController extends Controller
             // Get the status name from the id
             $statusName = RequestStatus::find($validated['status'])?->name;
 
-            // Only update action report fields, not job order status, unless it's not "Completed"
+            // --- FIX: If admin is denying, always set Completed/Closed regardless of incoming status ---
+            if (
+                $request->user()->isAdmin() &&
+                (
+                    $statusName === 'Cancelled' ||
+                    $statusName === 'Cancelled by User' ||
+                    (isset($validated['action_taken']) && strtolower($validated['action_taken']) === 'closed')
+                )
+            ) {
+                $completedStatusId = RequestStatus::where('name', 'Completed')->value('id');
+                $jobOrder->update(['status' => $completedStatusId]);
+                $actionReport->update([
+                    'status' => 'Completed',
+                    'action_taken' => 'Closed',
+                    'remarks' => $validated['remarks'] ?? $actionReport->remarks,
+                ]);
+                $jobOrder = $jobOrder->load([
+                    'department',
+                    'requester',
+                    'categories',
+                    'attachments',
+                    'actionReport.servicedBy',
+                    'clientSatisfactionMeasurements',
+                    'actionReport.acceptedBy',
+                    'actionReport.cancelledBy',
+                ]);
+                foreach (['requester', 'creator', 'approver', 'conformer'] as $relation) {
+                    if ($jobOrder->$relation && $jobOrder->$relation->relationLoaded('role')) {
+                        $jobOrder->$relation->role = $jobOrder->$relation->role ? $jobOrder->$relation->role->name : null;
+                    }
+                }
+                return response()->json($jobOrder, 200);
+            }
+
+            // --- FIX: If user cancels, set service status to Closed as well ---
+            if (
+                !$request->user()->isAdmin() &&
+                $statusName === 'Cancelled'
+            ) {
+                $actionReport->update([
+                    'status' => 'Cancelled',
+                    'action_taken' => 'Closed',
+                    'cancelled_by' => $request->user()->id,
+                    'cancelled_at' => now(),
+                    'remarks' => $validated['remarks'] ?? $actionReport->remarks,
+                ]);
+                $jobOrder->update(['status' => $validated['status']]);
+                $jobOrder = $jobOrder->load([
+                    'department',
+                    'requester',
+                    'categories',
+                    'attachments',
+                    'actionReport.servicedBy',
+                    'clientSatisfactionMeasurements',
+                    'actionReport.acceptedBy',
+                    'actionReport.cancelledBy',
+                ]);
+                foreach (['requester', 'creator', 'approver', 'conformer'] as $relation) {
+                    if ($jobOrder->$relation && $jobOrder->$relation->relationLoaded('role')) {
+                        $jobOrder->$relation->role = $jobOrder->$relation->role ? $jobOrder->$relation->role->name : null;
+                    }
+                }
+                return response()->json($jobOrder, 200);
+            }
+
             $actionReport->update([
                 'diagnosis' => $validated['diagnosis'] ?? $actionReport->diagnosis,
                 'action_taken' => $validated['action_taken'] ?? $actionReport->action_taken,
                 'remarks' => $validated['remarks'] ?? $actionReport->remarks,
-                // Optionally, you may want to update a local status field for the action report (e.g., "Ongoing", "Cancelled", etc.)
                 'status' => $statusName !== 'Completed' ? $statusName : $actionReport->status,
             ]);
 
-            // Only update job order status if not transitioning to "Completed" (which should be done by confirmation)
             if ($statusName !== 'Completed') {
                 $jobOrder->update(['status' => $validated['status']]);
             }
@@ -403,7 +465,6 @@ class JobOrderController extends Controller
                 ]);
             }
 
-            // If an admin changed the status to Ongoing or Cancelled, apply the configured IT Director signatory
             if ($request->user()->isAdmin() && in_array($statusName, ['Ongoing', 'Cancelled'])) {
                 $signatory = Signatory::where('role', 'it_director')->first();
                 if ($signatory) {
@@ -517,11 +578,14 @@ class JobOrderController extends Controller
     public function serviceStatus(Request $request)
     {
         $serviceStatus = $request->input('service_status');
+        $search = $request->input('search');
+        $sort = $request->input('sort', 'newest');
+
         // Map UI keys to action_report.action_taken values
         $statusMap = [
             'unserviceable_with_form' => 'Unserviceable with Form',
             'unserviceable_without_form' => 'Unserviceable without Form',
-            'closed' => 'Closed', // or whatever value means "Service Closed" in your DB
+            'closed' => 'Closed',
         ];
 
         if (!isset($statusMap[$serviceStatus])) {
@@ -530,9 +594,6 @@ class JobOrderController extends Controller
                 'message' => 'Invalid service status.'
             ], 400);
         }
-
-        // DEBUG: Uncomment to see what is being searched for
-        // \Log::info('ServiceStatus filter', ['service_status' => $serviceStatus, 'action_taken' => $statusMap[$serviceStatus]]);
 
         $query = JobOrder::with([
             'department',
@@ -545,21 +606,59 @@ class JobOrderController extends Controller
             'clientSatisfactionMeasurements',
             'requestStatus',
         ])
-        // Make sure to use the correct relationship name: actionReport (singular) if you have one per job order
         ->whereHas('actionReport', function ($q) use ($statusMap, $serviceStatus) {
             $q->whereNotNull('action_taken')
               ->whereRaw('BINARY action_taken = ?', [$statusMap[$serviceStatus]]);
         });
+
+        // Search filter
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('job_orders.job_order_no', 'like', "%{$search}%")
+                  ->orWhereHas('department', function ($d) use ($search) {
+                      $d->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Sorting logic (match request status logic)
+        switch ($sort) {
+            case 'oldest':
+                $query->join('action_reports', 'job_orders.id', '=', 'action_reports.job_order_id')
+                    ->orderBy('action_reports.updated_at', 'asc')
+                    ->select('job_orders.*');
+                break;
+            case 'department_asc':
+                $query->join('departments', 'job_orders.department_id', '=', 'departments.id')
+                    ->orderBy('departments.name', 'asc')
+                    ->select('job_orders.*');
+                break;
+            case 'department_desc':
+                $query->join('departments', 'job_orders.department_id', '=', 'departments.id')
+                    ->orderBy('departments.name', 'desc')
+                    ->select('job_orders.*');
+                break;
+            case 'job_order_asc':
+                $query->orderBy('job_orders.job_order_no', 'asc');
+                break;
+            case 'job_order_desc':
+                $query->orderBy('job_orders.job_order_no', 'desc');
+                break;
+            case 'newest':
+            default:
+                $query->join('action_reports', 'job_orders.id', '=', 'action_reports.job_order_id')
+                    ->orderBy('action_reports.updated_at', 'desc')
+                    ->select('job_orders.*');
+                break;
+        }
 
         // Optional: restrict to user's own jobs if not admin/technician
         if (!$request->user()->isAdmin() && !$request->user()->isTechnician()) {
             $query->where('job_orders.requested_by', $request->user()->id);
         }
 
+        // No pagination for service status cards (to match frontend)
         $jobs = $query->get();
-
-        // DEBUG: Uncomment to see what is returned
-        // \Log::info('ServiceStatus result count', ['count' => $jobs->count()]);
 
         return response()->json([
             'data' => $this->transformJobs($jobs),
