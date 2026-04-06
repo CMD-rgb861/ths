@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, memo } from 'react';
 import axios from 'axios';
 import UnserviceableModal from './UnserviceableModal';
 import CSMModal from './CSMModal';
+import SerialNumberSearch from './SerialNumberSearch';
 
 const TABS = ['Details', 'Dates'];
 
@@ -997,15 +998,11 @@ export default function JobOrderOngoingModal({
                                       {hardwareFields.serial_number || '—'}
                                     </div>
                                   ) : (
-                                    <input
-                                      type="text"
-                                      name="serial_number"
+                                    <SerialNumberSearch
                                       value={hardwareFields.serial_number}
-                                      onChange={e =>
-                                        setHardwareFields(f => ({ ...f, serial_number: e.target.value }))
-                                      }
-                                      className="w-full border border-gray-300 rounded-lg p-2 text-sm"
-                                      placeholder="Enter Serial Number"
+                                      onChange={val => setHardwareFields(f => ({ ...f, serial_number: val }))}
+                                      readOnly={readOnly}
+                                      currentJob={job}
                                     />
                                   )}
                                 </div>

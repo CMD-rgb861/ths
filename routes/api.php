@@ -11,6 +11,7 @@ use App\Http\Controllers\SignatoryController;
 use App\Http\Controllers\ActionReportController;
 use App\Http\Controllers\UnserviceableReportController;
 use App\Http\Controllers\CompletedReportController;
+use App\Http\Controllers\SerialNumberController;
 use App\Models\JobOrder;
 
 /*
@@ -96,4 +97,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Approve a job order (set approved_by and approval_date)
     Route::post('/job-orders/{jobOrder}/approve', [JobOrderController::class, 'approve']);
 
+    // Serial number search
+    Route::get('/serial-number/search', [SerialNumberController::class, 'search']);
 });
