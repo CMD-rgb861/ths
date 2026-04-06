@@ -200,9 +200,6 @@ class ActionReportController extends Controller
             }
         });
 
-        // Generate final PDF AFTER transaction
-        $this->generateFinalPdf($jobOrder);
-
         return response()->json([
             'message' => 'Action report confirmed successfully.',
             'data'    => $actionReport->fresh()
@@ -230,86 +227,12 @@ class ActionReportController extends Controller
         ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | GENERATE FINAL PDF
-    |--------------------------------------------------------------------------
-    */
-    private function generateFinalPdf(JobOrder $jobOrder)
-    {
-        $pdf = new Fpdi();
-        $pdf->SetCreator('ITSO Job Order System');
-        $pdf->SetAuthor('ITSO');
-        $pdf->SetTitle('Final Action Report');
-        $pdf->AddPage();
-        $pdf->SetFont('helvetica', '', 12);
-
-        $pdf->Write(0, "Job Order #: {$jobOrder->jo_number}");
-        $pdf->Ln();
-        $pdf->Write(0, "Diagnosis: {$jobOrder->actionReport->diagnosis}");
-        $pdf->Ln();
-        $pdf->Write(0, "Action Taken: {$jobOrder->actionReport->action_taken}");
-        $pdf->Ln(10);
-
-        $files = Storage::disk('public')->files("job_orders/{$jobOrder->id}");
-
-        foreach ($files as $file) {
-
-            if (str_contains($file, 'final_report.pdf')) {
-                continue;
-            }
-
-            $fullPath = storage_path("app/public/{$file}");
-            $extension = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
-
-            if (in_array($extension, ['jpg', 'jpeg', 'png'])) {
-                $pdf->AddPage();
-                $pdf->Image($fullPath, 15, 40, 180);
-            }
-
-            if ($extension === 'pdf') {
-                $pageCount = $pdf->setSourceFile($fullPath);
-
-                for ($i = 1; $i <= $pageCount; $i++) {
-                    $tpl = $pdf->importPage($i);
-                    $pdf->AddPage();
-                    $pdf->useTemplate($tpl);
-                }
-            }
-        }
-
-        $fileName = "job_orders/{$jobOrder->id}/final_report.pdf";
-        $fullPath = storage_path("app/public/{$fileName}");
-        
-        // Create directory if it doesn't exist
-        $directory = dirname($fullPath);
-        if (!is_dir($directory)) {
-            mkdir($directory, 0755, true);
-        }
-
-        $pdf->Output($fullPath, 'F');
-
-        $jobOrder->update([
-            'final_report_path' => $fileName
-        ]);
-    }
 
     /*
     |--------------------------------------------------------------------------
-    | DOWNLOAD FINAL REPORT
+    | UPDATE into UNSERVICEABLE (ADMIN SIDE)
     |--------------------------------------------------------------------------
     */
-    public function downloadReport(JobOrder $jobOrder)
-    {
-        if (!$jobOrder->final_report_path) {
-            abort(404, 'Final report not generated yet.');
-        }
-
-        return response()->download(
-            storage_path("app/public/{$jobOrder->final_report_path}")
-        );
-    }
-
     public function updateUnserviceable(Request $request, JobOrder $jobOrder)
     {
         $actionReport = $jobOrder->actionReport;

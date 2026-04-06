@@ -252,8 +252,14 @@ export default function CSMModal({
               </div>
               
               <div className="p-6 space-y-6">
+                {/* Client Type */}
                 <div className={`${errors.client_type ? 'border-2 border-red-500 rounded-lg p-4 bg-red-50' : ''}`}>
-                  <p className="font-semibold text-gray-900 mb-3">Client Type <span className="text-red-500">*</span></p>
+                  <p className="font-semibold text-gray-900 mb-3">
+                    Client Type <span className="text-red-500">*</span>
+                    {errors.client_type && (
+                      <span className="ml-2 text-xs text-red-600">{errors.client_type}</span>
+                    )}
+                  </p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {['Citizen', 'Business', 'Government (Employee or another agency)'].map((type) => (
                       <label key={type} className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition">
@@ -272,8 +278,14 @@ export default function CSMModal({
                   </div>
                 </div>
 
-                <div className={`${errors.client_category || errors.client_category_other ? 'border-2 border-red-500 rounded-lg p-4 bg-red-50' : ''}`}>
-                  <p className="font-semibold text-gray-900 mb-3">Client Category <span className="text-red-500">*</span></p>
+                {/* Client Category */}
+                <div className={`${(errors.client_category || errors.client_category_other) ? 'border-2 border-red-500 rounded-lg p-4 bg-red-50' : ''}`}>
+                  <p className="font-semibold text-gray-900 mb-3">
+                    Client Category <span className="text-red-500">*</span>
+                    {errors.client_category && (
+                      <span className="ml-2 text-xs text-red-600">{errors.client_category}</span>
+                    )}
+                  </p>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     {['Student', 'Visitor', 'Faculty', 'Admin/Personnel', 'Others'].map((cat) => (
                       <label key={cat} className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition">
@@ -296,63 +308,86 @@ export default function CSMModal({
                     ))}
                   </div>
                   {form.client_category === 'Others' && (
-                    <input
-                      type="text"
-                      name="client_category_other"
-                      placeholder="Please specify"
-                      value={form.client_category_other || ''}
-                      onChange={(e) => { setForm(prev => ({ ...prev, client_category_other: e.target.value })); clearError('client_category_other'); }}
-                      className={`mt-3 w-full rounded-lg border p-3 focus:ring-2 focus:ring-blue-400 focus:outline-none ${errors.client_category_other ? 'border-red-500' : 'border-gray-300'}`}
-                    />
+                    <>
+                      <input
+                        type="text"
+                        name="client_category_other"
+                        placeholder="Please specify"
+                        value={form.client_category_other || ''}
+                        onChange={(e) => { setForm(prev => ({ ...prev, client_category_other: e.target.value })); clearError('client_category_other'); }}
+                        className={`mt-3 w-full rounded-lg border p-3 focus:ring-2 focus:ring-blue-400 focus:outline-none ${errors.client_category_other ? 'border-red-500' : 'border-gray-300'}`}
+                      />
+                      {errors.client_category_other && (
+                        <div className="text-xs text-red-600 mt-1">{errors.client_category_other}</div>
+                      )}
+                    </>
                   )}
                 </div>
 
+                {/* Name and Email */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="font-semibold text-gray-900 mb-2 block">Name (Optional)</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={form.name || ''}
-                    onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400 focus:outline-none"
-                    placeholder="Enter your name"
-                  />
+                  {/* Name */}
+                  <div>
+                    <label className="font-semibold text-gray-900 mb-2 block">Name (Optional)</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={form.name || ''}
+                      onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                      placeholder="Enter your name"
+                    />
+                  </div>
+                  {/* Email */}
+                  <div>
+                    <label className="font-semibold text-gray-900 mb-2 block">Email Address (Optional)</label>
+                    <input
+                      type="email"
+                      name="email_address"
+                      value={form.email_address || ''}
+                      onChange={(e) => setForm(prev => ({ ...prev, email_address: e.target.value }))}
+                      className={`w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400 focus:outline-none ${errors.email_address ? 'border-red-500' : 'border-gray-300'}`}
+                      placeholder="your.email@example.com"
+                    />
+                    {errors.email_address && (
+                      <div className="text-xs text-red-600 mt-1">{errors.email_address}</div>
+                    )}
+                  </div>
                 </div>
 
-                <div>
-                  <label className="font-semibold text-gray-900 mb-2 block">Email Address (Optional)</label>
-                  <input
-                    type="email"
-                    name="email_address"
-                    value={form.email_address || ''}
-                    onChange={(e) => setForm(prev => ({ ...prev, email_address: e.target.value }))}
-                    className="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400 focus:outline-none"
-                    placeholder="your.email@example.com"
-                  />
+                {/* Sex */}
+                <div className={`${errors.sex ? 'border-2 border-red-500 bg-red-50 rounded-lg p-4' : ''}`}>
+                  <p className="font-semibold text-gray-900 mb-2">
+                    Sex <span className="text-red-500">*</span>
+                    {errors.sex && (
+                      <span className="ml-2 text-xs text-red-600">{errors.sex}</span>
+                    )}
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {['Male', 'Female', 'Prefer not to say'].map(sex => (
+                      <label key={sex} className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition flex-1 justify-center">
+                        <input
+                          type="checkbox"
+                          checked={form.sex === sex}
+                          onChange={() => { setForm(prev => ({ ...prev, sex })); clearError('sex'); }}
+                          className="w-4 h-4 accent-blue-600"
+                        />
+                        <span className="text-sm font-medium">{sex}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <div className={`${errors.sex ? 'border-2 border-red-500 bg-red-50 rounded-lg p-4' : ''}`}>
-                <p className="font-semibold text-gray-900 mb-2">Sex <span className="text-red-500">*</span></p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {['Male', 'Female', 'Prefer not to say'].map(sex => (
-                    <label key={sex} className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition flex-1 justify-center">
-                      <input
-                        type="checkbox"
-                        checked={form.sex === sex}
-                        onChange={() => { setForm(prev => ({ ...prev, sex })); clearError('sex'); }}
-                        className="w-4 h-4 accent-blue-600"
-                      />
-                      <span className="text-sm font-medium">{sex}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
+                {/* Age and Date/Time */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Age */}
                   <div className={`${errors.age ? 'border-2 border-red-500 bg-red-50 rounded-lg p-4' : ''}`}>
-                    <label className="font-semibold text-gray-900 mb-2 block">Age <span className="text-red-500">*</span></label>
+                    <label className="font-semibold text-gray-900 mb-2 block">
+                      Age <span className="text-red-500">*</span>
+                      {errors.age && (
+                        <span className="ml-2 text-xs text-red-600">{errors.age}</span>
+                      )}
+                    </label>
                     <input
                       type="number"
                       name="age"
@@ -363,8 +398,14 @@ export default function CSMModal({
                     />
                   </div>
 
+                  {/* Date & Time */}
                   <div className={`${errors.date_time_visited ? 'border-2 border-red-500 bg-red-50 rounded-lg p-4' : ''}`}>
-                    <label className="font-semibold text-gray-900 mb-2 block">Date & Time of Visit <span className="text-red-500">*</span></label>
+                    <label className="font-semibold text-gray-900 mb-2 block">
+                      Date & Time of Visit <span className="text-red-500">*</span>
+                      {errors.date_time_visited && (
+                        <span className="ml-2 text-xs text-red-600">{errors.date_time_visited}</span>
+                      )}
+                    </label>
                     <input
                       type="datetime-local"
                       name="date_time_visited"
@@ -375,21 +416,25 @@ export default function CSMModal({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                  <div className={`${errors.services_availed ? 'border-2 border-red-500 bg-red-50 rounded-lg p-4' : ''}`}>
-                    <label className="font-semibold text-gray-900 mb-2 block">Services Availed <span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      name="services_availed"
-                      value={form.services_availed || ''}
-                      onChange={(e) => { setForm(prev => ({ ...prev, services_availed: e.target.value })); clearError('services_availed'); }}
-                      className={`w-full p-3 rounded-lg border ${errors.services_availed ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-400 focus:outline-none`}
-                      placeholder="Specify services"
-                    />
-                  </div>
+                {/* Services Availed */}
+                <div className={`${errors.services_availed ? 'border-2 border-red-500 bg-red-50 rounded-lg p-4' : ''}`}>
+                  <label className="font-semibold text-gray-900 mb-2 block">
+                    Services Availed <span className="text-red-500">*</span>
+                    {errors.services_availed && (
+                      <span className="ml-2 text-xs text-red-600">{errors.services_availed}</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    name="services_availed"
+                    value={form.services_availed || ''}
+                    onChange={(e) => { setForm(prev => ({ ...prev, services_availed: e.target.value })); clearError('services_availed'); }}
+                    className={`w-full p-3 rounded-lg border ${errors.services_availed ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-blue-400 focus:outline-none`}
+                    placeholder="Specify services"
+                  />
                 </div>
 
+                {/* Service Provider Name */}
                 <div>
                   <label className="font-semibold text-gray-900 mb-2 block">Service Provider Name (Optional)</label>
                   <input
@@ -402,8 +447,14 @@ export default function CSMModal({
                   />
                 </div>
 
-                <div className={`${errors.who_to_evaluate || errors.who_to_evaluate_other ? 'border-2 border-red-500 bg-red-50 rounded-lg p-4' : ''}`}>
-                  <p className="font-semibold text-gray-900 mb-3">Who are you evaluating? <span className="text-red-500">*</span></p>
+                {/* Who to Evaluate */}
+                <div className={`${(errors.who_to_evaluate || errors.who_to_evaluate_other) ? 'border-2 border-red-500 bg-red-50 rounded-lg p-4' : ''}`}>
+                  <p className="font-semibold text-gray-900 mb-3">
+                    Who are you evaluating? <span className="text-red-500">*</span>
+                    {errors.who_to_evaluate && (
+                      <span className="ml-2 text-xs text-red-600">{errors.who_to_evaluate}</span>
+                    )}
+                  </p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {['Student', 'Faculty', 'Admin/Personnel', 'Others'].map(option => (
                     <label key={option} className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition">
@@ -426,18 +477,30 @@ export default function CSMModal({
                   ))}
                   </div>
                   {form.who_to_evaluate === 'Others' && (
-                    <input
-                      type="text"
-                      name="who_to_evaluate_other"
-                      placeholder="Please specify"
-                      value={form.who_to_evaluate_other || ''}
-                      onChange={(e) => { setForm(prev => ({ ...prev, who_to_evaluate_other: e.target.value })); clearError('who_to_evaluate_other'); }}
-                      className={`mt-3 w-full rounded-lg border p-3 focus:ring-2 focus:ring-blue-400 focus:outline-none ${errors.who_to_evaluate_other ? 'border-red-500' : 'border-gray-300'}`}
-                    />
+                    <>
+                      <input
+                        type="text"
+                        name="who_to_evaluate_other"
+                        placeholder="Please specify"
+                        value={form.who_to_evaluate_other || ''}
+                        onChange={(e) => { setForm(prev => ({ ...prev, who_to_evaluate_other: e.target.value })); clearError('who_to_evaluate_other'); }}
+                        className={`mt-3 w-full rounded-lg border p-3 focus:ring-2 focus:ring-blue-400 focus:outline-none ${errors.who_to_evaluate_other ? 'border-red-500' : 'border-gray-300'}`}
+                      />
+                      {errors.who_to_evaluate_other && (
+                        <div className="text-xs text-red-600 mt-1">{errors.who_to_evaluate_other}</div>
+                      )}
+                    </>
                   )}
                 </div>
-                  <div className={`${errors.office_or_faculty_unit_transacted ? 'border-2 border-red-500 bg-red-50 rounded-lg p-4' : ''}`}>
-                  <label className="font-semibold text-gray-900 mb-2 block">Office/Faculty Unit Transacted <span className="text-red-500">*</span></label>
+
+                {/* Office/Faculty Unit Transacted */}
+                <div className={`${errors.office_or_faculty_unit_transacted ? 'border-2 border-red-500 bg-red-50 rounded-lg p-4' : ''}`}>
+                  <label className="font-semibold text-gray-900 mb-2 block">
+                    Office/Faculty Unit Transacted <span className="text-red-500">*</span>
+                    {errors.office_or_faculty_unit_transacted && (
+                      <span className="ml-2 text-xs text-red-600">{errors.office_or_faculty_unit_transacted}</span>
+                    )}
+                  </label>
                   <input
                     type="text"
                     name="office_or_faculty_unit_transacted"
@@ -498,6 +561,9 @@ export default function CSMModal({
                       >
                         <p className="font-semibold text-gray-900 mb-4">
                           {questionText} <span className="text-red-500">*</span>
+                          {errors[ccField] && (
+                            <span className="ml-2 text-xs text-red-600">{errors[ccField]}</span>
+                          )}
                         </p>
 
                         <div className="space-y-2">
@@ -558,6 +624,9 @@ export default function CSMModal({
                 <div className={`${errors[sqdQuestions[currentSQD].key] ? 'border-2 border-red-500 bg-red-50' : 'border border-gray-200'} rounded-lg p-6`}>
                   <p className="font-semibold text-gray-900 text-center mb-6 text-lg">
                     {sqdQuestions[currentSQD].text} <span className="text-red-500">*</span>
+                    {errors[sqdQuestions[currentSQD].key] && (
+                      <span className="ml-2 text-xs text-red-600">{errors[sqdQuestions[currentSQD].key]}</span>
+                    )}
                   </p>
 
                   <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
