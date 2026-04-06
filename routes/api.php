@@ -42,6 +42,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Job Orders routes
     Route::get('/job-orders', [JobOrderController::class, 'index']);
     Route::post('/job-orders', [JobOrderController::class, 'store']);
+
+    // FIX: Place this BEFORE the {jobOrder} route to avoid conflict
+    Route::get('/job-orders/service-status', [JobOrderController::class, 'serviceStatus']);
+
     Route::get('/job-orders/{jobOrder}', [JobOrderController::class, 'show'])->name('job-orders.show');
     Route::put('/job-orders/{jobOrder}', [JobOrderController::class, 'update']);
     Route::patch('/job-orders/{jobOrder}/confirm-diagnosis',

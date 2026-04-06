@@ -510,6 +510,63 @@ class JobOrderController extends Controller
         );
     }
 
+    /**
+     * Get job orders filtered by service status (for Service Status summary cards)
+     * Accepts: ?service_status=unserviceable_with_form|unserviceable_without_form|closed
+     */
+    public function serviceStatus(Request $request)
+    {
+        $serviceStatus = $request->input('service_status');
+        // Map UI keys to action_report.action_taken values
+        $statusMap = [
+            'unserviceable_with_form' => 'Unserviceable with Form',
+            'unserviceable_without_form' => 'Unserviceable without Form',
+            'closed' => 'Closed', // or whatever value means "Service Closed" in your DB
+        ];
+
+        if (!isset($statusMap[$serviceStatus])) {
+            return response()->json([
+                'data' => [],
+                'message' => 'Invalid service status.'
+            ], 400);
+        }
+
+        // DEBUG: Uncomment to see what is being searched for
+        // \Log::info('ServiceStatus filter', ['service_status' => $serviceStatus, 'action_taken' => $statusMap[$serviceStatus]]);
+
+        $query = JobOrder::with([
+            'department',
+            'requester',
+            'categories',
+            'attachments',
+            'actionReport.servicedBy',
+            'actionReport.acceptedBy',
+            'actionReport.cancelledBy',
+            'clientSatisfactionMeasurements',
+            'requestStatus',
+        ])
+        // Make sure to use the correct relationship name: actionReport (singular) if you have one per job order
+        ->whereHas('actionReport', function ($q) use ($statusMap, $serviceStatus) {
+            $q->whereNotNull('action_taken')
+              ->whereRaw('BINARY action_taken = ?', [$statusMap[$serviceStatus]]);
+        });
+
+        // Optional: restrict to user's own jobs if not admin/technician
+        if (!$request->user()->isAdmin() && !$request->user()->isTechnician()) {
+            $query->where('job_orders.requested_by', $request->user()->id);
+        }
+
+        $jobs = $query->get();
+
+        // DEBUG: Uncomment to see what is returned
+        // \Log::info('ServiceStatus result count', ['count' => $jobs->count()]);
+
+        return response()->json([
+            'data' => $this->transformJobs($jobs),
+            'count' => $jobs->count(),
+        ]);
+    }
+
     private function transformJobs($jobs)
     {
         return collect($jobs)->map(function ($job) {

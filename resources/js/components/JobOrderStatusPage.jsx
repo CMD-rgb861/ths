@@ -36,6 +36,14 @@ export default function JobOrderStatusPage({ showNotification }) {
   const [statusOptions, setStatusOptions] = useState([]);
   const [selectedStatusId, setSelectedStatusId] = useState(status || '');
 
+  // --- NEW: Service Status Mode ---
+  const SERVICE_STATUS_KEYS = [
+    'unserviceable_with_form',
+    'unserviceable_without_form',
+    'closed',
+  ];
+  const [isServiceStatus, setIsServiceStatus] = useState(false);
+
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
@@ -58,26 +66,41 @@ export default function JobOrderStatusPage({ showNotification }) {
   const loadOrders = useCallback(() => {
     setLoading(true);
 
-    // Only include status if selectedStatusId is not empty
-    const params = { page, search, sort: sortBy };
-    if (selectedStatusId) {
-      params.status = selectedStatusId;
-    }
+    if (isServiceStatus && SERVICE_STATUS_KEYS.includes(selectedStatusId)) {
+      // Fetch by service status
+      axios
+        .get('/job-orders/service-status', { params: { service_status: selectedStatusId } })
+        .then((res) => {
+          const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+          setOrders(rows);
+          setLastPage(1);
+        })
+        .catch((err) => {
+          setOrders([]);
+          setLastPage(1);
+        })
+        .finally(() => setLoading(false));
+    } else {
+      // Only include status if selectedStatusId is not empty
+      const params = { page, search, sort: sortBy };
+      if (selectedStatusId) {
+        params.status = selectedStatusId;
+      }
 
-    axios
-      .get('/job-orders', { params })
-      .then((res) => {
-        const rows = Array.isArray(res.data?.data) ? res.data.data : [];
-        setOrders(rows);
-        setLastPage(res.data?.meta?.last_page || 1);
-      })
-      .catch((err) => {
-        console.error('Load orders failed:', err);
-        setOrders([]);
-        setLastPage(1);
-      })
-      .finally(() => setLoading(false));
-  }, [page, search, selectedStatusId, sortBy]);
+      axios
+        .get('/job-orders', { params })
+        .then((res) => {
+          const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+          setOrders(rows);
+          setLastPage(res.data?.meta?.last_page || 1);
+        })
+        .catch((err) => {
+          setOrders([]);
+          setLastPage(1);
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [page, search, selectedStatusId, sortBy, isServiceStatus]);
 
   useEffect(() => {
     loadOrders();
@@ -89,24 +112,31 @@ export default function JobOrderStatusPage({ showNotification }) {
       .catch(() => setStatusOptions([]));
   }, []);
 
-  // --- NEW: update selectedStatusId when route param changes ---
+  // --- NEW: update selectedStatusId and service status mode when route param changes ---
   useEffect(() => {
-    // If status param is a number, use as is. If it's a name, map to id.
     if (!status) {
       setSelectedStatusId('');
+      setIsServiceStatus(false);
       return;
     }
-    // If already a number string, use as is
-    if (!isNaN(status)) {
+    // If it's a service status key, set service mode
+    if (SERVICE_STATUS_KEYS.includes(status)) {
+      setIsServiceStatus(true);
       setSelectedStatusId(status);
-      return;
-    }
-    // Otherwise, map status name to id
-    const found = statusOptions.find(s => s.name.toLowerCase() === status.toLowerCase());
-    if (found) {
-      setSelectedStatusId(String(found.id));
     } else {
-      setSelectedStatusId('');
+      setIsServiceStatus(false);
+      // If already a number string, use as is
+      if (!isNaN(status)) {
+        setSelectedStatusId(status);
+      } else {
+        // Otherwise, map status name to id
+        const found = statusOptions.find(s => s.name.toLowerCase() === status.toLowerCase());
+        if (found) {
+          setSelectedStatusId(String(found.id));
+        } else {
+          setSelectedStatusId('');
+        }
+      }
     }
   }, [status, statusOptions]);
 
@@ -156,8 +186,18 @@ export default function JobOrderStatusPage({ showNotification }) {
     return '—';
   };
 
-  // --- NEW: get status name from id for header ---
-  const formattedStatus = statusOptions.find(s => String(s.id) === String(selectedStatusId))?.name || '';
+  // --- NEW: get display label for service status ---
+  const getServiceStatusLabel = (key) => {
+    if (key === 'unserviceable_with_form') return 'Unserviceable with Form';
+    if (key === 'unserviceable_without_form') return 'Unserviceable without Form';
+    if (key === 'closed') return 'Service Closed';
+    return '';
+  };
+
+  // --- NEW: get formatted status for header ---
+  const formattedStatus = isServiceStatus
+    ? getServiceStatusLabel(selectedStatusId)
+    : statusOptions.find(s => String(s.id) === String(selectedStatusId))?.name || '';
 
   return (
     <div className="space-y-6">
@@ -240,27 +280,29 @@ export default function JobOrderStatusPage({ showNotification }) {
             </div>
 
             {/* Status Filter */}
-            <div className="relative">
-              <select
-                value={selectedStatusId}
-                onChange={e => {
-                  const value = e.target.value;
-                  setSelectedStatusId(value);
-                  if (value) {
-                    navigate(`/reports/status/${value}`);
-                  } else {
-                    navigate(`/reports/status`);
-                  }
-                  setPage(1);
-                }}
-                className="block appearance-none w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              >
-                <option value="">All Status</option>
-                {statusOptions.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
+            {!isServiceStatus && (
+              <div className="relative">
+                <select
+                  value={selectedStatusId}
+                  onChange={e => {
+                    const value = e.target.value;
+                    setSelectedStatusId(value);
+                    if (value) {
+                      navigate(`/reports/status/${value}`);
+                    } else {
+                      navigate(`/reports/status`);
+                    }
+                    setPage(1);
+                  }}
+                  className="block appearance-none w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                >
+                  <option value="">All Status</option>
+                  {statusOptions.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
 

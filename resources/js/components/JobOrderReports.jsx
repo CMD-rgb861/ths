@@ -38,6 +38,11 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [statusOptions, setStatusOptions] = useState([]);
   const [status, setStatus] = useState('');
+  const [serviceTotals, setServiceTotals] = useState({
+    unserviceable_with_form: null,
+    unserviceable_without_form: null,
+    closed: null,
+  });
 
   // Fetch job orders data (for dashboard/summary only)
   useEffect(() => {
@@ -97,6 +102,36 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
         else setStatusOptions([]);
       })
       .catch(() => setStatusOptions([]));
+  }, []);
+
+  // Fetch counts for Service Status cards from backend
+  useEffect(() => {
+    const fetchServiceTotals = async () => {
+      try {
+        const keys = [
+          'unserviceable_with_form',
+          'unserviceable_without_form',
+          'closed',
+        ];
+        const results = await Promise.all(
+          keys.map(key =>
+            axios.get('/job-orders/service-status', { params: { service_status: key } })
+          )
+        );
+        setServiceTotals({
+          unserviceable_with_form: results[0].data.count,
+          unserviceable_without_form: results[1].data.count,
+          closed: results[2].data.count,
+        });
+      } catch (e) {
+        setServiceTotals({
+          unserviceable_with_form: 0,
+          unserviceable_without_form: 0,
+          closed: 0,
+        });
+      }
+    };
+    fetchServiceTotals();
   }, []);
 
   // Apply filters to job orders
@@ -463,7 +498,11 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
       </div>
 
       {/* Status Summary */}
-      <JobOrderStatusSummary totals={totals} statusOptions={statusOptions} />
+      <JobOrderStatusSummary
+        totals={totals}
+        statusOptions={statusOptions}
+        serviceTotals={serviceTotals}
+      />
 
       {/* Filter Panel */}
       <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">

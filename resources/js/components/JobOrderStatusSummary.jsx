@@ -1,9 +1,11 @@
 // resources/js/components/JobOrderStatusSummary.jsx
 
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 
-export default function JobOrderStatusSummary({ totals = {}, statusOptions = [] }) {
+export default function JobOrderStatusSummary({ totals = {}, statusOptions = [], serviceTotals = {} }) {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('request');
 
   // Define the desired order for the cards
   const CARD_ORDER = ['Pending', 'Ongoing', 'Cancelled', 'Completed'];
@@ -48,52 +50,170 @@ export default function JobOrderStatusSummary({ totals = {}, statusOptions = [] 
     },
   };
 
+  // Service Status card definitions
+  const SERVICE_STATUS_CARDS = [
+    {
+      key: 'unserviceable_with_form',
+      label: 'Unserviceable with Form',
+      bg: '#FFEDD5',
+      accent: '#C2410C',
+      helper: '',
+    },
+    {
+      key: 'unserviceable_without_form',
+      label: 'Unserviceable without Form',
+      bg: '#FFF7ED',
+      accent: '#EA580C',
+      helper: '',
+    },
+    {
+      key: 'closed',
+      label: 'Service Closed',
+      bg: '#DCFCE7',
+      accent: '#15803D',
+      helper: 'Work/service fully completed',
+    },
+  ];
+
   // Sort status names according to CARD_ORDER, then append any others
   const statusNames = [
     ...CARD_ORDER.filter(status => Object.keys(totals).includes(status)),
     ...Object.keys(totals).filter(status => !CARD_ORDER.includes(status)),
   ];
 
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-      {statusNames.map((status) => {
-        // Comment out the Unserviceable card for now
-        if (status === 'Unserviceable') {
-          // return null; // uncomment this line to hide the card
-          return null;
-        }
-        const count = totals[status] || 0;
-        const style = styles[status] || styles.Default;
-        const statusId = getStatusIdByName(status);
+  // Add simple emoji icons for visual cues (optional, can be replaced with SVGs)
+  const statusIcons = {
+    Pending: "⏳",
+    Ongoing: "🔄",
+    Cancelled: "❌",
+    Completed: "✅",
+    unserviceable_with_form: "📝",
+    unserviceable_without_form: "📄",
+    closed: "🔒",
+  };
 
-        return (
-          <button
-            key={status}
-            onClick={() =>
-              navigate(`/reports/status/${statusId}`)
-            }
-            className={`rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition text-left ${style.bg}`}
-          >
-            <div className="flex flex-col items-center text-center">
-              <div className="text-sm font-medium text-gray-500">{status}</div>
-              {/* Show loading spinner if count === null (loading), else show count */}
-              {count === null ? (
-                <div className="mt-2 flex items-center justify-center h-10">
-                  <svg className="animate-spin h-7 w-7 text-gray-400" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+  // Helper to navigate to JobOrderStatusPage for a given status key
+  const goToStatusPage = (statusKey, type = 'request') => {
+    // You may need to adjust the route if your app uses a different path or query param for service status
+    if (type === 'request') {
+      navigate(`/reports/status/${statusKey}`);
+    } else if (type === 'service') {
+      navigate(`/reports/service-status/${statusKey}`);
+    }
+  };
+
+  return (
+    <div className="py-4">
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 mb-6">
+        <button
+          className={`px-4 py-2 font-semibold transition-colors duration-150 rounded-t-md ${
+            activeTab === 'request'
+              ? 'border-b-2 border-blue-600 text-blue-700 bg-white'
+              : 'text-gray-500 bg-gray-50 hover:bg-gray-100'
+          }`}
+          onClick={() => setActiveTab('request')}
+        >
+          Request Status
+        </button>
+        <div className="w-px bg-gray-200 mx-1" />
+        <button
+          className={`px-4 py-2 font-semibold transition-colors duration-150 rounded-t-md ${
+            activeTab === 'service'
+              ? 'border-b-2 border-blue-600 text-blue-700 bg-white'
+              : 'text-gray-500 bg-gray-50 hover:bg-gray-100'
+          }`}
+          onClick={() => setActiveTab('service')}
+        >
+          Service Status
+        </button>
+      </div>
+
+      {/* Tab Panels */}
+      {activeTab === 'request' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5 gap-y-7 justify-center">
+          {statusNames.map((status) => {
+            if (status === 'Unserviceable') return null;
+            const count = totals[status] || 0;
+            const style = styles[status] || styles.Default;
+            const statusId = getStatusIdByName(status);
+
+            return (
+              <button
+                key={status}
+                onClick={() => goToStatusPage(statusId, 'request')}
+                className={`w-full max-w-[320px] mx-auto rounded-xl border border-gray-200 p-5 shadow group bg-gradient-to-br from-white to-gray-50 hover:from-blue-50 hover:to-white hover:shadow-lg transition focus:outline-none focus:ring-2 focus:ring-blue-200 outline outline-2 outline-blue-100 hover:border-blue-500 hover:outline-blue-400`}
+                style={{ minHeight: 160 }}
+              >
+                <div className="flex flex-col items-center text-center gap-1">
+                  <div
+                    className="flex items-center justify-center w-11 h-11 rounded-full mb-1 shadow-sm"
+                    style={{
+                      background: style.bg === 'bg-yellow-50' ? '#FEF3C7'
+                        : style.bg === 'bg-blue-50' ? '#DBEAFE'
+                        : style.bg === 'bg-green-50' ? '#DCFCE7'
+                        : style.bg === 'bg-red-50' ? '#FEE2E2'
+                        : '#F3F4F6',
+                      color: style.text ? undefined : '#555',
+                      fontSize: 26,
+                    }}
+                  >
+                    {statusIcons[status] || "📄"}
+                  </div>
+                  <div className="text-[15px] font-medium text-gray-700">{status}</div>
+                  {count === null ? (
+                    <div className="mt-2 flex items-center justify-center h-10">
+                      <svg className="animate-spin h-7 w-7 text-gray-400" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className={`mt-1 text-3xl font-bold tracking-tight ${style.text}`}>{count}</div>
+                  )}
                 </div>
-              ) : (
-                <div className={`mt-2 text-3xl font-semibold ${style.text}`}>{count}</div>
-              )}
-              <div className={`mt-2 px-3 py-1 text-xs font-medium rounded-full ${style.badge}`}>
-                {status}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {activeTab === 'service' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 gap-y-7 justify-center bg-gray-50 py-4 rounded-xl">
+          {SERVICE_STATUS_CARDS.map(card => (
+            <button
+              key={card.key}
+              onClick={() => goToStatusPage(card.key, 'service')}
+              className="w-full max-w-[320px] mx-auto rounded-xl border border-gray-200 p-5 shadow-sm bg-white flex flex-col items-center transition outline outline-2 outline-blue-100 hover:border-blue-500 hover:outline-blue-400"
+              style={{
+                minHeight: 160,
+                cursor: 'pointer'
+              }}
+            >
+              <div
+                className="flex items-center justify-center w-11 h-11 rounded-full mb-1 shadow-sm"
+                style={{
+                  background: "#fff",
+                  color: card.accent,
+                  fontSize: 26,
+                  border: `2px solid ${card.accent}`,
+                }}
+              >
+                {statusIcons[card.key] || "📄"}
               </div>
-            </div>
-          </button>
-        );
-      })}
+              <div className="text-[15px] font-medium" style={{ color: card.accent }}>{card.label}</div>
+              <div className="mt-1 text-3xl font-bold tracking-tight" style={{ color: card.accent }}>
+                {serviceTotals?.[card.key] ?? 0}
+              </div>
+              {card.helper && (
+                <div className="mt-2 px-3 py-1 text-xs font-medium rounded bg-gray-100 text-gray-600">
+                  {card.helper}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

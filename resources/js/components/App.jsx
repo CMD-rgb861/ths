@@ -267,6 +267,11 @@ export default function App() {
                       path="/reports/status/:status"
                       element={<JobOrderStatusPage showNotification={showNotification} />}
                     />
+                    {/* Add this route for service status cards */}
+                    <Route
+                      path="/reports/service-status/:status"
+                      element={<JobOrderStatusPage showNotification={showNotification} />}
+                    />
                     <Route
                       path="/reports"
                       element={

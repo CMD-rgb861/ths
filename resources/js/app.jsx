@@ -1,4 +1,4 @@
-//resources\js\app.jsx
+  //resources\js\app.jsx
 import './bootstrap';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
