@@ -1,72 +1,233 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
-function SerialNumberCompareModal({ isOpen, onClose, jobs = [], currentJob, currentIndex, onPrev, onNext }) {
+function SerialNumberCompareModal({
+  isOpen,
+  onClose,
+  jobs = [],
+  currentJob,
+  currentIndex,
+  onPrev,
+  onNext,
+}) {
   if (!isOpen) return null;
 
   const oldJob = jobs[currentIndex] || null;
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex < jobs.length - 1;
+
+  const getStatusText = (job, fallback = '—') =>
+    job?.action_report?.status || job?.status || fallback;
+
+  const DetailRow = ({ label, value, strong = false }) => (
+    <div className="flex flex-col gap-1 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-left">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+        {label}
+      </span>
+      <span className={strong ? 'text-sm font-semibold text-gray-900' : 'text-sm text-gray-700'}>
+        {value || '—'}
+      </span>
+    </div>
+  );
+
+  const StatusBadge = ({ value, tone = 'blue' }) => {
+    const classes =
+      tone === 'amber'
+        ? 'border-amber-200 bg-amber-50 text-amber-700'
+        : 'border-blue-200 bg-blue-50 text-blue-700';
+
+    return (
+      <span
+        className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold ${classes}`}
+      >
+        {value || '—'}
+      </span>
+    );
+  };
+
+  // Helper to format date
+  const formatDate = (date) =>
+    date ? new Date(date).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="relative w-full max-w-5xl mx-auto flex flex-col items-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
+      <div className="relative w-full max-w-6xl">
         {/* Close button */}
         <button
-          className="absolute top-4 right-4 text-2xl text-gray-700 hover:text-black"
+          type="button"
           onClick={onClose}
+          className="absolute right-1 top-0 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full text-3xl text-gray-700 transition hover:bg-white/70 hover:text-black"
+          aria-label="Close modal"
         >
           &times;
         </button>
-        <div className="flex flex-row items-center justify-center w-full gap-8">
-          {/* Left Arrow */}
+
+        {/* Top indicator */}
+        <div className="mb-5 flex justify-center">
+          <div className="rounded-full border border-gray-200 bg-white px-4 py-2 shadow-sm">
+            <span className="text-sm font-semibold text-gray-800">
+              Comparing previous history {jobs.length > 0 ? currentIndex + 1 : 0} of {jobs.length}
+            </span>
+          </div>
+        </div>
+
+        {/* Main layout */}
+        <div className="flex items-center justify-center gap-5 lg:gap-7">
+          {/* Prev button */}
           <button
-            className="flex items-center justify-center w-10 h-10 rounded-full border border-gray-700 text-2xl bg-white hover:bg-gray-100"
-            tabIndex={-1}
+            type="button"
             onClick={onPrev}
-            disabled={currentIndex === 0}
+            disabled={!hasPrev}
+            className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-gray-800 bg-white text-2xl text-gray-800 shadow-sm transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-35 lg:flex"
             aria-label="Previous"
           >
-            <span>&#x276E;</span>
+            &#x276E;
           </button>
-          {/* Old Job Order */}
-          <div className="bg-white rounded-lg shadow-lg p-8 flex-1 max-w-md flex flex-col items-center">
-            <h2 className="text-xl font-semibold mb-6 text-center">OLD JOB ORDER</h2>
+
+          {/* Old Job */}
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
+            <div className="mb-5 text-center">
+              <div className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                History {jobs.length > 0 ? currentIndex + 1 : 0} of {jobs.length}
+              </div>
+
+              <h2 className="mt-3 text-xl font-semibold text-gray-900">OLD JOB ORDER</h2>
+
+              {jobs.length > 1 && (
+                <>
+                  <div className="mt-3 flex justify-center gap-1.5">
+                    {jobs.map((_, idx) => (
+                      <span
+                        key={idx}
+                        className={`rounded-full transition-all ${
+                          idx === currentIndex
+                            ? 'h-2.5 w-6 bg-amber-500'
+                            : 'h-2.5 w-2.5 bg-gray-300'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Browse other previous records using the arrows
+                  </p>
+                </>
+              )}
+            </div>
+
             {oldJob ? (
-              <div className="space-y-3 text-center">
-                <div>Job Order No: <b>{oldJob.job_order_no}</b></div>
-                <div>Department: {oldJob.department?.name || '—'}</div>
-                <div>Requester: {oldJob.requester?.name || '—'}</div>
-                <div>Categories: {(oldJob.categories || []).map(c => c.name).join(', ')}</div>
-                <div>Status: {oldJob.action_report?.status || oldJob.status || '—'}</div>
+              <div className="space-y-3">
+                <DetailRow label="Job Order No" value={oldJob.job_order_no} strong />
+                <DetailRow label="Department" value={oldJob.department?.name} />
+                <DetailRow label="Requester" value={oldJob.requester?.name} />
+                <DetailRow
+                  label="Categories"
+                  value={(oldJob.categories || []).map((c) => c.name).join(', ')}
+                />
+                {/* --- Additional fields for better comparison --- */}
+                <DetailRow label="Date Created" value={formatDate(oldJob.created_at)} />
+                <DetailRow label="Date Started" value={formatDate(oldJob.action_report?.date_started)} />
+                <DetailRow label="Date Finished" value={formatDate(oldJob.action_report?.date_finished)} />
+                <DetailRow label="Diagnosis" value={oldJob.action_report?.diagnosis} />
+                <DetailRow label="Action Taken" value={oldJob.action_report?.action_taken} />
+                <DetailRow label="Serial Number" value={oldJob.action_report?.serial_number} />
+                <DetailRow label="Brand Name" value={oldJob.action_report?.brand_name} />
+                <DetailRow label="Brand Model" value={oldJob.action_report?.brand_model} />
+                <DetailRow label="Software Name" value={oldJob.action_report?.software_name} />
+                <DetailRow label="Remarks" value={oldJob.action_report?.remarks} />
+                <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                    Status
+                  </div>
+                  <StatusBadge value={getStatusText(oldJob)} tone="amber" />
+                </div>
               </div>
             ) : (
-              <div className="text-gray-400">No data</div>
+              <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-10 text-center text-sm text-gray-400">
+                No old job order data available.
+              </div>
             )}
           </div>
-          {/* Right Arrow */}
+
+          {/* Next button */}
           <button
-            className="flex items-center justify-center w-10 h-10 rounded-full border border-gray-700 text-2xl bg-white hover:bg-gray-100"
-            tabIndex={-1}
+            type="button"
             onClick={onNext}
-            disabled={currentIndex === jobs.length - 1}
+            disabled={!hasNext}
+            className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-gray-800 bg-white text-2xl text-gray-800 shadow-sm transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-35 lg:flex"
             aria-label="Next"
           >
-            <span>&#x276F;</span>
+            &#x276F;
           </button>
-          {/* New Job Order */}
-          <div className="bg-white rounded-lg shadow-lg p-8 flex-1 max-w-md flex flex-col items-center">
-            <h2 className="text-xl font-semibold mb-6 text-center">NEW JOB ORDER</h2>
+
+          {/* New Job */}
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
+            <div className="mb-5 text-center">
+              <div className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                Current Entry
+              </div>
+              <h2 className="mt-3 text-xl font-semibold text-gray-900">NEW JOB ORDER</h2>
+            </div>
+
             {currentJob ? (
-              <div className="space-y-3 text-center">
-                <div>Job Order No: <b>{currentJob.job_order_no || 'New (unsaved)'}</b></div>
-                <div>Department: {currentJob.department?.name || '—'}</div>
-                <div>Requester: {currentJob.requester?.name || '—'}</div>
-                <div>Categories: {(currentJob.categories || []).map(c => c.name).join(', ')}</div>
-                <div>Status: {currentJob.action_report?.status || 'Draft'}</div>
+              <div className="space-y-3">
+                <DetailRow
+                  label="Job Order No"
+                  value={currentJob.job_order_no || 'New (unsaved)'}
+                  strong
+                />
+                <DetailRow label="Department" value={currentJob.department?.name} />
+                <DetailRow label="Requester" value={currentJob.requester?.name} />
+                <DetailRow
+                  label="Categories"
+                  value={(currentJob.categories || []).map((c) => c.name).join(', ')}
+                />
+                {/* --- Additional fields for better comparison --- */}
+                <DetailRow label="Date Created" value={formatDate(currentJob.created_at)} />
+                <DetailRow label="Date Started" value={formatDate(currentJob.action_report?.date_started)} />
+                <DetailRow label="Date Finished" value={formatDate(currentJob.action_report?.date_finished)} />
+                <DetailRow label="Diagnosis" value={currentJob.action_report?.diagnosis} />
+                <DetailRow label="Action Taken" value={currentJob.action_report?.action_taken} />
+                <DetailRow label="Serial Number" value={currentJob.action_report?.serial_number} />
+                <DetailRow label="Brand Name" value={currentJob.action_report?.brand_name} />
+                <DetailRow label="Brand Model" value={currentJob.action_report?.brand_model} />
+                <DetailRow label="Software Name" value={currentJob.action_report?.software_name} />
+                <DetailRow label="Remarks" value={currentJob.action_report?.remarks} />
+                <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                    Status
+                  </div>
+                  <StatusBadge value={getStatusText(currentJob, 'Draft')} tone="blue" />
+                </div>
               </div>
             ) : (
-              <div className="text-gray-400">No data</div>
+              <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-10 text-center text-sm text-gray-400">
+                No current job order data available.
+              </div>
             )}
           </div>
+        </div>
+
+        {/* Mobile buttons */}
+        <div className="mt-5 flex items-center justify-center gap-3 lg:hidden">
+          <button
+            type="button"
+            onClick={onPrev}
+            disabled={!hasPrev}
+            className="inline-flex h-10 min-w-[110px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            &#x276E;
+            <span className="ml-2">Previous</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={!hasNext}
+            className="inline-flex h-10 min-w-[110px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            <span className="mr-2">Next</span>
+            &#x276F;
+          </button>
         </div>
       </div>
     </div>
@@ -93,7 +254,7 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
     debounceRef.current = setTimeout(() => {
       axios
         .get('/serial-number/search', { params: { serial_number: value } })
-        .then(res => setResult(res.data))
+        .then((res) => setResult(res.data))
         .catch(() => setResult({ count: 0, jobs: [] }))
         .finally(() => setSearching(false));
     }, 400);
@@ -101,7 +262,6 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
     return () => clearTimeout(debounceRef.current);
   }, [value]);
 
-  // When badge is clicked, open compare modal with the latest job as "old"
   const handleBadgeClick = () => {
     if (result.jobs.length > 0) {
       setCurrentIndex(0);
@@ -109,7 +269,6 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
     }
   };
 
-  // The current job (right card) is passed as prop, fallback to minimal info if not provided
   const newJob = currentJob
     ? currentJob
     : {
@@ -121,12 +280,12 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
         serial_number: value,
       };
 
-  // Navigation handlers
   const handlePrev = () => {
-    setCurrentIndex(idx => Math.max(0, idx - 1));
+    setCurrentIndex((idx) => Math.max(0, idx - 1));
   };
+
   const handleNext = () => {
-    setCurrentIndex(idx => Math.min(result.jobs.length - 1, idx + 1));
+    setCurrentIndex((idx) => Math.min(result.jobs.length - 1, idx + 1));
   };
 
   return (
@@ -134,37 +293,52 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
       <input
         type="text"
         value={value}
-        onChange={e => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg p-2 text-sm pr-16"
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-gray-300 p-2 pr-16 text-sm"
         placeholder="Enter Serial Number"
         disabled={readOnly}
       />
-      {/* Badge with clock icon and number */}
+
       {value && result.count > 0 && (
         <button
           type="button"
           onClick={handleBadgeClick}
-          className="absolute right-2 top-2 flex items-center px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs font-semibold border border-yellow-300 shadow"
+          className="absolute right-2 top-2 flex items-center rounded-full border border-yellow-300 bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-700 shadow"
           tabIndex={-1}
         >
-          {/* Clock icon */}
-          <svg className="w-4 h-4 mr-1 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg
+            className="mr-1 h-4 w-4 text-yellow-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
             <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={2} />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" />
           </svg>
           <span className="font-bold">{result.count}</span>
         </button>
       )}
-      {/* Blur overlay while searching */}
+
       {searching && (
-        <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-lg z-10">
-          <svg className="animate-spin h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/60">
+          <svg className="h-5 w-5 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
           </svg>
         </div>
       )}
-      {/* Compare Modal */}
+
       <SerialNumberCompareModal
         isOpen={compareModalOpen}
         onClose={() => setCompareModalOpen(false)}
@@ -177,4 +351,3 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
     </div>
   );
 }
-
