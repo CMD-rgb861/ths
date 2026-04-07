@@ -183,21 +183,16 @@ class ActionReportController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($actionReport, $jobOrder) {
-            // ✅ Update action report
+        DB::transaction(function () use ($actionReport) {
+            // ✅ Update action report: set conformed, but keep status as Ongoing
             $actionReport->update([
                 'conformed'     => true,
-                'status'        => 'Completed',
                 'confirmed_at'  => now(),
                 'confirmed_by'  => Auth::id(),
-                'date_finished' => now(),
+                // Do NOT set status to Completed, keep as Ongoing
+                // Do NOT set date_finished here
             ]);
-
-            // ✅ Update job order status by id (not name)
-            $completedStatusId = RequestStatus::where('name', 'Completed')->value('id');
-            if ($completedStatusId) {
-                $jobOrder->update(['status' => $completedStatusId]);
-            }
+            // Do NOT update job order status to Completed
         });
 
         return response()->json([

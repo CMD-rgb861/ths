@@ -8,6 +8,7 @@ import StatusBadge from './ui/StatusBadge';
 import StatusIndicator from './ui/StatusIndicator';
 import JobOrderForm from './JobOrderForm';
 import NewJobOrdersModal from './NewJobOrdersModal';
+import ConfirmModal from './ConfirmModal'; // If not already imported
 
 const PER_PAGE = 10;
 
@@ -21,7 +22,7 @@ function isRole(user, roleName) {
   return false;
 }
 
-export default function JobOrderList({ showNotification, setNewPendingJobs, newPendingJobs, isAdmin: isAdminProp, user: userProp }) {
+export default function JobOrderList({ showNotification, setNewPendingJobs, newPendingJobs, isAdmin: isAdminProp, isTechnician: isTechnicianProp, user: userProp }) {
   const location = useLocation();
   
   const [jobs, setJobs] = useState([]);
@@ -34,6 +35,8 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   const [selectedOngoingJob, setSelectedOngoingJob] = useState(null);
   const [ongoingModalOpen, setOngoingModalOpen] = useState(false);
   const [isNewJobsModalOpen, setIsNewJobsModalOpen] = useState(false);
+  const [closeJobId, setCloseJobId] = useState(null);
+  const [closeLoading, setCloseLoading] = useState(false);
 
   // Use props if provided, otherwise fallback to localStorage
   let user = userProp;
@@ -151,6 +154,56 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
     }
     
     fetchJobs();
+  };
+
+  // Helper to get status id for "Completed"
+  const [statusOptions, setStatusOptions] = useState([]);
+  useEffect(() => {
+    axios.get('/request-statuses')
+      .then(res => {
+        if (Array.isArray(res.data)) setStatusOptions(res.data);
+        else if (Array.isArray(res.data?.data)) setStatusOptions(res.data.data);
+        else setStatusOptions([]);
+      })
+      .catch(() => setStatusOptions([]));
+  }, []);
+
+  const getStatusId = (statusName) => {
+    const found = statusOptions.find(s => s.name === statusName);
+    return found ? found.id : statusName;
+  };
+
+  // --- CLOSE JOB LOGIC ---
+  const handleCloseJob = async (job) => {
+    setCloseLoading(true);
+    try {
+      // 1. Update action report: set action_taken = "Closed"
+      await axios.put(`/job-orders/${job.id}/action-report`, {
+        action_taken: 'Closed',
+      });
+      // 2. Update job order: set status = Completed
+      const statusId = getStatusId('Completed');
+      await axios.put(`/job-orders/${job.id}`, {
+        status: statusId,
+        action_taken: 'Closed',
+      });
+      showNotification(
+        'success',
+        'Job Order Closed',
+        'The job order has been marked as completed/closed.'
+      );
+      // Refresh jobs
+      fetchJobs(search, page);
+    } catch (error) {
+      showNotification(
+        'error',
+        'Error',
+        'Failed to close the job order.'
+      );
+    } finally {
+      setCloseLoading(false);
+      setCloseJobId(null);
+    }
   };
 
   // Calculated counts (admin only)
@@ -320,7 +373,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                   <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -386,7 +439,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                       </div>
                     </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
                       <button
                         onClick={() => openModal(job)}
                         className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150"
@@ -397,6 +450,21 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                         </svg>
                         View Details
                       </button>
+                      {/* --- Show Close button if conformed is true and status is Ongoing, and user is admin/technician --- */}
+                      {((job.action_report?.conformed === true || job.action_report?.conformed === 1) &&
+                        job.action_report?.status === 'Ongoing' &&
+                        (isAdmin || isTechnician)) && (
+                        <button
+                          onClick={() => setCloseJobId(job.id)}
+                          className="inline-flex items-center px-4 py-2 ml-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-150"
+                          disabled={closeLoading}
+                        >
+                          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          {closeLoading && closeJobId === job.id ? 'Closing...' : 'Close'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -473,6 +541,21 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         newPendingJobs={newPendingJobs}
         onViewJob={handleViewFromNotification}
         onMarkAllViewed={handleMarkAllViewed}
+      />
+
+      {/* Confirm Close Modal */}
+      <ConfirmModal
+        isOpen={!!closeJobId}
+        title="Close Job Order"
+        message="Are you sure you want to close this job order? This will mark it as completed and closed."
+        confirmText="Yes, Close"
+        cancelText="Cancel"
+        loading={closeLoading}
+        onConfirm={() => {
+          const job = jobs.find(j => j.id === closeJobId);
+          if (job) handleCloseJob(job);
+        }}
+        onCancel={() => setCloseJobId(null)}
       />
     </div>
   );

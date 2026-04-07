@@ -361,7 +361,7 @@ export default function JobOrderStatusPage({ showNotification }) {
                   <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Service Status
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-center text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -416,7 +416,7 @@ export default function JobOrderStatusPage({ showNotification }) {
                       </span>
                     </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
                       <button
                         onClick={() => handleView(order)}
                         className="inline-flex items-center px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"

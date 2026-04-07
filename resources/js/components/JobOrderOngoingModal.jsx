@@ -175,6 +175,20 @@ export default function JobOrderOngoingModal({
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
+  // Helper: Should show confirm button for admin/technician as requester
+  const shouldShowConfirmForAdmin = (jobData, formData) => {
+    if (!isAdmin) return false;
+    if (!jobData || !formData) return false;
+    const isRequester = jobData?.requester?.id === currentUser?.id;
+    return (
+      isRequester &&
+      jobData?.action_report?.status === 'Ongoing' &&
+      formData.diagnosis &&
+      formData.action_taken &&
+      !jobData?.action_report?.confirmed_at
+    );
+  };
+
   // Load job order data
   const loadJob = useCallback(() => {
     if (!jobId) return;
@@ -188,7 +202,7 @@ export default function JobOrderOngoingModal({
         setJob(data);
 
         const ar = data.action_report;
-        setForm({
+        const newForm = {
           diagnosis: ar?.diagnosis || '',
           action_taken: ar?.action_taken || '',
           status: ar?.status && !isNaN(ar.status) ? parseInt(ar.status, 10) : 'Pending',
@@ -199,15 +213,16 @@ export default function JobOrderOngoingModal({
           cancel: ar?.status === 'Cancelled',
           unserviceable: ar?.status === 'Unserviceable',
           remarks: ar?.remarks || '',
-        });
+        };
+        setForm(newForm);
 
-        setShowConfirmForAdmin(false);
+        // --- FIX: Always recompute showConfirmForAdmin after loading job ---
+        setShowConfirmForAdmin(shouldShowConfirmForAdmin(data, newForm));
 
         const csmDone = !!ar?.csm_completed;
         setCsmCompleted(csmDone);
         setCsmChecked(csmDone);
 
-        // If you store these fields in job.action_report or job, update here accordingly
         setHardwareFields({
           serial_number: ar?.serial_number || '',
           brand_name: ar?.brand_name || '',
@@ -426,7 +441,7 @@ export default function JobOrderOngoingModal({
       setJob(updatedJob);
 
       const ar = updatedJob.action_report;
-      setForm({
+      const newForm = {
         diagnosis: ar?.diagnosis || '',
         action_taken: ar?.action_taken || '',
         status: ar?.status && !isNaN(ar.status) ? parseInt(ar.status, 10) : 'Pending',
@@ -437,7 +452,11 @@ export default function JobOrderOngoingModal({
         cancel: ar?.status === "Cancelled",
         unserviceable: ar?.status === "Unserviceable",
         remarks: ar?.remarks || '',
-      });
+      };
+      setForm(newForm);
+
+      // --- FIX: Always recompute showConfirmForAdmin after save ---
+      setShowConfirmForAdmin(shouldShowConfirmForAdmin(updatedJob, newForm));
 
       // Notify parent
       try {

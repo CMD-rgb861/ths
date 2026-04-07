@@ -40,7 +40,12 @@ class JobOrderController extends Controller
 
         // Check if filtering by a status that depends on action_reports timestamps
         $statusFilter = $request->input('status');
-        $isActionReportStatusFilter = in_array($statusFilter, ['Completed', 'Ongoing', 'Cancelled', 'Unserviceable']);
+        $isActionReportStatusFilter = false;
+        if ($statusFilter) {
+            // Get the status name from the id
+            $statusName = DB::table('request_statuses')->where('id', $statusFilter)->value('name');
+            $isActionReportStatusFilter = in_array($statusName, ['Completed', 'Ongoing', 'Cancelled', 'Unserviceable']);
+        }
 
         // Default sort
         $sortBy = $request->input('sort', 'newest');

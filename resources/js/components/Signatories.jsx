@@ -45,7 +45,7 @@ const Signatories = ({ showNotification }) => {
       setSignatory(res.data || null);
       setName(res.data?.name || '');
       if (showNotification) {
-        showNotification('success', 'Saved Successfully', 'IT Director saved. Future approvals will use this name.');
+        showNotification('success', 'Saved Successfully', 'ITS Director saved. Future approvals will use this name.');
       }
     } catch (err) {
       console.error('Failed to save signatory', err.response || err.message);
@@ -61,9 +61,9 @@ const Signatories = ({ showNotification }) => {
     <div className="space-y-6">
       {/* Header Card (Always visible, no loading) */}
       <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
-        <h1 className="text-2xl font-bold text-gray-900">Signatories (IT Director)</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Signatories (ITS Director)</h1>
         <p className="text-gray-600 mt-1">
-          Set the IT Director name used for approvals and unserviceable reports
+          Set the ITS Director name used for approvals and unserviceable reports
         </p>
       </div>
 
@@ -89,7 +89,7 @@ const Signatories = ({ showNotification }) => {
                 </svg>
                 <div>
                   <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide">
-                    Current IT Director
+                    Current ITS Director
                   </p>
                   <p className="text-sm font-medium text-blue-900 mt-0.5">
                     {refreshing ? (
@@ -126,7 +126,7 @@ const Signatories = ({ showNotification }) => {
                 onClick={() => fetchSignatory(true)}
                 disabled={refreshing}
                 className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                title="Refresh current IT Director"
+                title="Refresh current ITS Director"
               >
                 <svg
                   className={`w-3.5 h-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`}
@@ -154,7 +154,7 @@ const Signatories = ({ showNotification }) => {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter IT Director name"
+              placeholder="Enter ITS Director name"
               className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
             <p className="text-xs text-gray-500 mt-2">
