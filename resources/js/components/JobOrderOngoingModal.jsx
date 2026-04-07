@@ -947,11 +947,14 @@ export default function JobOrderOngoingModal({
                                     className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     disabled={readOnly}
                                   >
-                                    {serviceStatuses.map(status => (
-                                      <option key={status.id} value={status.name}>
-                                        {status.name}
-                                      </option>
-                                    ))}
+                                    {/* Only show options that are NOT "Closed" */}
+                                    {serviceStatuses
+                                      .filter(status => status.name !== "Closed")
+                                      .map(status => (
+                                        <option key={status.id} value={status.name}>
+                                          {status.name}
+                                        </option>
+                                      ))}
                                   </select>
                                   {/* Always show optional remarks since Diagnosed is always selected */}
                                   <div className="mt-2 space-y-2">
