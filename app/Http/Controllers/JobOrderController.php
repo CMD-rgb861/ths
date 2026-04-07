@@ -94,6 +94,7 @@ class JobOrderController extends Controller
             $query->where('job_orders.created_at', '>', $request->input('created_after'));
         }
 
+        // --- FIX: Only restrict to own jobs for normal users, not for admin/technician ---
         if (!$request->user()->isAdmin() && !$request->user()->isTechnician()) {
             $query->where('job_orders.requested_by', $request->user()->id);
         }

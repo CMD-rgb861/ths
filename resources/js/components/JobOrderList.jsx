@@ -56,20 +56,24 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
     setLoading(true);
 
     try {
-      const res = await axios.get('/job-orders', {
-        params: { search: searchValue }
-      });
+      // Always fetch all jobs for admin/technician, and only own jobs for normal user
+      let params = { search: searchValue, per_page: 1000 }; // fetch all for client-side pagination
+      const res = await axios.get('/job-orders', { params });
 
       let data = res.data.data || [];
 
-      // Filter: Keep only Pending & Ongoing
-      data = data.filter(job =>
-        ['Pending', 'Ongoing'].includes(job.action_report?.status || 'Pending')
-      );
-
-      // Only normal users see their own jobs
-      if (!isAdmin && !isTechnician) {
-        data = data.filter(job => job.requested_by === userId);
+      // --- FIX: Admin/Technician see ALL Pending & Ongoing, User sees only their own ---
+      if (isAdmin || isTechnician) {
+        // Show all jobs with Pending or Ongoing status
+        data = data.filter(job =>
+          ['Pending', 'Ongoing'].includes(job.action_report?.status || 'Pending')
+        );
+      } else {
+        // Only normal users see their own jobs with Pending or Ongoing status
+        data = data.filter(job =>
+          job.requested_by === userId &&
+          ['Pending', 'Ongoing'].includes(job.action_report?.status || 'Pending')
+        );
       }
 
       // Calculate pagination
