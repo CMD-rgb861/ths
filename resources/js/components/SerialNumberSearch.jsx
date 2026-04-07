@@ -284,6 +284,9 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
   const [currentIndex, setCurrentIndex] = useState(0);
   const debounceRef = useRef(null);
 
+  // Get current job id if available
+  const currentJobId = currentJob?.id;
+
   useEffect(() => {
     const trimmed = (value || '').trim();
 
@@ -303,7 +306,10 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
     debounceRef.current = setTimeout(() => {
       axios
         .get('/serial-number/search', {
-          params: { serial_number: trimmed },
+          params: {
+            serial_number: trimmed,
+            ...(currentJobId ? { exclude_job_id: currentJobId } : {}),
+          },
           signal: controller.signal,
         })
         .then((res) => setResult(res.data))
@@ -315,7 +321,6 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
           ) {
             return;
           }
-
           setResult({ count: 0, jobs: [] });
         })
         .finally(() => {
@@ -327,7 +332,7 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
       clearTimeout(debounceRef.current);
       controller.abort();
     };
-  }, [value]);
+  }, [value, currentJobId]);
 
   const handleBadgeClick = () => {
     if (result.jobs.length > 0) {
@@ -337,6 +342,9 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
   };
 
   const trimmedValue = (value || '').trim();
+
+  // Only show badge if there are OTHER jobs (not just the current job)
+  const showHistoryBadge = trimmedValue && result.count > 0 && result.jobs.length > 0;
 
   const newJob = currentJob
     ? currentJob
@@ -362,7 +370,7 @@ export default function SerialNumberSearch({ value, onChange, readOnly, currentJ
         disabled={readOnly}
       />
 
-      {trimmedValue && result.count > 0 && (
+      {showHistoryBadge && (
         <button
           type="button"
           onClick={handleBadgeClick}

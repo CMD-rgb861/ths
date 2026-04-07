@@ -16,6 +16,10 @@ const STATUS_STYLES = {
   Ongoing: 'bg-blue-100 text-blue-800',
   Completed: 'bg-green-100 text-green-800',
   Cancelled: 'bg-red-100 text-red-800',
+  'Cancelled by User': 'bg-red-100 text-red-800',
+  Unserviceable: 'bg-gray-200 text-gray-800',
+  // fallback
+  Default: 'bg-gray-100 text-gray-700',
 };
 
 export default function JobOrderReports({ isAdmin, user, showNotification }) {
@@ -655,6 +659,8 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
                     order.signature_name && order.requester?.role === 'admin'
                       ? `(${order.requester?.name})`
                       : order.requester?.name || '—';
+                  // Use pill color for request status
+                  const pillClass = STATUS_STYLES[requestStatus] || STATUS_STYLES.Default;
                   return (
                     <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
@@ -667,7 +673,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
                         {requestedBy}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${pillClass}`}>
                           {requestStatus}
                         </span>
                       </td>
