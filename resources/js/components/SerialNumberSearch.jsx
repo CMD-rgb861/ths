@@ -93,6 +93,8 @@ function SerialNumberCompareModal({
     showHistoryHint = false,
   }) => (
     <div className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+      {/* DEBUG: Show the job object */}
+      {/* <pre>{JSON.stringify(job, null, 2)}</pre> */}
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/95 px-5 py-4 backdrop-blur">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -149,6 +151,12 @@ function SerialNumberCompareModal({
               <InfoField
                 label="Categories"
                 value={getCategoriesText(job)}
+                className="sm:col-span-2"
+              />
+              {/* Add Request Description */}
+              <InfoField
+                label="Request Description"
+                value={job?.request_description}
                 className="sm:col-span-2"
               />
             </Section>

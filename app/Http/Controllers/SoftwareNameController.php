@@ -54,6 +54,7 @@ class SoftwareNameController extends Controller
                 'requested_by',
                 'created_at',
                 'status',
+                'request_description',
             ]);
 
         return response()->json([

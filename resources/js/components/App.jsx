@@ -12,6 +12,7 @@ import UserJobHistory from './UserJobHistory';
 import WelcomePage from './WelcomePage';
 import ConfirmModal from './ConfirmModal';
 import SerialNumberHistory from './SerialNumberHistory';
+import SoftwareHistory from './SoftwareHistory'; // Add this import
 
 // Utility function for role check
 function isRole(user, roleName) {
@@ -216,6 +217,15 @@ export default function App() {
                                 <span>Serial History</span>
                               </span>
                             </NavLink>
+                            {/* Add Software History link */}
+                            <NavLink to="/software-history" className={navLinkClass}>
+                              <span className="flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
+                                <span>Software History</span>
+                              </span>
+                            </NavLink>
                             {isAdmin && (
                               <>
                                 <NavLink to="/users" className={navLinkClass}>
@@ -310,6 +320,11 @@ export default function App() {
                       path="/serial-history"
                       element={<SerialNumberHistory />}
                     />
+                    {/* Add Software History route */}
+                    <Route
+                      path="/software-history"
+                      element={<SoftwareHistory />}
+                    />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </div>
@@ -363,7 +378,7 @@ export default function App() {
 
       {/* Confirmation Modal for Switch Role */}
       <ConfirmModal
-        isOpen={showSwitchConfirm}
+        show={showSwitchConfirm}
         title="Switch Role"
         message="Are you sure you want to switch your role? You will be redirected to the role selection page."
         confirmText="Yes, Switch"

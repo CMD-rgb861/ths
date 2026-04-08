@@ -152,6 +152,12 @@ function SoftwareNameCompareModal({
                 value={getCategoriesText(job)}
                 className="sm:col-span-2"
               />
+              {/* Add Request Description */}
+              <InfoField
+                label="Request Description"
+                value={job?.request_description}
+                className="sm:col-span-2"
+              />
             </Section>
 
             <Section title="Timeline">

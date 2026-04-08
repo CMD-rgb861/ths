@@ -51,9 +51,10 @@ class SerialNumberController extends Controller
                 'id',
                 'job_order_no',
                 'department_id',
-                'requested_by', // If your relation uses requester_id instead, replace this line with 'requester_id'
+                'requested_by',
                 'created_at',
                 'status',
+                'request_description', // <-- this must exist in your job_orders table
             ]);
 
         return response()->json([
