@@ -99,4 +99,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Serial number search
     Route::get('/serial-number/search', [SerialNumberController::class, 'search']);
+    // Software name search
+    Route::get('/software-name/search', [\App\Http\Controllers\SoftwareNameController::class, 'search']);
 });

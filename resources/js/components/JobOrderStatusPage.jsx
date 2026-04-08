@@ -304,10 +304,15 @@ export default function JobOrderStatusPage({ showNotification }) {
                     const value = e.target.value;
                     setSelectedStatusId(value);
                     setPage(1);
+                    // FIX: Only navigate if a status is selected, otherwise just clear the filter
                     if (value) {
                       navigate(`/reports/status/${value}`);
                     } else {
-                      navigate(`/reports/status`);
+                      // Instead of navigating to /reports/status, just clear the filter and stay on the same page
+                      // setSelectedStatusId(''); // already set above
+                      // Optionally, you can update the URL to /reports/status (optional)
+                      // navigate('/reports/status');
+                      // But do NOT navigate to "/" or JobOrderList
                     }
                   }}
                   className="block appearance-none w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"

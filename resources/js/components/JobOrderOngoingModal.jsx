@@ -3,6 +3,7 @@ import axios from 'axios';
 import UnserviceableModal from './UnserviceableModal';
 import CSMModal from './CSMModal';
 import SerialNumberSearch from './SerialNumberSearch';
+import SoftwareNameSearch from './SoftwareNameSearch';
 
 const TABS = ['Details', 'Dates'];
 
@@ -1087,13 +1088,12 @@ export default function JobOrderOngoingModal({
                                       {softwareName || '—'}
                                     </div>
                                   ) : (
-                                    <input
-                                      type="text"
-                                      name="software_name"
+                                    // Use SoftwareNameSearch instead of plain input
+                                    <SoftwareNameSearch
                                       value={softwareName}
-                                      onChange={e => setSoftwareName(e.target.value)}
-                                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="Enter Software Name"
+                                      onChange={setSoftwareName}
+                                      readOnly={readOnly}
+                                      currentJob={job}
                                     />
                                   )}
                                 </div>
