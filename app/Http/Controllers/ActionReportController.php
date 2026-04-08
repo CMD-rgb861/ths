@@ -83,6 +83,12 @@ class ActionReportController extends Controller
             abort(404, 'Action Report not found.');
         }
 
+        // NEW: detect unserviceable + conformed so we preserve service status
+        $preserveUnserviceable = (
+            $actionReport->conformed &&
+            in_array($actionReport->action_taken, ['Unserviceable with Form', 'Unserviceable without Form'])
+        );
+
         $validated = $request->validate([
             'diagnosis'     => ['nullable', 'string'],
             'action_taken'  => ['nullable', 'string', 'exists:service_statuses,name'],
@@ -95,6 +101,11 @@ class ActionReportController extends Controller
             'brand_model' => ['nullable', 'string'],
             'software_name' => ['nullable', 'string'],
         ]);
+
+        // If we must preserve unserviceable status, drop incoming action_taken
+        if ($preserveUnserviceable) {
+            unset($validated['action_taken']);
+        }
 
         // Validate technician
         if (!empty($validated['serviced_by'])) {

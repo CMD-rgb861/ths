@@ -154,16 +154,26 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   const handleCloseJob = async (job) => {
     setCloseLoading(true);
     try {
-      // 1. Update action report: set action_taken = "Closed"
-      await axios.put(`/job-orders/${job.id}/action-report`, {
-        action_taken: 'Closed',
-      });
+      // Check if we should preserve the current service status (Unserviceable with/without Form + conformed)
+      const keepServiceStatus =
+        (job.action_report?.conformed === true || job.action_report?.conformed === 1) &&
+        (job.action_report?.action_taken === 'Unserviceable with Form' ||
+         job.action_report?.action_taken === 'Unserviceable without Form');
+
+      // 1. Update action report: set action_taken = "Closed" (ONLY if we don't want to preserve)
+      if (!keepServiceStatus) {
+        await axios.put(`/job-orders/${job.id}/action-report`, {
+          action_taken: 'Closed',
+        });
+      }
+
       // 2. Update job order: set status = Completed
       const statusId = getStatusId('Completed');
       await axios.put(`/job-orders/${job.id}`, {
         status: statusId,
-        action_taken: 'Closed',
+        action_taken: 'Closed', // backend will decide whether to keep or overwrite action_taken
       });
+
       showNotification(
         'success',
         'Job Order Closed',

@@ -383,7 +383,7 @@ class JobOrderController extends Controller
             // Get the status name from the id
             $statusName = RequestStatus::find($validated['status'])?->name;
 
-            // --- FIX: If admin is denying, always set Completed/Closed regardless of incoming status ---
+            // --- FIX: If admin is denying/closing, always set Completed, but preserve Unserviceable action_taken when appropriate ---
             if (
                 $request->user()->isAdmin() &&
                 (
@@ -393,10 +393,23 @@ class JobOrderController extends Controller
                 )
             ) {
                 $completedStatusId = RequestStatus::where('name', 'Completed')->value('id');
+
+                // Decide whether to keep existing action_taken (Unserviceable with/without Form + conformed)
+                $keepUnserviceableActionTaken =
+                    ($actionReport->conformed === true || $actionReport->conformed === 1) &&
+                    in_array($actionReport->action_taken, [
+                        'Unserviceable with Form',
+                        'Unserviceable without Form',
+                    ], true);
+
+                $newActionTaken = $keepUnserviceableActionTaken
+                    ? $actionReport->action_taken   // preserve Unserviceable with/without Form
+                    : 'Closed';                     // normal close
+
                 $jobOrder->update(['status' => $completedStatusId]);
                 $actionReport->update([
                     'status' => 'Completed',
-                    'action_taken' => 'Closed',
+                    'action_taken' => $newActionTaken,
                     'remarks' => $validated['remarks'] ?? $actionReport->remarks,
                 ]);
                 $jobOrder = $jobOrder->load([
