@@ -190,9 +190,12 @@ export default function SerialNumberHistory() {
   const [search, setSearch] = useState('');
   const [detailModalJob, setDetailModalJob] = useState(null);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const perPage = 10;
+
   useEffect(() => {
     setLoading(true);
-
     axios
       .get('/job-orders', { params: { per_page: 1000 } })
       .then((res) => {
@@ -201,6 +204,11 @@ export default function SerialNumberHistory() {
       .catch(() => setJobs([]))
       .finally(() => setLoading(false));
   }, []);
+
+  // Reset to first page on filter/search
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, category]);
 
   const filtered = jobs.filter((job) => {
     const ar = job.action_report;
@@ -216,6 +224,10 @@ export default function SerialNumberHistory() {
 
     return true;
   });
+
+  // Pagination logic
+  const pageCount = Math.ceil(filtered.length / perPage);
+  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
 
   const getRequestStatus = (job) => {
     if (
@@ -327,7 +339,7 @@ export default function SerialNumberHistory() {
                 </td>
               </tr>
             ) : (
-              filtered.map((job) => {
+              paginated.map((job) => {
                 const ar = job.action_report;
                 const cats = job.categories?.map((c) => c.name).join(', ') || '';
                 const reqStatus = getRequestStatus(job);
@@ -417,7 +429,26 @@ export default function SerialNumberHistory() {
           </tbody>
         </table>
       </div>
-
+      {/* Always show pagination controls */}
+      <div className="flex justify-center items-center gap-6 mt-4">
+        <button
+          className="flex items-center px-4 py-2 rounded border text-sm font-medium disabled:opacity-50"
+          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          disabled={currentPage === 1}
+        >
+          <span className="mr-2">&lt;</span> Previous
+        </button>
+        <span className="text-sm font-medium">
+          Page {pageCount === 0 ? 0 : currentPage} of {pageCount === 0 ? 1 : pageCount}
+        </span>
+        <button
+          className="flex items-center px-4 py-2 rounded border text-sm font-medium disabled:opacity-50"
+          onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
+          disabled={currentPage === pageCount || pageCount === 0}
+        >
+          Next <span className="ml-2">&gt;</span>
+        </button>
+      </div>
       <SerialNumberDetailModal
         isOpen={!!detailModalJob}
         job={detailModalJob}

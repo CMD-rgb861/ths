@@ -85,6 +85,9 @@ export default function JobOrderStatusPage({ showNotification }) {
       const params = { page, search, sort: sortBy };
       if (selectedStatusId) {
         params.status = selectedStatusId;
+      } else {
+        // Add a custom param to indicate "All Status" for this page
+        params.status_filter = 'all_status_page';
       }
 
       axios
@@ -133,6 +136,8 @@ export default function JobOrderStatusPage({ showNotification }) {
         const found = statusOptions.find(s => s.name.toLowerCase() === status.toLowerCase());
         if (found) {
           setSelectedStatusId(String(found.id));
+          // Optionally, navigate to the correct URL with the ID
+          // navigate(`/reports/status/${found.id}`);
         } else {
           setSelectedStatusId('');
         }

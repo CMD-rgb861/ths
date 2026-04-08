@@ -177,6 +177,10 @@ export default function SoftwareHistory() {
   const [search, setSearch] = useState('');
   const [detailModalJob, setDetailModalJob] = useState(null);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const perPage = 10;
+
   useEffect(() => {
     setLoading(true);
     axios
@@ -188,6 +192,11 @@ export default function SoftwareHistory() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Reset to first page on search
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
   const filtered = jobs.filter((job) => {
     const ar = job.action_report;
     if (!ar || !ar.software_name) return false;
@@ -197,6 +206,10 @@ export default function SoftwareHistory() {
     if (search && !ar.software_name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  // Pagination logic
+  const pageCount = Math.ceil(filtered.length / perPage);
+  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
 
   const getRequestStatus = (job) => {
     if (
@@ -283,7 +296,7 @@ export default function SoftwareHistory() {
                 </td>
               </tr>
             ) : (
-              filtered.map((job) => {
+              paginated.map((job) => {
                 const ar = job.action_report;
                 const reqStatus = getRequestStatus(job);
                 return (
@@ -360,6 +373,26 @@ export default function SoftwareHistory() {
             )}
           </tbody>
         </table>
+      </div>
+      {/* Always show pagination controls */}
+      <div className="flex justify-center items-center gap-6 mt-4">
+        <button
+          className="flex items-center px-4 py-2 rounded border text-sm font-medium disabled:opacity-50"
+          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          disabled={currentPage === 1}
+        >
+          <span className="mr-2">&lt;</span> Previous
+        </button>
+        <span className="text-sm font-medium">
+          Page {pageCount === 0 ? 0 : currentPage} of {pageCount === 0 ? 1 : pageCount}
+        </span>
+        <button
+          className="flex items-center px-4 py-2 rounded border text-sm font-medium disabled:opacity-50"
+          onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
+          disabled={currentPage === pageCount || pageCount === 0}
+        >
+          Next <span className="ml-2">&gt;</span>
+        </button>
       </div>
       <SoftwareDetailModal
         isOpen={!!detailModalJob}

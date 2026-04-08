@@ -38,9 +38,9 @@ class JobOrderController extends Controller
             'requestStatus', // <-- eager load status relation
         ]);
 
-        // Check if filtering by a status that depends on action_reports timestamps
         $statusFilter = $request->input('status');
         $isActionReportStatusFilter = false;
+        $statusName = null;
         if ($statusFilter) {
             // Get the status name from the id
             $statusName = DB::table('request_statuses')->where('id', $statusFilter)->value('name');
@@ -54,7 +54,7 @@ class JobOrderController extends Controller
         switch ($sortBy) {
             case 'oldest':
                 if ($isActionReportStatusFilter) {
-                    $query->join('action_reports', 'job_orders.id', '=', 'action_reports.job_order_id')
+                    $query->leftJoin('action_reports', 'job_orders.id', '=', 'action_reports.job_order_id')
                         ->orderBy('action_reports.updated_at', 'asc')
                         ->select('job_orders.*');
                 } else {
@@ -85,7 +85,7 @@ class JobOrderController extends Controller
             case 'newest':
             default:
                 if ($isActionReportStatusFilter) {
-                    $query->join('action_reports', 'job_orders.id', '=', 'action_reports.job_order_id')
+                    $query->leftJoin('action_reports', 'job_orders.id', '=', 'action_reports.job_order_id')
                         ->orderBy('action_reports.updated_at', 'desc')
                         ->select('job_orders.*');
                 } else {
@@ -154,27 +154,46 @@ class JobOrderController extends Controller
             $totals[$name] = (clone $allJobsQuery)->where('status', $id)->count();
         }
 
-        // Check if per_page is provided and handle accordingly
-        $perPage = $request->input('per_page', 10);
-        
-        // If per_page is set to a high number (e.g., 1000) or -1, get all results
-        if ($perPage == -1 || $perPage >= 1000) {
-            $jobs = $query->get();
-            $jobs = $this->transformJobs($jobs);
-
-            return response()->json([
-                'data' => $jobs,
-                'meta' => [
-                    'current_page' => 1,
-                    'last_page' => 1,
-                    'per_page' => $jobs->count(),
-                    'total' => $jobs->count(),
-                ],
-                'totals' => $totals,
-            ]);
+        // --- Add conform_filter backend filtering ---
+        $conformFilter = $request->input('conform_filter', 'all');
+        $statusFilterType = $request->input('status_filter');
+        // Only apply conform_filter if no explicit status filter is set and not the special all_status_page filter
+        if (!$request->filled('status') && $statusFilterType !== 'all_status_page') {
+            if ($conformFilter === 'all') {
+                // Only Pending/Ongoing by default (scalable, paginated)
+                $query->whereHas('actionReport', function ($q) {
+                    $q->whereIn('status', ['Pending', 'Ongoing']);
+                });
+            } elseif ($conformFilter === 'conformed') {
+                $query->whereHas('actionReport', function ($q) {
+                    $q->where(function ($sub) {
+                        $sub->where('conformed', true)
+                            ->orWhere('conformed', 1);
+                    })
+                    ->where('status', 'Ongoing'); // Only Ongoing jobs
+                });
+            } elseif ($conformFilter === 'awaiting') {
+                $query->whereHas('actionReport', function ($q) {
+                    $q->where(function ($sub) {
+                        $sub->where(function ($c) {
+                            $c->where('conformed', false)
+                              ->orWhere('conformed', 0)
+                              ->orWhereNull('conformed');
+                        })
+                        ->whereNotNull('diagnosis')
+                        ->whereNotNull('action_taken')
+                        ->where('status', 'Ongoing'); // Only Ongoing jobs
+                    });
+                });
+            }
+        }
+        // If status_filter=all_status_page, do not apply any status or conform filter (show all job orders for this page)
+        if ($statusFilterType === 'all_status_page') {
+            // Do not apply any status or conform filter
         }
 
-        // Paginated data
+        // Remove per_page == 1000 logic, always use pagination
+        $perPage = $request->input('per_page', 10);
         $jobs = $query->paginate($perPage);
         $jobsTransformed = $this->transformJobs($jobs->items());
 

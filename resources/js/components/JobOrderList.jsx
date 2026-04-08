@@ -37,6 +37,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   const [isNewJobsModalOpen, setIsNewJobsModalOpen] = useState(false);
   const [closeJobId, setCloseJobId] = useState(null);
   const [closeLoading, setCloseLoading] = useState(false);
+  const [filter, setFilter] = useState('all'); // 'all', 'conformed', 'awaiting'
 
   // Use props if provided, otherwise fallback to localStorage
   let user = userProp;
@@ -53,54 +54,30 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   const userId = user?.id;
 
   // Fetch job orders with filters
-  const fetchJobs = useCallback(async (searchValue = search, pageValue = page) => {
+  const fetchJobs = useCallback(async (searchValue = search, pageValue = page, filterValue = filter) => {
     if (loading) return;
 
     setLoading(true);
 
     try {
-      // Always fetch all jobs for admin/technician, and only own jobs for normal user
-      let params = { search: searchValue, per_page: 1000 }; // fetch all for client-side pagination
+      let params = {
+        search: searchValue,
+        per_page: PER_PAGE,
+        page: pageValue,
+        conform_filter: filterValue // Only send filter to backend
+      };
+      // Removed: any client-side filtering for status/conformed/awaiting
       const res = await axios.get('/job-orders', { params });
 
       let data = res.data.data || [];
 
-      // --- FIX: Admin/Technician see ALL Pending & Ongoing, User sees only their own ---
-      if (isAdmin || isTechnician) {
-        // Show all jobs with Pending or Ongoing status
-        data = data.filter(job =>
-          ['Pending', 'Ongoing'].includes(job.action_report?.status || 'Pending')
-        );
-      } else {
-        // Only normal users see their own jobs with Pending or Ongoing status
-        data = data.filter(job =>
-          job.requested_by === userId &&
-          ['Pending', 'Ongoing'].includes(job.action_report?.status || 'Pending')
-        );
-      }
-
-      // Calculate pagination
-      const totalPages = Math.ceil(data.length / PER_PAGE) || 1;
-
-      // Auto go back if current page exceeds total pages
-      if (pageValue > totalPages) {
-        setPage(totalPages);
-        setLoading(false);
-        return;
-      }
-
-      // Manual pagination
-      const start = (pageValue - 1) * PER_PAGE;
-      const end = start + PER_PAGE;
-      const paginatedData = data.slice(start, end);
-
-      setJobs(paginatedData);
+      setJobs(data);
 
       setMeta({
-        current_page: pageValue,
-        last_page: totalPages,
-        prev_page_url: pageValue > 1,
-        next_page_url: pageValue < totalPages
+        current_page: res.data.meta?.current_page || 1,
+        last_page: res.data.meta?.last_page || 1,
+        prev_page_url: res.data.meta?.current_page > 1,
+        next_page_url: res.data.meta?.current_page < res.data.meta?.last_page
       });
 
       // Always update newPendingJobs from backend data (admin only)
@@ -118,12 +95,12 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
     } finally {
       setLoading(false);
     }
-  }, [search, page, loading, isAdmin, isTechnician, userId, setNewPendingJobs]);
+  }, [search, page, loading, isAdmin, isTechnician, userId, setNewPendingJobs, filter]);
 
-  // Load jobs when search or page changes
+  // Load jobs when search, page, or filter changes
   useEffect(() => {
-    fetchJobs(search, page);
-  }, [search, page]);
+    fetchJobs(search, page, filter);
+  }, [search, page, filter]);
 
   // Modal handlers
   const openModal = (job) => {
@@ -309,9 +286,9 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
           )}
         </div>
 
-        {/* Search Bar */}
-        <div className="mt-6">
-          <div className="relative">
+        {/* Search Bar and Filter */}
+        <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4">
+          <div className="relative flex-1">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -323,6 +300,18 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
               placeholder="Search by job order number, department, or requester..."
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
+          </div>
+          {/* Filter Dropdown */}
+          <div className="mt-3 sm:mt-0">
+            <select
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ml-0 sm:ml-2"
+            >
+              <option value="all">All</option>
+              <option value="conformed">Conformed</option>
+              <option value="awaiting">Awaiting Confirmation</option>
+            </select>
           </div>
         </div>
       </div>
