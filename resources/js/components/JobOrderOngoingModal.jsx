@@ -96,6 +96,7 @@ export default function JobOrderOngoingModal({
   const isCompleted = job?.action_report?.status === 'Completed';
   const isUnserviceable = job?.action_report?.status === 'Unserviceable';
   const isCancelled = job?.action_report?.status === 'Cancelled';
+  const requestStatusName = job?.request_status?.name || job?.status;
   const cancelledById =
     job?.action_report?.cancelled_by &&
     (typeof job.action_report.cancelled_by === 'object'
@@ -111,12 +112,42 @@ export default function JobOrderOngoingModal({
     cancelledById &&
     job?.requester &&
     cancelledById !== job.requester.id;
+
+  // A denial is persisted as Completed + Closed with only remarks and without actual service-work details.
+  const hasServiceWorkDetails = !!(
+    job?.action_report?.diagnosis ||
+    job?.action_report?.serviced_by ||
+    job?.action_report?.date_started ||
+    job?.action_report?.date_finished ||
+    job?.action_report?.serial_number ||
+    job?.action_report?.software_name
+  );
+  const isDeniedByAdminOrTech =
+    requestStatusName === 'Completed' &&
+    job?.action_report?.action_taken === 'Closed' &&
+    !!job?.action_report?.remarks &&
+    !hasServiceWorkDetails;
+
+  const getActorName = (value) => {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object') return value.name || '';
+    return '';
+  };
+
+  const deniedByName =
+    getActorName(job?.action_report?.cancelled_by) ||
+    getActorName(job?.action_report?.accepted_by) ||
+    getActorName(job?.action_report?.serviced_by) ||
+    '—';
+
+  const deniedAt = job?.action_report?.cancelled_at || job?.action_report?.updated_at;
   const isConfirmed = !!job?.action_report?.confirmed_at;
   const isRequester = job?.requester?.id === currentUser?.id;
   const requesterIsUser = isRole(job?.requester, 'user');
 
-  // Read only if cancelled by user or admin/tech
-  const readOnly = isCancelledByUser || isCancelledByAdminOrTech || !isAdmin || !isEditable || isCompleted;
+  // Read only if cancelled/denied or admin/tech restrictions apply
+  const readOnly = isCancelledByUser || isCancelledByAdminOrTech || isDeniedByAdminOrTech || !isAdmin || !isEditable || isCompleted;
 
   const showConfirmButtonUser =
     !isAdmin &&
@@ -829,22 +860,26 @@ export default function JobOrderOngoingModal({
                 </div>
               </div>
 
-              {/* If cancelled by user or admin/tech, show only cancellation info, hide action report fields */}
-              {(isCancelledByUser || isCancelledByAdminOrTech) ? (
+              {/* If cancelled/denied, show summary info and hide action report fields */}
+              {(isCancelledByUser || isCancelledByAdminOrTech || isDeniedByAdminOrTech) ? (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-6 space-y-4">
                   <div className="flex items-center text-red-700">
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                     <span className="font-semibold">
-                      {isCancelledByUser
+                      {isDeniedByAdminOrTech
+                        ? 'This job order was denied by an admin/technician.'
+                        : isCancelledByUser
                         ? "This job order was cancelled by the requester."
                         : "This job order was Denied"}
                     </span>
                   </div>
                   <div>
-                    <span className="font-semibold">Cancelled by:</span>{' '}
-                    {isCancelledByUser
+                    <span className="font-semibold">{isDeniedByAdminOrTech ? 'Denied by:' : 'Cancelled by:'}</span>{' '}
+                    {isDeniedByAdminOrTech
+                      ? deniedByName
+                      : isCancelledByUser
                       ? job?.requester?.name || '—'
                       : (job?.action_report?.cancelled_by?.name ||
                          (typeof job.action_report.cancelled_by === 'object'
@@ -852,14 +887,14 @@ export default function JobOrderOngoingModal({
                            : '—'))}
                   </div>
                   <div>
-                    <span className="font-semibold">Cancelled at:</span>{' '}
-                    {job?.action_report?.cancelled_at
-                      ? formatDisplayDate(job.action_report.cancelled_at)
+                    <span className="font-semibold">{isDeniedByAdminOrTech ? 'Denied at:' : 'Cancelled at:'}</span>{' '}
+                    {(isDeniedByAdminOrTech ? deniedAt : job?.action_report?.cancelled_at)
+                      ? formatDisplayDate(isDeniedByAdminOrTech ? deniedAt : job.action_report.cancelled_at)
                       : '—'}
                   </div>
                   {job?.action_report?.remarks && (
                     <div>
-                      <span className="font-semibold">Reason:</span>{' '}
+                      <span className="font-semibold">{isDeniedByAdminOrTech ? 'Denial Reason:' : 'Reason:'}</span>{' '}
                       {job.action_report.remarks}
                     </div>
                   )}

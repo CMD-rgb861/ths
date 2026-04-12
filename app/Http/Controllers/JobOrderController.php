@@ -427,6 +427,8 @@ class JobOrderController extends Controller
                 $actionReport->update([
                     'status' => 'Completed',
                     'action_taken' => $newActionTaken,
+                    'cancelled_by' => $request->user()->id,
+                    'cancelled_at' => now(),
                     'remarks' => $validated['remarks'] ?? $actionReport->remarks,
                 ]);
                 $jobOrder = $jobOrder->load([

@@ -133,6 +133,8 @@ class ActionReportController extends Controller
             $actionReport->update([
                 'status' => 'Completed',
                 'action_taken' => 'Closed',
+                'cancelled_by' => $request->user()->id,
+                'cancelled_at' => now(),
                 'remarks' => $validated['remarks'] ?? $actionReport->remarks,
             ]);
             return $actionReport->fresh()->load([
