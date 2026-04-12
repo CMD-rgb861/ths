@@ -403,6 +403,36 @@ export default function JobOrderOngoingModal({
       return;
     }
 
+    // If "Unserviceable with Form" is selected, ensure the form has already been saved in DB.
+    if (form.action_taken === "Unserviceable with Form") {
+      try {
+        const verifyRes = await axios.get(`/job-orders/${job.id}`);
+        const savedAr = verifyRes?.data?.action_report || {};
+
+        const hasSavedUnserviceableForm =
+          !!savedAr.item?.trim() &&
+          !!savedAr.findings?.trim() &&
+          !!savedAr.unserviceable_date;
+
+        if (!hasSavedUnserviceableForm) {
+          showNotification(
+            "error",
+            "Unserviceable Form Required",
+            "Please fill up and save the Unserviceable Form first before saving this action report."
+          );
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to verify unserviceable form data:', error);
+        showNotification(
+          "error",
+          "Verification Failed",
+          "Unable to verify saved Unserviceable Form data. Please try again."
+        );
+        return;
+      }
+    }
+
     setSaving(true);
 
     // Merge hardware/software fields into the payload
