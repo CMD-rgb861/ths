@@ -29,6 +29,7 @@ class JobOrderController extends Controller
         $query = JobOrder::with([
             'department',
             'requester',
+            'creator',
             'categories',
             'attachments',
             'actionReport.servicedBy',

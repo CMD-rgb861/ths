@@ -13,9 +13,9 @@ class JobOrderExportController extends Controller
         $query = JobOrder::with([
             'department',
             'requester',
-            'actionReport.acceptedByUser',
             'actionReport.servicedBy',
-            'actionReport.cancelledByUser'
+            'actionReport.acceptedBy',
+            'actionReport.cancelledBy'
         ]);
 
         // Filter by status if provided and not 'all'
@@ -47,9 +47,9 @@ class JobOrderExportController extends Controller
         foreach ($orders as $order) {
             $status = $order->actionReport->status ?? 'Pending';
             $requestedBy = $order->requester->name ?? '';
-            $acceptedBy = $order->actionReport->acceptedByUser->name ?? '';
+            $acceptedBy = $order->actionReport->acceptedBy->name ?? '';
             $servicedBy = $order->actionReport->servicedBy->name ?? $order->actionReport->serviced_by ?? '';
-            $cancelledBy = $order->actionReport->cancelledByUser->name ?? '';
+            $cancelledBy = $order->actionReport->cancelledBy->name ?? '';
             
             $csvData[] = [
                 $order->job_order_no,

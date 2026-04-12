@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import JobOrderModal from './JobOrderModal';
+import UserJobHistoryModal from './UserJobHistoryModal';
 
 export default function UserJobHistory({ showNotification }) {
   const [orders, setOrders] = useState([]);
@@ -292,12 +292,10 @@ export default function UserJobHistory({ showNotification }) {
 
       {/* MODAL */}
       {selectedJob && (
-        <JobOrderModal
+        <UserJobHistoryModal
           isOpen={true}
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
-          onStatusChange={() => {}}
-          showNotification={showNotification}
         />
       )}
     </div>
