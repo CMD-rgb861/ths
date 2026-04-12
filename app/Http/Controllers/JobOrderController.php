@@ -114,13 +114,29 @@ class JobOrderController extends Controller
         }
 
         if ($request->filled('search')) {
-            $search = $request->search;
+            $search = trim((string) $request->search);
+            $searchTokens = array_values(array_filter(
+                preg_split('/[^[:alnum:]]+/', mb_strtolower($search)) ?: []
+            ));
 
-            $query->where(function ($q) use ($search) {
-                $q->where('job_orders.job_order_no', 'like', "%{$search}%")
-                ->orWhereHas('department', function ($d) use ($search) {
-                    $d->where('name', 'like', "%{$search}%");
-                });
+            $query->where(function ($outerQuery) use ($searchTokens) {
+                foreach ($searchTokens as $token) {
+                    $outerQuery->where(function ($q) use ($token) {
+                        $like = '%' . $token . '%';
+
+                        $q->whereRaw('CAST(job_orders.id AS CHAR) LIKE ?', [$like])
+                            ->orWhereRaw('LOWER(job_orders.job_order_no) LIKE ?', [$like])
+                            ->orWhereHas('department', function ($d) use ($like) {
+                                $d->whereRaw('LOWER(name) LIKE ?', [$like]);
+                            });
+                    });
+                }
+            });
+        }
+
+        if ($request->filled('category_id')) {
+            $query->whereHas('categories', function ($categoryQuery) use ($request) {
+                $categoryQuery->where('categories.id', (int) $request->input('category_id'));
             });
         }
 

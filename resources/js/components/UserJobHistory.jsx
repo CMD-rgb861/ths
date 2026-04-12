@@ -15,6 +15,7 @@ export default function UserJobHistory({ showNotification }) {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({});
   const [statusOptions, setStatusOptions] = useState([]);
+  const [categoryOptions, setCategoryOptions] = useState([]);
 
   const token = localStorage.getItem('token'); // Get the auth token
 
@@ -23,6 +24,10 @@ export default function UserJobHistory({ showNotification }) {
     axios.get('/request-statuses')
       .then(res => setStatusOptions(Array.isArray(res.data) ? res.data : []))
       .catch(() => setStatusOptions([]));
+
+    axios.get('/categories')
+      .then(res => setCategoryOptions(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setCategoryOptions([]));
   }, []);
 
   // 🔥 Auto Fetch (Debounced Search)
@@ -44,7 +49,7 @@ export default function UserJobHistory({ showNotification }) {
         history: true, // Apply 'history' filter for Completed, Cancelled, Unserviceable
       };
       if (status) params.status = parseInt(status, 10);
-      if (category) params.category = category;
+      if (category) params.category_id = parseInt(category, 10);
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
 
@@ -108,9 +113,12 @@ export default function UserJobHistory({ showNotification }) {
             </div>
             <input
               type="text"
-              placeholder="Search job order number..."
+              placeholder="Search job order ID or department..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setPage(1);
+                setSearch(e.target.value);
+              }}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
           </div>
@@ -131,7 +139,10 @@ export default function UserJobHistory({ showNotification }) {
               <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value)}
+                onChange={(e) => {
+                  setPage(1);
+                  setStatus(e.target.value);
+                }}
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               >
                 <option value="">All Status</option>
@@ -147,7 +158,10 @@ export default function UserJobHistory({ showNotification }) {
               <input
                 type="date"
                 value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+                onChange={(e) => {
+                  setPage(1);
+                  setDateFrom(e.target.value);
+                }}
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               />
             </div>
@@ -158,7 +172,10 @@ export default function UserJobHistory({ showNotification }) {
               <input
                 type="date"
                 value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+                onChange={(e) => {
+                  setPage(1);
+                  setDateTo(e.target.value);
+                }}
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               />
             </div>
@@ -166,13 +183,19 @@ export default function UserJobHistory({ showNotification }) {
             {/* Category */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
-              <input
-                type="text"
+              <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="Enter category"
+                onChange={(e) => {
+                  setPage(1);
+                  setCategory(e.target.value);
+                }}
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              />
+              >
+                <option value="">All Categories</option>
+                {categoryOptions.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
