@@ -41,12 +41,13 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
   const [selectedTab, setSelectedTab] = useState('distribution');
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [statusOptions, setStatusOptions] = useState([]);
-  const [status, setStatus] = useState('');
   const [serviceTotals, setServiceTotals] = useState({
     unserviceable_with_form: null,
     unserviceable_without_form: null,
     closed: null,
   });
+
+  const getOrderStatus = (order) => order.request_status?.name || order.action_report?.status || order.status || '—';
 
   // Fetch job orders data (for dashboard/summary only)
   useEffect(() => {
@@ -56,7 +57,10 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
       try {
         // Only fetch all for dashboard/summary
         let response = await axios.get('/job-orders', {
-          params: { per_page: 1000 }
+          params: {
+            per_page: 1000,
+            status_filter: 'all_status_page',
+          }
         });
         const rows = Array.isArray(response.data?.data) ? response.data.data : [];
         setOrders(rows);
@@ -143,7 +147,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
     let data = [...orders];
 
     if (filters.status) {
-      data = data.filter(o => o.action_report?.status === filters.status);
+      data = data.filter(o => getOrderStatus(o) === filters.status);
     }
 
     if (filters.department) {
@@ -166,7 +170,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
         o.job_order_no?.toLowerCase().includes(term) ||
         o.department?.name?.toLowerCase().includes(term) ||
         o.requester?.name?.toLowerCase().includes(term) ||
-        o.action_report?.status?.toLowerCase().includes(term)
+        getOrderStatus(o).toLowerCase().includes(term)
       );
     }
 
@@ -346,7 +350,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
     let dataToExport = [...orders];
     
     if (statusFilter) {
-      dataToExport = dataToExport.filter(o => o.action_report?.status === statusFilter);
+      dataToExport = dataToExport.filter(o => getOrderStatus(o) === statusFilter);
     }
 
     if (dataToExport.length === 0) {
@@ -367,7 +371,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
     ];
 
     const rows = dataToExport.map(order => {
-      const status = order.action_report?.status || 'Pending';
+      const status = getOrderStatus(order) || 'Pending';
       const requestedBy = order.requester?.name || '';
       const signatory = order.signature_name || '';
       const acceptedBy = order.action_report?.accepted_by_user?.name || 
@@ -424,12 +428,6 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
     document.body.removeChild(link);
     
     setShowExportDropdown(false);
-  };
-
-  // Helper to get status name by id
-  const getStatusName = (statusId) => {
-    const found = statusOptions.find(s => String(s.id) === String(statusId));
-    return found ? found.name : statusId;
   };
 
   return (
@@ -551,13 +549,13 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
             </label>
             <select
               id="status"
-              value={status}
-              onChange={e => setStatus(e.target.value)}
+              value={filters.status}
+              onChange={e => handleFilterChange('status', e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             >
               <option value="">All Status</option>
               {statusOptions.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+                <option key={s.id} value={s.name}>{s.name}</option>
               ))}
             </select>
           </div>
@@ -649,7 +647,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {paginated.map(order => {
-                  const requestStatus = order.request_status?.name || order.status || '—';
+                  const requestStatus = getOrderStatus(order);
                   const serviceStatus = order.action_report?.action_taken || '—';
                   const servicedBy =
                     order.action_report?.serviced_by?.name ||
