@@ -43,7 +43,7 @@ export default function UserJobHistory({ showNotification }) {
         page,
         history: true, // Apply 'history' filter for Completed, Cancelled, Unserviceable
       };
-      if (status) params.status = status;
+      if (status) params.status = parseInt(status, 10);
       if (category) params.category = category;
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;

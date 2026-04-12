@@ -157,8 +157,8 @@ class JobOrderController extends Controller
         // --- Add conform_filter backend filtering ---
         $conformFilter = $request->input('conform_filter', 'all');
         $statusFilterType = $request->input('status_filter');
-        // Only apply conform_filter if no explicit status filter is set and not the special all_status_page filter
-        if (!$request->filled('status') && $statusFilterType !== 'all_status_page') {
+        // Only apply conform_filter if no explicit status filter is set and not the special all_status_page filter and not history filter
+        if (!$request->filled('status') && $statusFilterType !== 'all_status_page' && !$request->boolean('history')) {
             if ($conformFilter === 'all') {
                 // Only Pending/Ongoing by default (scalable, paginated)
                 $query->whereHas('actionReport', function ($q) {
