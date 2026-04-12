@@ -21,6 +21,7 @@ export default function UserJobHistoryModal({
     switch (status) {
       case 'Completed':
         return 'bg-green-100 text-green-800';
+      case 'Declined':
       case 'Cancelled':
       case 'Cancelled by User':
         return 'bg-red-100 text-red-800';
@@ -51,9 +52,73 @@ export default function UserJobHistoryModal({
     return categories.some(cat => cat.name === 'Software');
   };
 
-  const statusDisplay = job.action_report?.status === 'Cancelled by User'
-    ? 'Cancelled'
-    : (job.action_report?.status || job.status);
+  const formatDateTime = (value) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString('en-US', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
+  const requestStatusName = job?.request_status?.name || job?.status;
+  const hasServiceWorkDetails = !!(
+    job?.action_report?.diagnosis ||
+    job?.action_report?.serviced_by ||
+    job?.action_report?.servicedBy ||
+    job?.action_report?.date_started ||
+    job?.action_report?.date_finished ||
+    job?.action_report?.serial_number ||
+    job?.action_report?.software_name
+  );
+
+  const isDeniedByAdminOrTech =
+    requestStatusName === 'Completed' &&
+    job?.action_report?.action_taken === 'Closed' &&
+    !!job?.action_report?.remarks &&
+    !hasServiceWorkDetails;
+
+  const cancelledByRaw = job?.action_report?.cancelled_by;
+  const cancelledById =
+    typeof cancelledByRaw === 'object' && cancelledByRaw
+      ? cancelledByRaw.id
+      : cancelledByRaw;
+  const requesterId = job?.requester?.id;
+  const isCancelledByUser =
+    (job?.action_report?.status === 'Cancelled' || job?.action_report?.status === 'Cancelled by User') &&
+    !!cancelledById &&
+    !!requesterId &&
+    cancelledById === requesterId;
+
+  const isCancelledByAdminOrTech =
+    job?.action_report?.status === 'Cancelled' &&
+    !!cancelledById &&
+    !!requesterId &&
+    cancelledById !== requesterId;
+
+  const terminalStatusLabel = isDeniedByAdminOrTech
+    ? 'Declined'
+    : (isCancelledByUser || isCancelledByAdminOrTech ? 'Cancelled' : null);
+
+  const terminalActorName = isDeniedByAdminOrTech
+    ? getName(job?.action_report?.cancelledBy || job?.action_report?.cancelled_by)
+    : (isCancelledByUser
+      ? getName(job?.requester)
+      : getName(job?.action_report?.cancelledBy || job?.action_report?.cancelled_by));
+
+  const terminalAt = job?.action_report?.cancelled_at || job?.action_report?.updated_at;
+
+  const statusDisplay = isDeniedByAdminOrTech
+    ? 'Declined'
+    : (job.action_report?.status === 'Cancelled by User'
+      ? 'Cancelled'
+      : (job.action_report?.status || requestStatusName || job.status));
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -69,21 +134,6 @@ export default function UserJobHistoryModal({
             <p className="text-gray-600 mt-1">Complete information about this completed job request</p>
           </div>
           <div className="flex items-center gap-3">
-            <span
-              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${getStatusBadgeColor(
-                statusDisplay
-              )}`}
-            >
-              {statusDisplay || 'Pending'}
-            </span>
-            <button
-              onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 p-2 rounded-lg transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
           </div>
         </div>
 
@@ -207,94 +257,134 @@ export default function UserJobHistoryModal({
                 Technician's Report
               </h3>
               <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</p>
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${getStatusBadgeColor(job.action_report.status)}`}>
-                      {job.action_report.status || '—'}
-                    </span>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Serviced By</p>
-                    <p className="text-sm text-gray-900">
-                      {getName(job.action_report.servicedBy || job.action_report.serviced_by)}
-                    </p>
-                  </div>
-
-                  {job.action_report.acceptedBy && (
+                {terminalStatusLabel ? (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-6 space-y-4">
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Accepted By</p>
-                      <p className="text-sm text-gray-900">{getName(job.action_report.acceptedBy)}</p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</p>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${getStatusBadgeColor(terminalStatusLabel)}`}>
+                        {terminalStatusLabel}
+                      </span>
                     </div>
-                  )}
 
-                  {job.action_report.cancelledBy && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Cancelled By</p>
-                      <p className="text-sm text-gray-900">{getName(job.action_report.cancelledBy)}</p>
-                    </div>
-                  )}
-                </div>
-
-                {job.action_report.diagnosis && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Diagnosis</p>
-                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {job.action_report.diagnosis}
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                        {isDeniedByAdminOrTech ? 'Declined By' : 'Cancelled By'}
                       </p>
+                      <p className="text-sm text-gray-900">{terminalActorName}</p>
                     </div>
-                  </div>
-                )}
 
-                {job.action_report.remarks && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Remarks</p>
-                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {job.action_report.remarks}
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                        {isDeniedByAdminOrTech ? 'Declined At' : 'Cancelled At'}
                       </p>
+                      <p className="text-sm text-gray-900">{formatDateTime(terminalAt)}</p>
                     </div>
-                  </div>
-                )}
 
-                {isHardwareCategory(job.categories) && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Hardware Details</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {job.action_report.remarks && (
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Serial Number</p>
-                        <p className="text-sm text-gray-900">{job.action_report.serial_number || '—'}</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                          {isDeniedByAdminOrTech ? 'Decline Reason' : 'Reason'}
+                        </p>
+                        <div className="bg-white rounded-lg border border-red-200 p-4">
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                            {job.action_report.remarks}
+                          </p>
+                        </div>
                       </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Brand Model</p>
-                        <p className="text-sm text-gray-900">{job.action_report.brand_model || '—'}</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</p>
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${getStatusBadgeColor(job.action_report.status)}`}>
+                          {job.action_report.status || '—'}
+                        </span>
                       </div>
+
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Brand Name</p>
-                        <p className="text-sm text-gray-900">{job.action_report.brand_name || '—'}</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Serviced By</p>
+                        <p className="text-sm text-gray-900">
+                          {getName(job.action_report.servicedBy || job.action_report.serviced_by)}
+                        </p>
                       </div>
+
+                      {job.action_report.acceptedBy && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Accepted By</p>
+                          <p className="text-sm text-gray-900">{getName(job.action_report.acceptedBy)}</p>
+                        </div>
+                      )}
+
+                      {job.action_report.cancelledBy && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Cancelled By</p>
+                          <p className="text-sm text-gray-900">{getName(job.action_report.cancelledBy)}</p>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
 
-                {isSoftwareCategory(job.categories) && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Software Name</p>
-                    <p className="text-sm text-gray-900">{job.action_report.software_name || '—'}</p>
-                  </div>
-                )}
+                    {job.action_report.diagnosis && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Diagnosis</p>
+                        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                            {job.action_report.diagnosis}
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
-                {job.action_report.findings && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Unserviceable Reason</p>
-                    <div className="bg-red-50 rounded-lg border border-red-200 p-4">
-                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {job.action_report.findings}
-                      </p>
-                    </div>
-                  </div>
+                    {job.action_report.remarks && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Remarks</p>
+                        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                            {job.action_report.remarks}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {isHardwareCategory(job.categories) && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Hardware Details</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div>
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Serial Number</p>
+                            <p className="text-sm text-gray-900">{job.action_report.serial_number || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Brand Model</p>
+                            <p className="text-sm text-gray-900">{job.action_report.brand_model || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Brand Name</p>
+                            <p className="text-sm text-gray-900">{job.action_report.brand_name || '—'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {isSoftwareCategory(job.categories) && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Software Name</p>
+                        <p className="text-sm text-gray-900">{job.action_report.software_name || '—'}</p>
+                      </div>
+                    )}
+
+                    {job.action_report.findings && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Unserviceable Reason</p>
+                        <div className="bg-red-50 rounded-lg border border-red-200 p-4">
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                            {job.action_report.findings}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

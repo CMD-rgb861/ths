@@ -164,8 +164,8 @@ export default function JobOrderModal({
       const updatedJob = response.data;
       showNotification(
         'success',
-        'Job Order Denied',
-        'The job order has been denied and marked as completed/closed.'
+        'Job Order Declined',
+        'The job order has been declined and marked as completed/closed.'
       );
       onStatusChange(updatedJob, false);
       onClose();
@@ -174,7 +174,7 @@ export default function JobOrderModal({
       showNotification(
         'error',
         'Error',
-        'Failed to deny job order.'
+        'Failed to decline job order.'
       );
     } finally {
       setLoadingAction(null);

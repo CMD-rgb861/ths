@@ -869,14 +869,14 @@ export default function JobOrderOngoingModal({
                     </svg>
                     <span className="font-semibold">
                       {isDeniedByAdminOrTech
-                        ? 'This job order was denied by an admin/technician.'
+                        ? 'This job order was declined by an admin/technician.'
                         : isCancelledByUser
                         ? "This job order was cancelled by the requester."
-                        : "This job order was Denied"}
+                        : "This job order was declined"}
                     </span>
                   </div>
                   <div>
-                    <span className="font-semibold">{isDeniedByAdminOrTech ? 'Denied by:' : 'Cancelled by:'}</span>{' '}
+                    <span className="font-semibold">{isDeniedByAdminOrTech ? 'Declined by:' : 'Cancelled by:'}</span>{' '}
                     {isDeniedByAdminOrTech
                       ? deniedByName
                       : isCancelledByUser
@@ -887,14 +887,14 @@ export default function JobOrderOngoingModal({
                            : '—'))}
                   </div>
                   <div>
-                    <span className="font-semibold">{isDeniedByAdminOrTech ? 'Denied at:' : 'Cancelled at:'}</span>{' '}
+                    <span className="font-semibold">{isDeniedByAdminOrTech ? 'Declined at:' : 'Cancelled at:'}</span>{' '}
                     {(isDeniedByAdminOrTech ? deniedAt : job?.action_report?.cancelled_at)
                       ? formatDisplayDate(isDeniedByAdminOrTech ? deniedAt : job.action_report.cancelled_at)
                       : '—'}
                   </div>
                   {job?.action_report?.remarks && (
                     <div>
-                      <span className="font-semibold">{isDeniedByAdminOrTech ? 'Denial Reason:' : 'Reason:'}</span>{' '}
+                      <span className="font-semibold">{isDeniedByAdminOrTech ? 'Decline Reason:' : 'Reason:'}</span>{' '}
                       {job.action_report.remarks}
                     </div>
                   )}
