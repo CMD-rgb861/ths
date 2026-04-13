@@ -4,15 +4,7 @@ import axios from 'axios';
 import JobOrderModal from './JobOrderModal';
 import JobOrderOngoingModal from './JobOrderOngoingModal';
 import StatusIndicator from './ui/StatusIndicator';
-
-const STATUS_BADGE_STYLES = {
-  Pending: 'bg-yellow-100 text-yellow-800',
-  Ongoing: 'bg-blue-100 text-blue-800',
-  Completed: 'bg-green-100 text-green-800',
-  Cancelled: 'bg-red-100 text-red-800',
-  'Cancelled by User': 'bg-red-100 text-red-800',
-  Unserviceable: 'bg-gray-200 text-gray-800',
-};
+import StatusBadge from './ui/StatusBadge';
 
 export default function JobOrderStatusPage({ showNotification }) {
   const { status } = useParams();
@@ -365,10 +357,10 @@ export default function JobOrderStatusPage({ showNotification }) {
                     Categories
                   </th>
                   {/* --- CHANGED: Show both Request Status and Service Status --- */}
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-center text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Request Status
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-center text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Service Status
                   </th>
                   <th className="px-6 py-4 text-center text-xs font-bold text-gray-900 uppercase tracking-wider">
@@ -409,19 +401,20 @@ export default function JobOrderStatusPage({ showNotification }) {
                       </div>
                     </td>
 
-                    {/* --- NEW: Request Status column --- */}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                          STATUS_BADGE_STYLES[getRequestStatus(order)]
-                        }`}
-                      >
-                        {getRequestStatus(order)}
-                      </span>
+                    {/* --- NEW: Request Status column (matches JobOrderList logic with substatus, centered) --- */}
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex flex-col items-center space-y-1">
+                        <StatusBadge status={getRequestStatus(order)} />
+                        <StatusIndicator
+                          status={getRequestStatus(order)}
+                          actionReport={order.action_report}
+                          requesterId={order.requester?.id}
+                        />
+                      </div>
                     </td>
-                    {/* --- NEW: Service Status column --- */}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">
+                    {/* --- NEW: Service Status column (centered) --- */}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <span className="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">
                         {getServiceStatus(order)}
                       </span>
                     </td>
