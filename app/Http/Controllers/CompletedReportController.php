@@ -188,7 +188,7 @@ class CompletedReportController extends Controller
         $boxWidth = 5; $boxHeight = 3; $gap = 2;
 
         $leftCats = [
-            'Computer Desktop', // <-- updated from 'Computer Hardware'
+            'Computer Desktop', 
             'Information System',
             'Internet Connection',
             'Laptop',
@@ -198,7 +198,7 @@ class CompletedReportController extends Controller
             'Local Area Network',
             'Printer',
             'Software',
-            'Institutional Email Request', // <-- Add this line
+            'Institutional Email Request', 
             'Others: _________',
         ];
 

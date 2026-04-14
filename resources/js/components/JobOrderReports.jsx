@@ -409,14 +409,29 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
       const serviceStatus = order.action_report?.action_taken || '';
       const requestedBy = order.requester?.name || '';
       const signatory = order.signature_name || '';
-      const acceptedBy = order.action_report?.accepted_by_user?.name || 
+
+      // Derive serviced-by name (technician or raw value)
+      const servicedByRaw = order.action_report?.serviced_by?.name || 
+                        order.action_report?.serviced_by || '';
+      const servicedByTrim = (servicedByRaw || '').toString().trim();
+
+      // Default Accepted By logic (IT Director fallback for normal serviced jobs)
+      let acceptedBy = order.action_report?.accepted_by_user?.name || 
                         itDirector?.user?.name || 
                         itDirector?.name || '';
-      const servicedBy = order.action_report?.serviced_by?.name || 
-                        order.action_report?.serviced_by || '';
-  const cancelledBy = order.action_report?.cancelled_by?.name || 
-        itDirector?.user?.name || 
-        itDirector?.name;
+
+      // If the job is "Closed" and there is no technician, treat it as
+      // administratively declined/closed and *suppress* Accepted By in CSV.
+      const serviceStatusKey = (serviceStatus || '').toString().trim().toLowerCase();
+      if (serviceStatusKey === 'closed' && servicedByTrim === '') {
+        acceptedBy = '';
+      }
+
+      const servicedBy = servicedByRaw;
+
+	  const cancelledBy = order.action_report?.cancelled_by?.name || 
+		itDirector?.user?.name || 
+		itDirector?.name;
       const dateCreated = order.created_at 
         ? new Date(order.created_at).toLocaleString('en-US', {
             year: 'numeric',

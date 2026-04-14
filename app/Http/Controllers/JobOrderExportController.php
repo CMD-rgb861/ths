@@ -98,6 +98,8 @@ class JobOrderExportController extends Controller
 
             // --- Service Status comes from action_taken (Unserviceable with Form, Closed, etc.) ---
             $serviceStatus = $actionReport?->action_taken ?? '';
+            // Normalised key for robust comparisons (handles case/whitespace)
+            $serviceStatusKey = strtolower(trim((string) $serviceStatus));
 
             $requestedBy = $order->requester->name ?? '';
             $acceptedBy = $actionReport?->acceptedBy?->name ?? '';
@@ -110,16 +112,21 @@ class JobOrderExportController extends Controller
             $outcomeType = 'Serviced';
 
             // Treat as "Closed (Declined)" when:
-            // - request status is Completed (or Cancelled/Cancelled by User)
-            // - service status is Closed
-            // - there is no technician, but there *is* a cancelled/closed-by user
+            // - service status is "Closed" (any case/whitespace)
+            // - there is no technician (no Serviced By)
+            // This covers cases like Completed+Closed with remarks only,
+            // and any other administratively closed job without technician work.
             if (
-                in_array($requestStatus, ['Completed', 'Cancelled', 'Cancelled by User'], true) &&
-                $serviceStatus === 'Closed' &&
-                (trim((string) $servicedBy) === '') &&
-                (trim((string) $cancelledBy) !== '')
+                $serviceStatusKey === 'closed' &&
+                (trim((string) $servicedBy) === '')
             ) {
                 $outcomeType = 'Closed (Declined)';
+
+                // For declined/administratively closed jobs, we don't want
+                // to show an "Accepted By" value in the CSV, even if the
+                // job was temporarily marked Ongoing earlier. This keeps
+                // the export aligned with the final outcome.
+                $acceptedBy = '';
             }
 
             // Build row respecting the same conditional columns as headers
