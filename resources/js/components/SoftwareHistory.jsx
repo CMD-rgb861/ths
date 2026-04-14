@@ -184,7 +184,7 @@ export default function SoftwareHistory() {
   useEffect(() => {
     setLoading(true);
     axios
-      .get('/job-orders', { params: { per_page: 1000 } })
+      .get('/job-orders', { params: { per_page: 1000, history: true } })
       .then((res) => {
         setJobs(Array.isArray(res.data?.data) ? res.data.data : []);
       })
