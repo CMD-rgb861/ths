@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UnserviceableReportController;
 use App\Http\Controllers\CompletedReportController;
+use App\Http\Controllers\JobOrderExportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,6 +18,10 @@ Route::get('/job-orders/{job}/unserviceable/pdf',
 Route::get('/job-orders/{job}/completed/pdf',
     [CompletedReportController::class, 'generate']
 )->name('completed.pdf');
+
+Route::get('/job-orders/export/csv',
+    [JobOrderExportController::class, 'exportCsv']
+)->name('job-orders.export.csv');
 
 
 /*

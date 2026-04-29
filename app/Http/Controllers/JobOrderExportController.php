@@ -10,6 +10,8 @@ class JobOrderExportController extends Controller
 {
     public function exportCsv(Request $request, $status = null)
     {
+        $exportType = strtolower((string) $request->query('type', 'all'));
+
         $query = JobOrder::with([
             'department',
             'requester',
@@ -18,7 +20,22 @@ class JobOrderExportController extends Controller
             'actionReport.servicedBy',
             'actionReport.acceptedBy',
             'actionReport.cancelledBy',
+            'categories',
         ]);
+
+        if ($exportType === 'serial-history') {
+            $query->whereHas('actionReport', function ($q) {
+                $q->whereNotNull('serial_number')->where('serial_number', '<>', '');
+            })->whereHas('categories', function ($q) {
+                $q->whereIn('name', ['Computer Desktop', 'Laptop', 'Printer']);
+            });
+        } elseif ($exportType === 'software-history') {
+            $query->whereHas('actionReport', function ($q) {
+                $q->whereNotNull('software_name')->where('software_name', '<>', '');
+            })->whereHas('categories', function ($q) {
+                $q->where('name', 'Software');
+            });
+        }
 
         // Filter by status if provided and not 'all'
         if ($status && $status !== 'all') {
@@ -39,33 +56,64 @@ class JobOrderExportController extends Controller
         $includeServicedBy  = !in_array($statusKey, ['pending']);
         $includeCancelledBy = in_array($statusKey, ['all', 'cancelled', 'completed', 'unserviceable']);
 
-        // Create CSV content
-        // Export both request status (Pending/Ongoing/Cancelled/etc.) and
-        // service status (action taken: Unserviceable, Closed, etc.),
-        // plus a derived "Outcome Type" column to distinguish serviced vs
-        // administratively closed/declined jobs.
-        $headers = [
-            'Job Order No',
-            'Department',
-            'Requester',
-            'Signatory',
-            'Request Status',
-            'Service Status',
-            'Outcome Type',
-        ];
+        $isSerialHistory = $exportType === 'serial-history';
+        $isSoftwareHistory = $exportType === 'software-history';
 
-        if ($includeAcceptedBy) {
-            $headers[] = 'Accepted By';
-        }
-        if ($includeServicedBy) {
-            $headers[] = 'Serviced By';
-        }
-        if ($includeCancelledBy) {
-            $headers[] = 'Cancelled / Closed By';
-        }
+        if ($isSerialHistory) {
+            $headers = [
+                'Job Order No',
+                'Department',
+                'Requester',
+                'Categories',
+                'Serial Number',
+                'Brand Name',
+                'Brand Model',
+                'Request Status',
+                'Service Status',
+                'Created At',
+                'Updated At',
+            ];
+        } elseif ($isSoftwareHistory) {
+            $headers = [
+                'Job Order No',
+                'Department',
+                'Requester',
+                'Categories',
+                'Software Name',
+                'Request Status',
+                'Service Status',
+                'Created At',
+                'Updated At',
+            ];
+        } else {
+            // Create CSV content
+            // Export both request status (Pending/Ongoing/Cancelled/etc.) and
+            // service status (action taken: Unserviceable, Closed, etc.),
+            // plus a derived "Outcome Type" column to distinguish serviced vs
+            // administratively closed/declined jobs.
+            $headers = [
+                'Job Order No',
+                'Department',
+                'Requester',
+                'Signatory',
+                'Request Status',
+                'Service Status',
+                'Outcome Type',
+            ];
 
-        $headers[] = 'Created At';
-        $headers[] = 'Updated At';
+            if ($includeAcceptedBy) {
+                $headers[] = 'Accepted By';
+            }
+            if ($includeServicedBy) {
+                $headers[] = 'Serviced By';
+            }
+            if ($includeCancelledBy) {
+                $headers[] = 'Cancelled / Closed By';
+            }
+
+            $headers[] = 'Created At';
+            $headers[] = 'Updated At';
+        }
 
         $csvData = [];
         $csvData[] = $headers;
@@ -106,6 +154,7 @@ class JobOrderExportController extends Controller
             $servicedBy = $actionReport?->servicedBy?->name
                 ?? ($actionReport?->serviced_by ?? '');
             $cancelledBy = $actionReport?->cancelledBy?->name ?? '';
+            $categories = $order->categories?->pluck('name')->filter()->implode(', ') ?? '';
 
             // Derive a high-level outcome type to make "Completed but Closed"
             // vs "Completed and Serviced" easy to distinguish in spreadsheets.
@@ -129,25 +178,49 @@ class JobOrderExportController extends Controller
                 $acceptedBy = '';
             }
 
-            // Build row respecting the same conditional columns as headers
-            $row = [
-                $order->job_order_no,
-                $order->department->name ?? '',
-                $requestedBy,
-                $order->signature_name ?? '',
-                $requestStatus,
-                $serviceStatus,
-                $outcomeType,
-            ];
+            if ($isSerialHistory) {
+                $row = [
+                    $order->job_order_no,
+                    $order->department->name ?? '',
+                    $requestedBy,
+                    $categories,
+                    $actionReport?->serial_number ?? '',
+                    $actionReport?->brand_name ?? '',
+                    $actionReport?->brand_model ?? '',
+                    $requestStatus,
+                    $serviceStatus,
+                ];
+            } elseif ($isSoftwareHistory) {
+                $row = [
+                    $order->job_order_no,
+                    $order->department->name ?? '',
+                    $requestedBy,
+                    $categories,
+                    $actionReport?->software_name ?? '',
+                    $requestStatus,
+                    $serviceStatus,
+                ];
+            } else {
+                // Build row respecting the same conditional columns as headers
+                $row = [
+                    $order->job_order_no,
+                    $order->department->name ?? '',
+                    $requestedBy,
+                    $order->signature_name ?? '',
+                    $requestStatus,
+                    $serviceStatus,
+                    $outcomeType,
+                ];
 
-            if ($includeAcceptedBy) {
-                $row[] = $acceptedBy;
-            }
-            if ($includeServicedBy) {
-                $row[] = $servicedBy;
-            }
-            if ($includeCancelledBy) {
-                $row[] = $cancelledBy;
+                if ($includeAcceptedBy) {
+                    $row[] = $acceptedBy;
+                }
+                if ($includeServicedBy) {
+                    $row[] = $servicedBy;
+                }
+                if ($includeCancelledBy) {
+                    $row[] = $cancelledBy;
+                }
             }
 
             $row[] = $order->created_at->format('Y-m-d H:i:s');
