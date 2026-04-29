@@ -13,6 +13,7 @@ use App\Http\Controllers\UnserviceableReportController;
 use App\Http\Controllers\CompletedReportController;
 use App\Http\Controllers\SerialNumberController;
 use App\Http\Controllers\JobOrderQueueController;
+use App\Http\Controllers\SummaryRequestReportController;
 use App\Models\JobOrder;
 
 /*
@@ -111,5 +112,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/queue/stats', [JobOrderQueueController::class, 'getStats']);
     Route::get('/queue/user-jobs', [JobOrderQueueController::class, 'getUserJobsInQueue']);
     Route::get('/queue/{jobOrder}/position', [JobOrderQueueController::class, 'getPosition']);
+
+    // Summary Request Report routess
+    Route::get('/reports/daily', [SummaryRequestReportController::class, 'daily']);
+    Route::get('/reports/weekly', [SummaryRequestReportController::class, 'weekly']);
+    Route::get('/reports/monthly', [SummaryRequestReportController::class, 'monthly']);
 
 });
