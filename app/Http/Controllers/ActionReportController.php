@@ -89,7 +89,8 @@ class ActionReportController extends Controller
         // NEW: detect unserviceable + conformed so we preserve service status
         $preserveUnserviceable = (
             $actionReport->conformed &&
-            in_array($actionReport->action_taken, ['Unserviceable with Form', 'Unserviceable without Form'])
+            in_array($actionReport->action_taken, ['Unserviceable with Form'])
+            // 'Unserviceable without Form'
         );
 
         $validated = $request->validate([

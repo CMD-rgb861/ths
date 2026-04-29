@@ -19,12 +19,12 @@ const SERVICE_STATUS_FILTERS = [
     match: 'Unserviceable with Form',
     dotClass: 'bg-gray-600',
   },
-  {
-    key: 'service_unserviceable_without_form',
-    label: 'Unserviceable without Form',
-    match: 'Unserviceable without Form',
-    dotClass: 'bg-gray-400',
-  },
+  // {
+  //   key: 'service_unserviceable_without_form',
+  //   label: 'Unserviceable without Form',
+  //   match: 'Unserviceable without Form',
+  //   dotClass: 'bg-gray-400',
+  // },
   {
     key: 'service_closed',
     label: 'Service Closed',

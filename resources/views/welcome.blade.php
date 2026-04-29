@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="{{ asset('images/cmt-logo.png') }}">
         
-    <title>Technical Help Services</title>
+    <title>Technical Hardware Systems</title>
     @viteReactRefresh
     @vite('resources/js/app.jsx')
 </head>

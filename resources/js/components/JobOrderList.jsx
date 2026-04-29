@@ -157,8 +157,9 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
       // Check if we should preserve the current service status (Unserviceable with/without Form + conformed)
       const keepServiceStatus =
         (job.action_report?.conformed === true || job.action_report?.conformed === 1) &&
-        (job.action_report?.action_taken === 'Unserviceable with Form' ||
-         job.action_report?.action_taken === 'Unserviceable without Form');
+        (job.action_report?.action_taken === 'Unserviceable with Form'); 
+        // ||
+        //  job.action_report?.action_taken === 'Unserviceable without Form');
 
       // 1. Update action report: set action_taken = "Closed" (ONLY if we don't want to preserve)
       if (!keepServiceStatus) {
@@ -449,21 +450,44 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                         </svg>
                         View Details
                       </button>
-                      {/* --- Show Close button if conformed is true and status is Ongoing, and user is admin/technician --- */}
-                      {((job.action_report?.conformed === true || job.action_report?.conformed === 1) &&
-                        job.action_report?.status === 'Ongoing' &&
-                        (isAdmin || isTechnician)) && (
-                        <button
-                          onClick={() => setCloseJobId(job.id)}
-                          className="inline-flex items-center px-4 py-2 ml-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-150"
-                          disabled={closeLoading}
-                        >
-                          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          {closeLoading && closeJobId === job.id ? 'Closing...' : 'Close'}
-                        </button>
-                      )}
+                      {/* --- Show Close button if conformed is true and status is Ongoing, or substatus is 'Waiting for confirmation', and user is admin/technician --- */}
+                      {(() => {
+                        const isOngoing = job.action_report?.status === 'Ongoing';
+                        const isConformed = job.action_report?.conformed === true || job.action_report?.conformed === 1;
+                        // Substatus logic: mimic StatusIndicator logic
+                        const user = userProp || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user')) : null);
+                        const isRequester = user?.id === job.requester?.id;
+                        const hasReportContent = job.action_report && (
+                          !!job.action_report.diagnosis ||
+                          !!job.action_report.action_taken ||
+                          !!job.action_report.serviced_by ||
+                          !!job.action_report.date_started ||
+                          !!job.action_report.date_finished ||
+                          !!job.action_report.remarks
+                        );
+                        const isConfirmed = !!(job.action_report?.confirmed_at || job.action_report?.confirmed || job.action_report?.conformed);
+                        let showForSubStatus = false;
+                        if (isOngoing && hasReportContent && !isConfirmed) {
+                          // Substatus string as in StatusIndicator
+                          const subStatus = isRequester ? 'Waiting for your confirmation' : 'Waiting for confirmation';
+                          showForSubStatus = true; // If you want to show for both cases
+                        }
+                        if ((isOngoing && (isConformed || showForSubStatus)) && (isAdmin || isTechnician)) {
+                          return (
+                            <button
+                              onClick={() => setCloseJobId(job.id)}
+                              className="inline-flex items-center px-4 py-2 ml-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-150"
+                              disabled={closeLoading}
+                            >
+                              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              {closeLoading && closeJobId === job.id ? 'Closing...' : 'Close'}
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
                     </td>
                   </tr>
                 ))}

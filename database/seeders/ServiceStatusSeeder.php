@@ -15,8 +15,8 @@ class ServiceStatusSeeder extends Seeder
             ->update(['name' => 'Closed']);
 
         $statuses = [
-            'Unserviceable with Form',
-            'Unserviceable without Form',
+            'Unserviceable',
+            // 'Unserviceable without Form',
             'Diagnosed',
             'Serviced',
             'Closed',

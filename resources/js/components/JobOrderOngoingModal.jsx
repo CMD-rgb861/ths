@@ -470,8 +470,9 @@ export default function JobOrderOngoingModal({
       }
       // Handle unserviceable (just update action report, do NOT update job order status)
       else if (
-        form.action_taken === "Unserviceable with Form" ||
-        form.action_taken === "Unserviceable without Form"
+        form.action_taken === "Unserviceable with Form" 
+        // ||
+        // form.action_taken === "Unserviceable without Form"
       ) {
         await axios.put(`/job-orders/${job.id}/action-report`, payload);
       }
@@ -1058,7 +1059,7 @@ export default function JobOrderOngoingModal({
                                     )}
                                     {/* Label for optional remarks */}
                                     <label className="block text-sm font-semibold text-gray-700 mb-1">
-                                      Remarks <span className="text-gray-500 font-medium">(optional)</span>
+                                      Remarks <span className="text-gray-500 font-medium">(required if Unserviceable with Form is selected)</span>
                                     </label>
                                     <textarea
                                       name="remarks"
@@ -1305,29 +1306,19 @@ export default function JobOrderOngoingModal({
               )}
             </div>
 
+
+
+            {/* THIS IS WHERE THE BUTTON LIES */}
+
             {/* --- Always show CSM checkbox and confirm button for user when confirming --- */}
             {showConfirmButtonUser && (
               <div className="flex items-center gap-4">
-                {/* CSM Checkbox */}
-                <label className="inline-flex items-center cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={csmChecked}
-                    onChange={handleCsmCheckboxChange}
-                    disabled={csmCompleted}
-                    className="form-checkbox h-5 w-5 text-blue-600"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">
-                    Complete CSM Survey
-                  </span>
-                </label>
-
                 {/* Confirm Button */}
                 <button
-                  onClick={handleConfirm}
-                  disabled={confirming || !csmCompleted}
+                  onClick={() => setIsCsmModalOpen(true)}
+                  disabled={confirming}
                   className={`inline-flex items-center px-6 py-2.5 rounded-lg text-white text-sm font-medium transition-all ${
-                    confirming || !csmCompleted
+                    confirming
                       ? 'bg-gray-400 cursor-not-allowed'
                       : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
                   }`}
@@ -1357,7 +1348,11 @@ export default function JobOrderOngoingModal({
           onSave={handleCsmSave}
           onCancel={handleCsmCancel}
           showNotification={showNotification}
+          job={job}
+          onStatusChange={onStatusChange}
+          loadJob={loadJob}
         />
+        
         {/* Unserviceable Modal */}
         <UnserviceableModal
           isOpen={isUnserviceableModalOpen}

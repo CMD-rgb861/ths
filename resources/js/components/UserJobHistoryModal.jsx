@@ -134,6 +134,19 @@ export default function UserJobHistoryModal({
             <p className="text-gray-600 mt-1">Complete information about this completed job request</p>
           </div>
           <div className="flex items-center gap-3">
+            {job?.action_report?.status === 'Completed' && (
+              <button
+                onClick={() =>
+                  window.open(`/job-orders/${job.id}/completed/pdf`, "_blank")
+                }
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                View Report
+              </button>
+            )}
           </div>
         </div>
 

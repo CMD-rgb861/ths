@@ -416,8 +416,8 @@ class JobOrderController extends Controller
                     ($actionReport->conformed === true || $actionReport->conformed === 1) &&
                     in_array($actionReport->action_taken, [
                         'Unserviceable with Form',
-                        'Unserviceable without Form',
                     ], true);
+                    // 'Unserviceable without Form'
 
                 $newActionTaken = $keepUnserviceableActionTaken
                     ? $actionReport->action_taken   // preserve Unserviceable with/without Form
@@ -641,7 +641,7 @@ class JobOrderController extends Controller
         // Map UI keys to action_report.action_taken values
         $statusMap = [
             'unserviceable_with_form' => 'Unserviceable with Form',
-            'unserviceable_without_form' => 'Unserviceable without Form',
+            // 'unserviceable_without_form' => 'Unserviceable without Form',
             'closed' => 'Closed',
         ];
 

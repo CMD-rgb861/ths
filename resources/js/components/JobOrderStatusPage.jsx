@@ -186,7 +186,7 @@ export default function JobOrderStatusPage({ showNotification }) {
   // --- NEW: get display label for service status ---
   const getServiceStatusLabel = (key) => {
     if (key === 'unserviceable_with_form') return 'Unserviceable with Form';
-    if (key === 'unserviceable_without_form') return 'Unserviceable without Form';
+    // if (key === 'unserviceable_without_form') return 'Unserviceable without Form';
     if (key === 'closed') return 'Service Closed';
     return '';
   };

@@ -1,12 +1,62 @@
 import React, { useState, useEffect } from 'react';
 
+import axios from 'axios';
+
 export default function CSMModal({
   isOpen,
   initialData = {},
   onSave,
   onCancel,
   showNotification,
+  job,
+  onStatusChange,
+  loadJob,
 }) {
+  const [confirming, setConfirming] = useState(false);
+  // Confirm job completion (from JobOrderOngoingModal)
+  const handleConfirm = async () => {
+    if (!job?.id || confirming) return;
+
+    setConfirming(true);
+
+    try {
+      await axios.patch(`/job-orders/${job.id}/confirm-diagnosis`);
+
+      showNotification?.(
+        'success',
+        'Job Confirmed',
+        'You have successfully confirmed the completion of this job.'
+      );
+
+      // Mark notifications as read (non-blocking)
+      axios.post(`/job-orders/${job.id}/mark-notifications-read`)
+        .catch(err => console.error('Failed to mark notifications as read:', err));
+
+      // Optimistic UI update
+      const updatedJob = {
+        ...job,
+        action_report: {
+          ...job.action_report,
+          confirmed_at: new Date().toISOString(),
+        },
+      };
+
+      if (typeof onStatusChange === 'function') onStatusChange(updatedJob);
+
+      // Refresh in background
+      if (typeof loadJob === 'function') loadJob();
+    } catch (err) {
+      console.error('Confirmation error:', err);
+      const errorMessage = err.response?.data?.message || 'Something went wrong while confirming.';
+      showNotification?.(
+        'error',
+        'Confirmation Failed',
+        errorMessage
+      );
+    } finally {
+      setConfirming(false);
+    }
+  };
   const defaultForm = {
     client_type: '',
     client_category: '',
@@ -140,6 +190,8 @@ export default function CSMModal({
     setSaving(true);
     try {
       await onSave(form);
+      // After successful CSM save, confirm the job
+      await handleConfirm();
     } catch (err) {
       console.error('CSMModal save failed', err);
       showNotification?.('error', 'Save Failed', 'Failed to save CSM.');
