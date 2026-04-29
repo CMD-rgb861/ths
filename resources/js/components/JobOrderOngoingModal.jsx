@@ -403,8 +403,8 @@ export default function JobOrderOngoingModal({
       return;
     }
 
-    // If "Unserviceable with Form" is selected, ensure the form has already been saved in DB.
-    if (form.action_taken === "Unserviceable with Form") {
+    // If Unserviceable is selected, ensure the form has already been saved in DB.
+    if (form.action_taken === "Unserviceable") {
       try {
         const verifyRes = await axios.get(`/job-orders/${job.id}`);
         const savedAr = verifyRes?.data?.action_report || {};
@@ -470,7 +470,7 @@ export default function JobOrderOngoingModal({
       }
       // Handle unserviceable (just update action report, do NOT update job order status)
       else if (
-        form.action_taken === "Unserviceable with Form" 
+        form.action_taken === "Unserviceable" 
         // ||
         // form.action_taken === "Unserviceable without Form"
       ) {
@@ -1004,8 +1004,8 @@ export default function JobOrderOngoingModal({
                                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
                                     {form.action_taken || '—'}
                                   </div>
-                                  {/* Show Unserviceable Report button if Unserviceable with Form and Completed */}
-                                  {job?.action_report?.action_taken === "Unserviceable with Form" &&
+                                  {/* Show Unserviceable Report button if Unserviceable and Completed */}
+                                  {job?.action_report?.action_taken === "Unserviceable" &&
                                     (job?.request_status?.name === "Completed" ||
                                       job?.status === "Completed") && (
                                     <button
@@ -1020,7 +1020,7 @@ export default function JobOrderOngoingModal({
                                       <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                       </svg>
-                                      View Unserviceable Form
+                                      View Unserviceable Report
                                     </button>
                                   )}
                                 </div>
@@ -1045,7 +1045,7 @@ export default function JobOrderOngoingModal({
                                   {/* Always show optional remarks since Diagnosed is always selected */}
                                   <div className="mt-2 space-y-2">
                                     {/* Show Unserviceable Form button if selected */}
-                                    {form.action_taken === "Unserviceable with Form" && (
+                                    {form.action_taken === "Unserviceable" && (
                                       <button
                                         type="button"
                                         className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all"
@@ -1059,7 +1059,7 @@ export default function JobOrderOngoingModal({
                                     )}
                                     {/* Label for optional remarks */}
                                     <label className="block text-sm font-semibold text-gray-700 mb-1">
-                                      Remarks <span className="text-gray-500 font-medium">(required if Unserviceable with Form is selected)</span>
+                                      Remarks <span className="text-gray-500 font-medium">(required if Unserviceable is selected)</span>
                                     </label>
                                     <textarea
                                       name="remarks"

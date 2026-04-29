@@ -86,11 +86,10 @@ class ActionReportController extends Controller
         // Keep the original action_taken so we can detect transitions
         $originalActionTaken = $actionReport->action_taken;
 
-        // NEW: detect unserviceable + conformed so we preserve service status
+        // Preserve the current Unserviceable value when the report is already conformed.
         $preserveUnserviceable = (
             $actionReport->conformed &&
-            in_array($actionReport->action_taken, ['Unserviceable with Form'])
-            // 'Unserviceable without Form'
+            in_array($actionReport->action_taken, ['Unserviceable'], true)
         );
 
         $validated = $request->validate([
@@ -111,16 +110,15 @@ class ActionReportController extends Controller
             unset($validated['action_taken']);
         }
 
-        // If the action_taken is being changed away from
-        // "Unserviceable with Form" to ANY other value, clear the
+        // If action_taken changes away from Unserviceable, clear the
         // unserviceable form fields to keep the database clean.
-        $wasUnserviceableWithForm = ($originalActionTaken === 'Unserviceable with Form');
-        $changingAwayFromUnserviceableWithForm = (
+        $wasUnserviceable = ($originalActionTaken === 'Unserviceable');
+        $changingAwayFromUnserviceable = (
             isset($validated['action_taken']) &&
-            $validated['action_taken'] !== 'Unserviceable with Form'
+            $validated['action_taken'] !== 'Unserviceable'
         );
 
-        if ($wasUnserviceableWithForm && $changingAwayFromUnserviceableWithForm) {
+        if ($wasUnserviceable && $changingAwayFromUnserviceable) {
             $validated['item'] = null;
             $validated['findings'] = null;
             $validated['noted_by_its'] = null;

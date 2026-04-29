@@ -14,9 +14,9 @@ const STATUSES = ['Pending', 'Ongoing', 'Completed', 'Cancelled'];
 // Service status options for CSV export (based on action_report.action_taken)
 const SERVICE_STATUS_FILTERS = [
   {
-    key: 'service_unserviceable_with_form',
-    label: 'Unserviceable with Form',
-    match: 'Unserviceable with Form',
+    key: 'service_unserviceable',
+    label: 'Unserviceable',
+    match: 'Unserviceable',
     dotClass: 'bg-gray-600',
   },
   // {
@@ -64,7 +64,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [statusOptions, setStatusOptions] = useState([]);
   const [serviceTotals, setServiceTotals] = useState({
-    unserviceable_with_form: null,
+    unserviceable: null,
     closed: null,
   });
 
@@ -138,7 +138,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
     const fetchServiceTotals = async () => {
       try {
         const keys = [
-          'unserviceable_with_form',
+          'unserviceable',
           'closed',
         ];
         const results = await Promise.all(
@@ -147,12 +147,12 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
           )
         );
         setServiceTotals({
-          unserviceable_with_form: results[0].data.count,
+          unserviceable: results[0].data.count,
           closed: results[1].data.count,
         });
       } catch (e) {
         setServiceTotals({
-          unserviceable_with_form: 0,
+          unserviceable: 0,
           closed: 0,
         });
       }

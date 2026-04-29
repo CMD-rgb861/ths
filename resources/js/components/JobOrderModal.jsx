@@ -149,17 +149,27 @@ export default function JobOrderModal({
   const handleAdminCancel = async () => {
     setLoadingAction('Cancelled');
     try {
-      // Always use "Completed" status and "Closed" service status for admin deny
+      const shouldPreserveUnserviceable = job?.action_report?.action_taken === 'Unserviceable';
+      // Always use "Completed" status; only overwrite the service status when needed.
       const statusId = getStatusId('Completed');
-      // First, update the action report with remarks and action_taken = Closed
-      await axios.put(`/job-orders/${job.id}/action-report`, {
+      const actionReportPayload = {
         remarks: cancelRemarks,
-        action_taken: 'Closed',
-      });
-      // Then, update the job order status to Completed
-      const response = await axios.put(`/job-orders/${job.id}`, {
+      };
+      if (!shouldPreserveUnserviceable) {
+        actionReportPayload.action_taken = 'Closed';
+      }
+
+      await axios.put(`/job-orders/${job.id}/action-report`, actionReportPayload);
+
+      const jobOrderPayload = {
         status: statusId,
-        action_taken: 'Closed', // ensure this is sent in case backend expects it
+      };
+      if (!shouldPreserveUnserviceable) {
+        jobOrderPayload.action_taken = 'Closed';
+      }
+
+      const response = await axios.put(`/job-orders/${job.id}`, {
+        ...jobOrderPayload,
       });
       const updatedJob = response.data;
       showNotification(

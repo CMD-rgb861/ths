@@ -53,8 +53,8 @@ export default function JobOrderStatusSummary({ totals = {}, statusOptions = [],
   // Service Status card definitions
   const SERVICE_STATUS_CARDS = [
     {
-      key: 'unserviceable_with_form',
-      label: 'Unserviceable with Form',
+      key: 'unserviceable',
+      label: 'Unserviceable',
       bg: '#FFEDD5',
       accent: '#C2410C',
       helper: '',
@@ -87,8 +87,8 @@ export default function JobOrderStatusSummary({ totals = {}, statusOptions = [],
     Ongoing: "🔄",
     Cancelled: "❌",
     Completed: "✅",
-    unserviceable_with_form: "📝",
-    unserviceable_without_form: "📄",
+    unserviceable: "📝",
+    // unserviceable_without_form: "📄",
     closed: "🔒",
   };
 

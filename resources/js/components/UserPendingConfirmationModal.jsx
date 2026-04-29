@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, memo } from 'react';
 import axios from 'axios';
+import CSMModal from './CSMModal';
 
 const TABS = ['Details', 'Dates'];
 
@@ -24,8 +25,11 @@ export default function JobOrderOngoingModal({
   isAdmin,
   isEditable = true
 }) {
+  const currentUser = JSON.parse(localStorage.getItem('user'));
   const [job, setJob] = useState(null);
   const [activeTab, setActiveTab] = useState(TABS[0]);
+  const [confirming, setConfirming] = useState(false);
+  const [isCsmModalOpen, setIsCsmModalOpen] = useState(false);
 
   const [form, setForm] = useState({
     diagnosis: '',
@@ -98,9 +102,17 @@ export default function JobOrderOngoingModal({
 
   const deniedAt = job?.action_report?.cancelled_at || job?.action_report?.updated_at;
   const isConfirmed = !!job?.action_report?.confirmed_at;
+  const isRequester = job?.requester?.id === currentUser?.id;
 
   // Read only if cancelled/denied or admin/tech restrictions apply
   const readOnly = isCancelledByUser || isCancelledByAdminOrTech || isDeniedByAdminOrTech || !isAdmin || !isEditable || isCompleted;
+
+  const showConfirmButtonUser =
+    isRequester &&
+    job?.action_report?.status === 'Ongoing' &&
+    form.diagnosis &&
+    form.action_taken &&
+    !isConfirmed;
 
 
   // Date formatting utilities
@@ -192,6 +204,96 @@ export default function JobOrderOngoingModal({
 
   const handleClose = () => {
     onClose();
+  };
+
+  const handleConfirm = async () => {
+    if (!job?.id || confirming) return;
+
+    setConfirming(true);
+
+    try {
+      await axios.patch(`/job-orders/${job.id}/confirm-diagnosis`);
+
+      showNotification?.(
+        'success',
+        'Job Confirmed',
+        'You have successfully confirmed the completion of this job.'
+      );
+
+      axios.post(`/job-orders/${job.id}/mark-notifications-read`)
+        .catch(err => console.error('Failed to mark notifications as read:', err));
+
+      const updatedJob = {
+        ...job,
+        action_report: {
+          ...job.action_report,
+          confirmed_at: new Date().toISOString(),
+        },
+      };
+
+      setJob(updatedJob);
+      if (onStatusChange) onStatusChange(updatedJob);
+      loadJob();
+    } catch (err) {
+      console.error('Confirmation error:', err);
+      const errorMessage = err.response?.data?.message || 'Something went wrong while confirming.';
+
+      showNotification?.(
+        'error',
+        'Confirmation Failed',
+        errorMessage
+      );
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const handleCsmCancel = () => {
+    setIsCsmModalOpen(false);
+  };
+
+  const handleCsmSave = async (formData) => {
+    try {
+      const payload = { ...formData };
+
+      const intFields = [
+        'cc1','cc2','cc3',
+        'sqd0','sqd1','sqd2','sqd3','sqd4','sqd5','sqd6','sqd7','sqd8',
+        'age'
+      ];
+
+      intFields.forEach((k) => {
+        if (payload[k] !== undefined && payload[k] !== null && payload[k] !== '') {
+          const v = parseInt(payload[k], 10);
+          payload[k] = Number.isNaN(v) ? payload[k] : v;
+        } else {
+          delete payload[k];
+        }
+      });
+
+      if (payload.date_time_visited && payload.date_time_visited.includes('T')) {
+        payload.date_time_visited = payload.date_time_visited.replace('T', ' ') + ':00';
+      }
+
+      await axios.post(`/job-orders/${job.id}/action-report/csm`, payload);
+
+      showNotification?.('success', 'Saved', 'CSM saved successfully.');
+      setIsCsmModalOpen(false);
+
+      const res = await axios.get(`/job-orders/${job.id}`);
+      const updatedJob = res.data;
+      setJob(updatedJob);
+      if (onStatusChange) onStatusChange(updatedJob);
+    } catch (err) {
+      console.error('CSM save failed', err);
+
+      if (err?.response?.status === 422 && err.response.data) {
+        showNotification?.('error', 'Validation Error', 'Please complete the required fields.');
+        return;
+      }
+
+      showNotification?.('error', 'Save Failed', 'Failed to save CSM.');
+    }
   };
 
   if (!isOpen || !job) return null;
@@ -624,6 +726,23 @@ export default function JobOrderOngoingModal({
         {/* Footer Actions */}
         <div className="bg-gray-50 border-t border-gray-200 px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            {showConfirmButtonUser && (
+              <button
+                onClick={() => setIsCsmModalOpen(true)}
+                disabled={confirming}
+                className={`inline-flex items-center px-6 py-2.5 rounded-lg text-white text-sm font-medium transition-all ${
+                  confirming
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                }`}
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                {confirming ? 'Confirming...' : 'Confirm Completion'}
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleClose}
@@ -633,6 +752,17 @@ export default function JobOrderOngoingModal({
             </button>
           </div>
         </div>
+
+        <CSMModal
+          isOpen={isCsmModalOpen}
+          initialData={{ rating: '', comments: '' }}
+          onSave={handleCsmSave}
+          onCancel={handleCsmCancel}
+          showNotification={showNotification}
+          job={job}
+          onStatusChange={onStatusChange}
+          loadJob={loadJob}
+        />
 
       </div>
     </div>

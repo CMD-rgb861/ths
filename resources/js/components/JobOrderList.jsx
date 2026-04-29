@@ -10,6 +10,7 @@ import JobOrderForm from './JobOrderForm';
 import NewJobOrdersModal from './NewJobOrdersModal';
 import PendingConfirmation from './PendingConfirmation';
 import ConfirmModal from './ConfirmModal'; // If not already imported
+import UserPendingConfirmation from './UserPendingConfirmation';
 
 const PER_PAGE = 10;
 
@@ -157,25 +158,12 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   const handleCloseJob = async (job) => {
     setCloseLoading(true);
     try {
-      // Check if we should preserve the current service status (Unserviceable with/without Form + conformed)
-      const keepServiceStatus =
-        (job.action_report?.conformed === true || job.action_report?.conformed === 1) &&
-        (job.action_report?.action_taken === 'Unserviceable with Form'); 
-        // ||
-        //  job.action_report?.action_taken === 'Unserviceable without Form');
-
-      // 1. Update action report: set action_taken = "Closed" (ONLY if we don't w ant to preserve)
-      if (!keepServiceStatus) {
-        await axios.put(`/job-orders/${job.id}/action-report`, {
-          action_taken: 'Closed',
-        });
-      }
-
-      // 2. Update job order: set status = Completed
+      // Only close the request here; the backend will preserve Unserviceable
+      // and may normalize other finalized service statuses to Closed.
       const statusId = getStatusId('Completed');
       await axios.put(`/job-orders/${job.id}`, {
         status: statusId,
-        action_taken: 'Closed', // backend will decide whether to keep or overwrite action_taken
+        action_taken: 'Closed',
       });
 
       showNotification(
@@ -251,22 +239,57 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         {/* Tabs for admin */}
-        {isAdmin && (
-          <div className="mb-4 flex gap-2">
-            <button
-              className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'all' ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-transparent text-gray-600 bg-white'}`}
-              onClick={() => setActiveTab('all')}
-            >
-              All Job Orders
-            </button>
-            <button
-              className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'pending-confirmations' ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-transparent text-gray-600 bg-white'}`}
-              onClick={() => setActiveTab('pending-confirmations')}
-            >
-              Pending Confirmations
-            </button>
-          </div>
-        )}
+          {isAdmin ? (
+            <div className="mb-4 flex gap-2">
+              <button
+                className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
+                  activeTab === 'all'
+                    ? 'border-blue-600 text-blue-700 bg-blue-50'
+                    : 'border-transparent text-gray-600'
+                }`}
+                onClick={() => setActiveTab('all')}
+              >
+                All Job Orders
+              </button>
+
+              <button
+                className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
+                  activeTab === 'pending'
+                    ? 'border-blue-600 text-blue-700 bg-blue-50'
+                    : 'border-transparent text-gray-600'
+                }`}
+                onClick={() => setActiveTab('pending')}
+              >
+                Pending Confirmations
+              </button>
+            </div>
+          ) : (
+
+            // Tabs for regular users (only show if not admin)
+            <div className="mb-4 flex gap-2">
+              <button
+                className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
+                  activeTab === 'all'
+                    ? 'border-blue-600 text-blue-700 bg-blue-50'
+                    : 'border-transparent text-gray-600'
+                }`}
+                onClick={() => setActiveTab('all')}
+              >
+                My Job Orders
+              </button>
+
+              <button
+                className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
+                  activeTab === 'pending'
+                    ? 'border-blue-600 text-blue-700 bg-blue-50'
+                    : 'border-transparent text-gray-600'
+                }`}
+                onClick={() => setActiveTab('pending')}
+              >
+                Pending Confirmation
+              </button>
+            </div>
+          )}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Job Orders</h1>
@@ -519,7 +542,17 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
             )}
           </>
         ) : (
-          <PendingConfirmation openModal={openModal} isJobNew={isJobNew} />
+          isAdmin ? (
+            <PendingConfirmation
+              openModal={openModal}
+              isJobNew={isJobNew}
+            />
+          ) : (
+            <UserPendingConfirmation
+              isJobNew={isJobNew}
+              showNotification={showNotification}
+            />
+          )
         )}
       </div>
 

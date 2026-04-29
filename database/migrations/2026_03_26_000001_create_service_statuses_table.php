@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('service_statuses', function (Blueprint $table) {
             $table->id();
-            $table->string('name')->unique(); // e.g., Unserviceable with Form, Diagnosed, etc.
+            $table->string('name')->unique(); // e.g., Unserviceable, Diagnosed, etc.
             $table->timestamps();
         });
     }

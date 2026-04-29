@@ -411,16 +411,12 @@ class JobOrderController extends Controller
             ) {
                 $completedStatusId = RequestStatus::where('name', 'Completed')->value('id');
 
-                // Decide whether to keep existing action_taken (Unserviceable with/without Form + conformed)
+                // Preserve Unserviceable when the job is finalized.
                 $keepUnserviceableActionTaken =
-                    ($actionReport->conformed === true || $actionReport->conformed === 1) &&
-                    in_array($actionReport->action_taken, [
-                        'Unserviceable with Form',
-                    ], true);
-                    // 'Unserviceable without Form'
+                    $actionReport->action_taken === 'Unserviceable';
 
                 $newActionTaken = $keepUnserviceableActionTaken
-                    ? $actionReport->action_taken   // preserve Unserviceable with/without Form
+                    ? $actionReport->action_taken   // preserve Unserviceable
                     : 'Closed';                     // normal close
 
                 $jobOrder->update(['status' => $completedStatusId]);
@@ -630,7 +626,7 @@ class JobOrderController extends Controller
 
     /**
      * Get job orders filtered by service status (for Service Status summary cards)
-     * Accepts: ?service_status=unserviceable_with_form|unserviceable_without_form|closed
+     * Accepts: ?service_status=unserviceable|closed
      */
     public function serviceStatus(Request $request)
     {
@@ -640,8 +636,7 @@ class JobOrderController extends Controller
 
         // Map UI keys to action_report.action_taken values
         $statusMap = [
-            'unserviceable_with_form' => 'Unserviceable with Form',
-            // 'unserviceable_without_form' => 'Unserviceable without Form',
+            'unserviceable' => 'Unserviceable',
             'closed' => 'Closed',
         ];
 

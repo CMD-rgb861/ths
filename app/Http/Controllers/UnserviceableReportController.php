@@ -184,8 +184,7 @@ class UnserviceableReportController extends Controller
         $pdf->SetFont($arialN, '', 11);
 
         $pdf->SetXY($x + $valueOffsetX, $y + $cellPaddingY);
-        // If action_taken is "Unserviceable with Form", show "Unserviceable" instead
-        $statusText = ($data->action_taken === 'Unserviceable with Form') ? 'Unserviceable' : $data->action_taken;
+        $statusText = $data->action_taken ?: 'Unserviceable';
         $pdf->Cell(130, 6, $statusText, 0);
 
         $y += $defaultRowHeight;

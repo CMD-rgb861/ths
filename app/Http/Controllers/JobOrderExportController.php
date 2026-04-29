@@ -41,7 +41,7 @@ class JobOrderExportController extends Controller
 
         // Create CSV content
         // Export both request status (Pending/Ongoing/Cancelled/etc.) and
-        // service status (action taken: Unserviceable with Form, Closed, etc.),
+        // service status (action taken: Unserviceable, Closed, etc.),
         // plus a derived "Outcome Type" column to distinguish serviced vs
         // administratively closed/declined jobs.
         $headers = [
@@ -96,7 +96,7 @@ class JobOrderExportController extends Controller
                 $requestStatus = 'Pending';
             }
 
-            // --- Service Status comes from action_taken (Unserviceable with Form, Closed, etc.) ---
+            // --- Service Status comes from action_taken (Unserviceable, Closed, etc.) ---
             $serviceStatus = $actionReport?->action_taken ?? '';
             // Normalised key for robust comparisons (handles case/whitespace)
             $serviceStatusKey = strtolower(trim((string) $serviceStatus));

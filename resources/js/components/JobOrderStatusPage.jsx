@@ -30,8 +30,8 @@ export default function JobOrderStatusPage({ showNotification }) {
 
   // --- NEW: Service Status Mode ---
   const SERVICE_STATUS_KEYS = [
-    'unserviceable_with_form',
-    'unserviceable_without_form',
+    'unserviceable',
+    // 'unserviceable_without_form',
     'closed',
   ];
   const [isServiceStatus, setIsServiceStatus] = useState(false);
@@ -185,7 +185,7 @@ export default function JobOrderStatusPage({ showNotification }) {
 
   // --- NEW: get display label for service status ---
   const getServiceStatusLabel = (key) => {
-    if (key === 'unserviceable_with_form') return 'Unserviceable with Form';
+    if (key === 'unserviceable') return 'Unserviceable';
     // if (key === 'unserviceable_without_form') return 'Unserviceable without Form';
     if (key === 'closed') return 'Service Closed';
     return '';
