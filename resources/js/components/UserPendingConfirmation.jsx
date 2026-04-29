@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import StatusBadge from './ui/StatusBadge';
-import StatusIndicator from './ui/StatusIndicator';
 import UserPendingConfirmationModal from './UserPendingConfirmationModal';
 
 export default function UserPendingConfirmation({ isJobNew, showNotification }) {
@@ -36,6 +35,11 @@ export default function UserPendingConfirmation({ isJobNew, showNotification }) 
       return isJobNew(jobId);
     }
     return false;
+  };
+
+  // Get substatus text for users (always "Waiting for your confirmation" since they're the requester)
+  const getSubStatus = () => {
+    return 'Waiting for your confirmation';
   };
 
   if (loading) {
@@ -83,15 +87,12 @@ export default function UserPendingConfirmation({ isJobNew, showNotification }) 
 
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center space-x-2">
-
-                    {/* ✅ FIXED CRASH HERE */}
                     {checkIfJobNew(job.id) && (
                       <span className="relative flex h-3 w-3">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                         <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
                       </span>
                     )}
-
                     <span className="text-sm font-semibold text-gray-900">
                       {job.job_order_no}
                     </span>
@@ -123,11 +124,12 @@ export default function UserPendingConfirmation({ isJobNew, showNotification }) 
                 <td className="px-6 py-4">
                   <div className="flex flex-col items-center space-y-1">
                     <StatusBadge status={job.action_report?.status} />
-                    <StatusIndicator
-                      status={job.action_report?.status}
-                      actionReport={job.action_report}
-                      requesterId={job.requester?.id}
-                    />
+                    <span className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">
+                      <svg className="w-3 h-3 mr-1 animate-spin" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      {getSubStatus()}
+                    </span>
                   </div>
                 </td>
 

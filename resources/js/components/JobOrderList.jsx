@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { useLocation } from 'react-router-dom';
-import { FaBell } from 'react-icons/fa';
+import { FaBell, FaList } from 'react-icons/fa';
 import JobOrderModal from './JobOrderModal';
 import JobOrderOngoingModal from './JobOrderOngoingModal';
 import StatusBadge from './ui/StatusBadge';
@@ -11,6 +11,7 @@ import NewJobOrdersModal from './NewJobOrdersModal';
 import PendingConfirmation from './PendingConfirmation';
 import ConfirmModal from './ConfirmModal'; // If not already imported
 import UserPendingConfirmation from './UserPendingConfirmation';
+import QueueModal from './UserQueueModal';
 
 const PER_PAGE = 10;
 
@@ -42,6 +43,9 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   const [closeJobId, setCloseJobId] = useState(null);
   const [closeLoading, setCloseLoading] = useState(false);
   const [filter, setFilter] = useState('all'); // 'all', 'conformed', 'awaiting'
+
+  const [queueModalOpen, setQueueModalOpen] = useState(false);
+  const [selectedJobForQueue, setSelectedJobForQueue] = useState(null);
 
   // Use props if provided, otherwise fallback to localStorage
   let user = userProp;
@@ -337,8 +341,19 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                 </div>
               </div>
             </div>
+          )} {/* ← Fixed: closing parenthesis here */}
+
+          {/* USER SIDE - Show Queue button */}
+          {!isAdmin && (
+            <button
+              onClick={() => setQueueModalOpen(true)}
+              className="inline-flex items-center px-2 py-2 bg-blue-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all shadow-md hover:shadow-lg"
+            >
+              <FaList className="w-5 h-5 mr-2" />
+              <span className="font-semibold">View Queue</span>
+            </button>
           )}
-        </div>
+        </div>  
 
         {/* Search Bar and Filter */}
         <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4">
@@ -638,6 +653,12 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
           if (job) handleCloseJob(job);
         }}
         onCancel={() => setCloseJobId(null)}
+      />
+
+      <QueueModal
+        isOpen={queueModalOpen}
+        onClose={() => setQueueModalOpen(false)}
+        user={user}
       />
     </div>
   );

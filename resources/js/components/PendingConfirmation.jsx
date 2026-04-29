@@ -20,6 +20,29 @@ export default function PendingConfirmation({ isJobNew }) {
     setIsModalOpen(false);
   };
 
+  // Get substatus text based on controller criteria
+  const getSubStatus = (job) => {
+    const actionReport = job.action_report;
+    
+    // Controller already filtered for:
+    // - conformed = false
+    // - Has action_taken in ['Closed', 'Unserviceable', 'Diagnosed', 'Serviced']
+    // - Has at least one content field (diagnosis, action_taken, serviced_by, dates, remarks)
+    
+    // So this component ONLY receives jobs waiting for confirmation
+    // Show based on current user
+    try {
+      const user = JSON.parse(localStorage.getItem('user'));
+      const isRequester = user?.id === job.requester?.id;
+      
+      return isRequester 
+        ? 'Waiting for your confirmation' 
+        : 'Waiting for confirmation';
+    } catch (e) {
+      return 'Waiting for confirmation';
+    }
+  };
+
   useEffect(() => {
     setLoading(true);
     axios.get('/pending-confirmations')
@@ -91,11 +114,12 @@ export default function PendingConfirmation({ isJobNew }) {
                 <td className="px-6 py-4">
                   <div className="flex flex-col items-center space-y-1">
                     <StatusBadge status={job.action_report?.status} />
-                    <StatusIndicator
-                      status={job.action_report?.status}
-                      actionReport={job.action_report}
-                      requesterId={job.requester?.id}
-                    />
+                    <span className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">
+                      <svg className="w-3 h-3 mr-1 animate-spin" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      {getSubStatus(job)}
+                    </span>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -116,10 +140,10 @@ export default function PendingConfirmation({ isJobNew }) {
         </table>
       </div>
       <PendingConfirmationModal
-          isOpen={isModalOpen}
-          onClose={closeModal}
-          jobId={selectedJobId}
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        jobId={selectedJobId}
       />
-      </>
+    </>
   );
 }

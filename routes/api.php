@@ -12,6 +12,7 @@ use App\Http\Controllers\ActionReportController;
 use App\Http\Controllers\UnserviceableReportController;
 use App\Http\Controllers\CompletedReportController;
 use App\Http\Controllers\SerialNumberController;
+use App\Http\Controllers\JobOrderQueueController;
 use App\Models\JobOrder;
 
 /*
@@ -104,4 +105,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Pending Confirmations route (admin/tech only)
     Route::get('/pending-confirmations', [\App\Http\Controllers\PendingConfirmationController::class, 'index']);
+
+    // Queue routes
+    Route::get('/queue', [JobOrderQueueController::class, 'index']);
+    Route::get('/queue/stats', [JobOrderQueueController::class, 'getStats']);
+    Route::get('/queue/user-jobs', [JobOrderQueueController::class, 'getUserJobsInQueue']);
+    Route::get('/queue/{jobOrder}/position', [JobOrderQueueController::class, 'getPosition']);
+
 });
