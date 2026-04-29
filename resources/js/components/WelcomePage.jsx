@@ -14,8 +14,11 @@ export default function WelcomePage() {
 
   // Redirect if user does not have both admin and technician roles
   useEffect(() => {
-    const roles = user?.roles || [];
-    if (!(roles.includes('admin') && roles.includes('technician'))) {
+    const roles = Array.isArray(user?.roles) ? user.roles : [];
+    const hasAdminRole = roles.some(r => (typeof r === 'string' ? r : r.name) === 'admin');
+    const hasTechnicianRole = roles.some(r => (typeof r === 'string' ? r : r.name) === 'technician');
+
+    if (!(hasAdminRole && hasTechnicianRole)) {
       navigate('/', { replace: true });
     }
   }, [user, navigate]);

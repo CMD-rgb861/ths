@@ -11,6 +11,28 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 
 const PER_PAGE = 5;
 const STATUSES = ['Pending', 'Ongoing', 'Completed', 'Cancelled'];
+// Service status options for CSV export (based on action_report.action_taken)
+const SERVICE_STATUS_FILTERS = [
+  {
+    key: 'service_unserviceable_with_form',
+    label: 'Unserviceable with Form',
+    match: 'Unserviceable with Form',
+    dotClass: 'bg-gray-600',
+  },
+  // {
+  //   key: 'service_unserviceable_without_form',
+  //   label: 'Unserviceable without Form',
+  //   match: 'Unserviceable without Form',
+  //   dotClass: 'bg-gray-400',
+  // },
+  {
+    key: 'service_closed',
+    label: 'Service Closed',
+    // Backend stores this as "Closed" in action_taken
+    match: 'Closed',
+    dotClass: 'bg-gray-800',
+  },
+];
 const STATUS_STYLES = {
   Pending: 'bg-yellow-100 text-yellow-800',
   Ongoing: 'bg-blue-100 text-blue-800',
@@ -43,7 +65,6 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
   const [statusOptions, setStatusOptions] = useState([]);
   const [serviceTotals, setServiceTotals] = useState({
     unserviceable_with_form: null,
-    unserviceable_without_form: null,
     closed: null,
   });
 
@@ -118,7 +139,6 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
       try {
         const keys = [
           'unserviceable_with_form',
-          'unserviceable_without_form',
           'closed',
         ];
         const results = await Promise.all(
@@ -128,13 +148,11 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
         );
         setServiceTotals({
           unserviceable_with_form: results[0].data.count,
-          unserviceable_without_form: results[1].data.count,
-          closed: results[2].data.count,
+          closed: results[1].data.count,
         });
       } catch (e) {
         setServiceTotals({
           unserviceable_with_form: 0,
-          unserviceable_without_form: 0,
           closed: 0,
         });
       }
@@ -348,9 +366,20 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
   const exportToCSV = (statusFilter = null) => {
     // Use original orders data, not filtered
     let dataToExport = [...orders];
-    
+
+    // Detect if we're filtering by request status or service status
+    const serviceFilter = SERVICE_STATUS_FILTERS.find(f => f.key === statusFilter);
+
     if (statusFilter) {
-      dataToExport = dataToExport.filter(o => getOrderStatus(o) === statusFilter);
+      if (serviceFilter) {
+        // Filter by service status (action_report.action_taken)
+        dataToExport = dataToExport.filter(o =>
+          (o.action_report?.action_taken || '').toLowerCase() === serviceFilter.match.toLowerCase()
+        );
+      } else {
+        // Default: filter by request status
+        dataToExport = dataToExport.filter(o => getOrderStatus(o) === statusFilter);
+      }
     }
 
     if (dataToExport.length === 0) {
@@ -361,27 +390,44 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
     const headers = [
       'Job Order No',
       'Department',
-      'Status',
+      'Request Status',
+      'Service Status',
       'Requested By',
       'Signatory',
       'Accepted By',
       'Serviced By',
       'Cancelled By',
-      'Date Created'
+      'Date Created',
     ];
 
     const rows = dataToExport.map(order => {
-      const status = getOrderStatus(order) || 'Pending';
+      const requestStatus = getOrderStatus(order) || 'Pending';
+      const serviceStatus = order.action_report?.action_taken || '';
       const requestedBy = order.requester?.name || '';
       const signatory = order.signature_name || '';
-      const acceptedBy = order.action_report?.accepted_by_user?.name || 
+
+      // Derive serviced-by name (technician or raw value)
+      const servicedByRaw = order.action_report?.serviced_by?.name || 
+                        order.action_report?.serviced_by || '';
+      const servicedByTrim = (servicedByRaw || '').toString().trim();
+
+      // Default Accepted By logic (IT Director fallback for normal serviced jobs)
+      let acceptedBy = order.action_report?.accepted_by_user?.name || 
                         itDirector?.user?.name || 
                         itDirector?.name || '';
-      const servicedBy = order.action_report?.serviced_by?.name || 
-                        order.action_report?.serviced_by || '';
-      const cancelledBy = order.action_report?.cancelled_by?.name || 
-                        itDirector?.user?.name || 
-                        itDirector?.name;
+
+      // If the job is "Closed" and there is no technician, treat it as
+      // administratively declined/closed and *suppress* Accepted By in CSV.
+      const serviceStatusKey = (serviceStatus || '').toString().trim().toLowerCase();
+      if (serviceStatusKey === 'closed' && servicedByTrim === '') {
+        acceptedBy = '';
+      }
+
+      const servicedBy = servicedByRaw;
+
+	  const cancelledBy = order.action_report?.cancelled_by?.name || 
+		itDirector?.user?.name || 
+		itDirector?.name;
       const dateCreated = order.created_at 
         ? new Date(order.created_at).toLocaleString('en-US', {
             year: 'numeric',
@@ -397,7 +443,8 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
       return [
         order.job_order_no || '',
         order.department?.name || '',
-        status,
+        requestStatus,
+        serviceStatus,
         requestedBy,
         signatory,
         acceptedBy,
@@ -416,9 +463,11 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     
-    const filename = statusFilter 
-      ? `job_orders_${statusFilter.toLowerCase()}_${new Date().toISOString().split('T')[0]}.csv`
-      : `job_orders_all_${new Date().toISOString().split('T')[0]}.csv`;
+    const filenameBase = serviceFilter
+      ? serviceFilter.label.toLowerCase().replace(/\s+/g, '_')
+      : (statusFilter ? statusFilter.toLowerCase().replace(/\s+/g, '_') : 'all');
+
+    const filename = `job_orders_${filenameBase}_${new Date().toISOString().split('T')[0]}.csv`;
     
     link.setAttribute('href', url);
     link.setAttribute('download', filename);
@@ -489,6 +538,19 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
                           'bg-red-500'
                         }`}></span>
                         {status} Only
+                      </button>
+                    ))}
+
+                    {/* Service Status export options */}
+                    <div className="border-t border-gray-100 my-1"></div>
+                    {SERVICE_STATUS_FILTERS.map(option => (
+                      <button
+                        key={option.key}
+                        onClick={() => exportToCSV(option.key)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                      >
+                        <span className={`w-2 h-2 rounded-full mr-3 ${option.dotClass}`}></span>
+                        {option.label} Only
                       </button>
                     ))}
                   </div>

@@ -71,9 +71,9 @@ export default function UserJobHistory({ showNotification }) {
       setPagination(safePagination);
 
       // Add console logs for debugging
-      console.log("Fetched Job Orders:", safeOrders);
-      console.log("Pagination:", safePagination);
-      console.log("User has job requests: ", safeOrders.length > 0);
+      // console.log("Fetched Job Orders:", safeOrders);
+      // console.log("Pagination:", safePagination);
+      // console.log("User has job requests: ", safeOrders.length > 0);
 
     } catch (error) {
       console.error('Error fetching job history:', error);

@@ -13,9 +13,11 @@ class JobOrderExportController extends Controller
         $query = JobOrder::with([
             'department',
             'requester',
+            'requestStatus',
+            'actionReport',
             'actionReport.servicedBy',
             'actionReport.acceptedBy',
-            'actionReport.cancelledBy'
+            'actionReport.cancelledBy',
         ]);
 
         // Filter by status if provided and not 'all'
@@ -27,46 +29,135 @@ class JobOrderExportController extends Controller
 
         $orders = $query->orderBy('created_at', 'desc')->get();
 
+        // Normalise status key for conditional column logic
+        $statusKey = $status ? strtolower($status) : 'all';
+
+        // Decide which "people" columns to include depending on the
+        // selected status filter. This keeps CSVs concise when certain
+        // data is impossible/irrelevant for that status.
+        $includeAcceptedBy  = !in_array($statusKey, ['pending']);
+        $includeServicedBy  = !in_array($statusKey, ['pending']);
+        $includeCancelledBy = in_array($statusKey, ['all', 'cancelled', 'completed', 'unserviceable']);
+
         // Create CSV content
+        // Export both request status (Pending/Ongoing/Cancelled/etc.) and
+        // service status (action taken: Unserviceable with Form, Closed, etc.),
+        // plus a derived "Outcome Type" column to distinguish serviced vs
+        // administratively closed/declined jobs.
         $headers = [
             'Job Order No',
             'Department',
             'Requester',
             'Signatory',
-            'Status',
-            'Accepted By',
-            'Serviced By',
-            'Cancelled By',
-            'Created At',
-            'Updated At'
+            'Request Status',
+            'Service Status',
+            'Outcome Type',
         ];
+
+        if ($includeAcceptedBy) {
+            $headers[] = 'Accepted By';
+        }
+        if ($includeServicedBy) {
+            $headers[] = 'Serviced By';
+        }
+        if ($includeCancelledBy) {
+            $headers[] = 'Cancelled / Closed By';
+        }
+
+        $headers[] = 'Created At';
+        $headers[] = 'Updated At';
 
         $csvData = [];
         $csvData[] = $headers;
 
         foreach ($orders as $order) {
-            $status = $order->actionReport->status ?? 'Pending';
+            $actionReport = $order->actionReport;
+
+            // --- Request Status (matches UI logic, including "Cancelled by User") ---
+            if (
+                (($order->requestStatus?->name === 'Cancelled') || ($actionReport?->status === 'Cancelled')) &&
+                $actionReport?->cancelled_by &&
+                $order->requester &&
+                (
+                    // cancelled_by can be an object or an id
+                    (is_object($actionReport->cancelled_by)
+                        ? $actionReport->cancelled_by->id
+                        : $actionReport->cancelled_by) === $order->requester->id
+                )
+            ) {
+                $requestStatus = 'Cancelled by User';
+            } elseif ($order->requestStatus?->name) {
+                $requestStatus = $order->requestStatus->name;
+            } elseif (is_string($order->status)) {
+                $requestStatus = $order->status;
+            } elseif ($actionReport?->status) {
+                $requestStatus = $actionReport->status;
+            } else {
+                $requestStatus = 'Pending';
+            }
+
+            // --- Service Status comes from action_taken (Unserviceable with Form, Closed, etc.) ---
+            $serviceStatus = $actionReport?->action_taken ?? '';
+            // Normalised key for robust comparisons (handles case/whitespace)
+            $serviceStatusKey = strtolower(trim((string) $serviceStatus));
+
             $requestedBy = $order->requester->name ?? '';
-            $acceptedBy = $order->actionReport->acceptedBy->name ?? '';
-            $servicedBy = $order->actionReport->servicedBy->name ?? $order->actionReport->serviced_by ?? '';
-            $cancelledBy = $order->actionReport->cancelledBy->name ?? '';
-            
-            $csvData[] = [
+            $acceptedBy = $actionReport?->acceptedBy?->name ?? '';
+            $servicedBy = $actionReport?->servicedBy?->name
+                ?? ($actionReport?->serviced_by ?? '');
+            $cancelledBy = $actionReport?->cancelledBy?->name ?? '';
+
+            // Derive a high-level outcome type to make "Completed but Closed"
+            // vs "Completed and Serviced" easy to distinguish in spreadsheets.
+            $outcomeType = 'Serviced';
+
+            // Treat as "Closed (Declined)" when:
+            // - service status is "Closed" (any case/whitespace)
+            // - there is no technician (no Serviced By)
+            // This covers cases like Completed+Closed with remarks only,
+            // and any other administratively closed job without technician work.
+            if (
+                $serviceStatusKey === 'closed' &&
+                (trim((string) $servicedBy) === '')
+            ) {
+                $outcomeType = 'Closed (Declined)';
+
+                // For declined/administratively closed jobs, we don't want
+                // to show an "Accepted By" value in the CSV, even if the
+                // job was temporarily marked Ongoing earlier. This keeps
+                // the export aligned with the final outcome.
+                $acceptedBy = '';
+            }
+
+            // Build row respecting the same conditional columns as headers
+            $row = [
                 $order->job_order_no,
                 $order->department->name ?? '',
                 $requestedBy,
                 $order->signature_name ?? '',
-                $status,
-                $acceptedBy,
-                $servicedBy,
-                $cancelledBy,
-                $order->created_at->format('Y-m-d H:i:s'),
-                $order->updated_at->format('Y-m-d H:i:s')
+                $requestStatus,
+                $serviceStatus,
+                $outcomeType,
             ];
+
+            if ($includeAcceptedBy) {
+                $row[] = $acceptedBy;
+            }
+            if ($includeServicedBy) {
+                $row[] = $servicedBy;
+            }
+            if ($includeCancelledBy) {
+                $row[] = $cancelledBy;
+            }
+
+            $row[] = $order->created_at->format('Y-m-d H:i:s');
+            $row[] = $order->updated_at->format('Y-m-d H:i:s');
+
+            $csvData[] = $row;
         }
 
         // Generate CSV file
-        $filename = 'job_orders_' . ($status ?? 'all') . '_' . date('Y-m-d_His') . '.csv';
+        $filename = 'job_orders_' . ($statusKey ?? 'all') . '_' . date('Y-m-d_His') . '.csv';
         
         $handle = fopen('php://temp', 'r+');
         foreach ($csvData as $row) {

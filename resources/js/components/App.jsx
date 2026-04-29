@@ -378,7 +378,7 @@ export default function App() {
 
       {/* Confirmation Modal for Switch Role */}
       <ConfirmModal
-        show={showSwitchConfirm}
+        isOpen={showSwitchConfirm}
         title="Switch Role"
         message="Are you sure you want to switch your role? You will be redirected to the role selection page."
         confirmText="Yes, Switch"

@@ -186,11 +186,11 @@ function SerialNumberCompareModal({
             <Section title="Asset / Software Details">
               <InfoField label="Brand Name" value={job?.action_report?.brand_name} />
               <InfoField label="Brand Model" value={job?.action_report?.brand_model} />
-              <InfoField
+              {/* <InfoField
                 label="Software Name"
                 value={job?.action_report?.software_name}
                 className="sm:col-span-2"
-              />
+              /> */}
             </Section>
           </div>
         )}
