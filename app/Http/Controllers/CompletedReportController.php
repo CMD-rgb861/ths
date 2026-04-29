@@ -541,7 +541,9 @@ class CompletedReportController extends Controller
                         $value = $jobOrder->actionReport->date_finished ? Carbon::parse($jobOrder->actionReport->date_finished)->format('m/d/Y h:i A') : '';
                         break;
                     case '*CONFORME (Requestor):':
-                        $value = $jobOrder->requester->name ?? ($jobOrder->conformed_by ?? '');
+                        $value = (!empty($jobOrder->actionReport) && $jobOrder->actionReport->conformed)
+                            ? ($jobOrder->requester->name ?? ($jobOrder->conformer->name ?? $jobOrder->conformed_by ?? ''))
+                            : '';
                         break;
                 }
                 if (!empty($value)) {
