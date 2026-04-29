@@ -65,7 +65,6 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
   const [statusOptions, setStatusOptions] = useState([]);
   const [serviceTotals, setServiceTotals] = useState({
     unserviceable_with_form: null,
-    unserviceable_without_form: null,
     closed: null,
   });
 
@@ -140,7 +139,6 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
       try {
         const keys = [
           'unserviceable_with_form',
-          'unserviceable_without_form',
           'closed',
         ];
         const results = await Promise.all(
@@ -150,13 +148,11 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
         );
         setServiceTotals({
           unserviceable_with_form: results[0].data.count,
-          unserviceable_without_form: results[1].data.count,
-          closed: results[2].data.count,
+          closed: results[1].data.count,
         });
       } catch (e) {
         setServiceTotals({
           unserviceable_with_form: 0,
-          unserviceable_without_form: 0,
           closed: 0,
         });
       }

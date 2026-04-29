@@ -8,6 +8,7 @@ import StatusBadge from './ui/StatusBadge';
 import StatusIndicator from './ui/StatusIndicator';
 import JobOrderForm from './JobOrderForm';
 import NewJobOrdersModal from './NewJobOrdersModal';
+import PendingConfirmation from './PendingConfirmation';
 import ConfirmModal from './ConfirmModal'; // If not already imported
 
 const PER_PAGE = 10;
@@ -23,6 +24,8 @@ function isRole(user, roleName) {
 }
 
 export default function JobOrderList({ showNotification, setNewPendingJobs, newPendingJobs, isAdmin: isAdminProp, isTechnician: isTechnicianProp, user: userProp }) {
+  // Tab state for admin
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'pending-confirmations'
   const location = useLocation();
   
   const [jobs, setJobs] = useState([]);
@@ -161,7 +164,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         // ||
         //  job.action_report?.action_taken === 'Unserviceable without Form');
 
-      // 1. Update action report: set action_taken = "Closed" (ONLY if we don't want to preserve)
+      // 1. Update action report: set action_taken = "Closed" (ONLY if we don't w ant to preserve)
       if (!keepServiceStatus) {
         await axios.put(`/job-orders/${job.id}/action-report`, {
           action_taken: 'Closed',
@@ -247,6 +250,23 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        {/* Tabs for admin */}
+        {isAdmin && (
+          <div className="mb-4 flex gap-2">
+            <button
+              className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'all' ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-transparent text-gray-600 bg-white'}`}
+              onClick={() => setActiveTab('all')}
+            >
+              All Job Orders
+            </button>
+            <button
+              className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'pending-confirmations' ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-transparent text-gray-600 bg-white'}`}
+              onClick={() => setActiveTab('pending-confirmations')}
+            >
+              Pending Confirmations
+            </button>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Job Orders</h1>
@@ -327,173 +347,179 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         </div>
       </div>
 
-      {/* Job Orders Table */}
+      {/* Job Orders Table (tabbed) */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        {loading && (
-          <div className="p-12 text-center">
-            <div className="inline-flex items-center space-x-2 text-gray-500">
-              <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span className="text-sm font-medium">Loading job orders...</span>
-            </div>
-          </div>
-        )}
+        {activeTab === 'all' ? (
+          <>
+            {loading && (
+              <div className="p-12 text-center">
+                <div className="inline-flex items-center space-x-2 text-gray-500">
+                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="text-sm font-medium">Loading job orders...</span>
+                </div>
+              </div>
+            )}
 
-        {!loading && jobs.length === 0 && (
-          <div className="p-12 text-center">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <p className="mt-4 text-sm text-gray-500">No job orders found</p>
-            <p className="text-xs text-gray-400 mt-1">Try adjusting your search criteria</p>
-          </div>
-        )}
+            {!loading && jobs.length === 0 && (
+              <div className="p-12 text-center">
+                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p className="mt-4 text-sm text-gray-500">No job orders found</p>
+                <p className="text-xs text-gray-400 mt-1">Try adjusting your search criteria</p>
+              </div>
+            )}
 
-        {!loading && jobs.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Job Order No.
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Department
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Categories
-                  </th>
-                  {isAdmin && (
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Requester
-                    </th>
-                  )}
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
+            {!loading && jobs.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        Job Order No.
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        Department
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        Categories
+                      </th>
+                      {isAdmin && (
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Requester
+                        </th>
+                      )}
+                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
 
-              <tbody className="bg-white divide-y divide-gray-200">
-                {jobs.map((job) => (
-                  <tr key={job.id} className="hover:bg-gray-50 transition-colors duration-150">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        {isJobNew(job.id) && (
-                          <span className="relative flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-                          </span>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {jobs.map((job) => (
+                      <tr key={job.id} className="hover:bg-gray-50 transition-colors duration-150">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center space-x-2">
+                            {isJobNew(job.id) && (
+                              <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                              </span>
+                            )}
+                            <span className="text-sm font-semibold text-gray-900">{job.job_order_no}</span>
+                            {isJobNew(job.id) && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                NEW
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm text-gray-700">{job.department?.name || '—'}</span>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap gap-1">
+                            {job.categories?.length > 0 ? (
+                              job.categories.map((category, index) => (
+                                <span
+                                  key={index}
+                                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                                >
+                                  {category.name}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-sm text-gray-400 italic">No categories</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {isAdmin && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-gray-700">{job.requester?.name || '—'}</span>
+                          </td>
                         )}
-                        <span className="text-sm font-semibold text-gray-900">{job.job_order_no}</span>
-                        {isJobNew(job.id) && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                            NEW
-                          </span>
-                        )}
-                      </div>
-                    </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-700">{job.department?.name || '—'}</span>
-                    </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col items-center space-y-1">
+                            <StatusBadge status={job.action_report?.status} />
+                            {job.action_report?.status === 'Ongoing' && (
+                              <StatusIndicator
+                                status={job.action_report?.status}
+                                actionReport={job.action_report}
+                                requesterId={job.requester?.id}
+                              />
+                            )}
+                          </div>
+                        </td>
 
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1">
-                        {job.categories?.length > 0 ? (
-                          job.categories.map((category, index) => (
-                            <span
-                              key={index}
-                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                            >
-                              {category.name}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-sm text-gray-400 italic">No categories</span>
-                        )}
-                      </div>
-                    </td>
-
-                    {isAdmin && (
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-700">{job.requester?.name || '—'}</span>
-                      </td>
-                    )}
-
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col items-center space-y-1">
-                        <StatusBadge status={job.action_report?.status} />
-                        {job.action_report?.status === 'Ongoing' && (
-                          <StatusIndicator
-                            status={job.action_report?.status}
-                            actionReport={job.action_report}
-                            requesterId={job.requester?.id}
-                          />
-                        )}
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <button
-                        onClick={() => openModal(job)}
-                        className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150"
-                      >
-                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        View Details
-                      </button>
-                      {/* --- Show Close button if conformed is true and status is Ongoing, or substatus is 'Waiting for confirmation', and user is admin/technician --- */}
-                      {(() => {
-                        const isOngoing = job.action_report?.status === 'Ongoing';
-                        const isConformed = job.action_report?.conformed === true || job.action_report?.conformed === 1;
-                        // Substatus logic: mimic StatusIndicator logic
-                        const user = userProp || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user')) : null);
-                        const isRequester = user?.id === job.requester?.id;
-                        const hasReportContent = job.action_report && (
-                          !!job.action_report.diagnosis ||
-                          !!job.action_report.action_taken ||
-                          !!job.action_report.serviced_by ||
-                          !!job.action_report.date_started ||
-                          !!job.action_report.date_finished ||
-                          !!job.action_report.remarks
-                        );
-                        const isConfirmed = !!(job.action_report?.confirmed_at || job.action_report?.confirmed || job.action_report?.conformed);
-                        let showForSubStatus = false;
-                        if (isOngoing && hasReportContent && !isConfirmed) {
-                          // Substatus string as in StatusIndicator
-                          const subStatus = isRequester ? 'Waiting for your confirmation' : 'Waiting for confirmation';
-                          showForSubStatus = true; // If you want to show for both cases
-                        }
-                        if ((isOngoing && (isConformed || showForSubStatus)) && (isAdmin || isTechnician)) {
-                          return (
-                            <button
-                              onClick={() => setCloseJobId(job.id)}
-                              className="inline-flex items-center px-4 py-2 ml-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-150"
-                              disabled={closeLoading}
-                            >
-                              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                              {closeLoading && closeJobId === job.id ? 'Closing...' : 'Close'}
-                            </button>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <button
+                            onClick={() => openModal(job)}
+                            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150"
+                          >
+                            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            View Details
+                          </button>
+                          {/* --- Show Close button if conformed is true and status is Ongoing, or substatus is 'Waiting for confirmation', and user is admin/technician --- */}
+                          {(() => {
+                            const isOngoing = job.action_report?.status === 'Ongoing';
+                            const isConformed = job.action_report?.conformed === true || job.action_report?.conformed === 1;
+                            // Substatus logic: mimic StatusIndicator logic
+                            const user = userProp || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user')) : null);
+                            const isRequester = user?.id === job.requester?.id;
+                            const hasReportContent = job.action_report && (
+                              !!job.action_report.diagnosis ||
+                              !!job.action_report.action_taken ||
+                              !!job.action_report.serviced_by ||
+                              !!job.action_report.date_started ||
+                              !!job.action_report.date_finished ||
+                              !!job.action_report.remarks
+                            );
+                            const isConfirmed = !!(job.action_report?.confirmed_at || job.action_report?.confirmed || job.action_report?.conformed);
+                            let showForSubStatus = false;
+                            if (isOngoing && hasReportContent && !isConfirmed) {
+                              // Substatus string as in StatusIndicator
+                              const subStatus = isRequester ? 'Waiting for your confirmation' : 'Waiting for confirmation';
+                              showForSubStatus = true; // If you want to show for both cases
+                            }
+                            if ((isOngoing && (isConformed || showForSubStatus)) && (isAdmin || isTechnician)) {
+                              return (
+                                <button
+                                  onClick={() => setCloseJobId(job.id)}
+                                  className="inline-flex items-center px-4 py-2 ml-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-150"
+                                  disabled={closeLoading}
+                                >
+                                  <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  {closeLoading && closeJobId === job.id ? 'Closing...' : 'Close'}
+                                </button>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        ) : (
+          <PendingConfirmation openModal={openModal} isJobNew={isJobNew} />
         )}
       </div>
 

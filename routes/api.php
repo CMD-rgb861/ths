@@ -101,4 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/serial-number/search', [SerialNumberController::class, 'search']);
     // Software name search
     Route::get('/software-name/search', [\App\Http\Controllers\SoftwareNameController::class, 'search']);
+
+    // Pending Confirmations route (admin/tech only)
+    Route::get('/pending-confirmations', [\App\Http\Controllers\PendingConfirmationController::class, 'index']);
 });

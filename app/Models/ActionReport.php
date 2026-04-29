@@ -69,6 +69,11 @@ class ActionReport extends Model
         return $this->belongsTo(User::class, 'serviced_by');
     }
 
+    public function servicedByUser()
+    {
+        return $this->belongsTo(User::class, 'serviced_by');
+    }
+
     public function acceptedBy()
     {
         return $this->belongsTo(User::class, 'accepted_by');
