@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 export default function SummaryRequestReportsModal({ isOpen, onClose, reportType }) {
@@ -8,9 +8,11 @@ export default function SummaryRequestReportsModal({ isOpen, onClose, reportType
   // Daily state
   const [dailyDate, setDailyDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Weekly state
-  const [weeklyStartDate, setWeeklyStartDate] = useState('');
-  const [weeklyEndDate, setWeeklyEndDate] = useState('');
+  // Weekly state (NEW)
+  const [weeklyYear, setWeeklyYear] = useState(new Date().getFullYear());
+  const [weeklyMonth, setWeeklyMonth] = useState(new Date().getMonth() + 1);
+  const [selectedWeek, setSelectedWeek] = useState(null);
+  const [weeks, setWeeks] = useState([]);
 
   // Monthly state
   const [monthlyYear, setMonthlyYear] = useState(new Date().getFullYear());
@@ -49,14 +51,16 @@ export default function SummaryRequestReportsModal({ isOpen, onClose, reportType
     }
   };
 
-  const handleGenerateWeekly = async () => {
-    if (!weeklyStartDate || !weeklyEndDate) {
-      setError('Please select both start and end dates');
+    const handleGenerateWeekly = async () => {
+    if (selectedWeek === null) {
+      setError('Please select a week');
       return;
     }
 
-    if (new Date(weeklyStartDate) > new Date(weeklyEndDate)) {
-      setError('Start date must be before end date');
+    const week = weeks[selectedWeek];
+
+    if (!week) {
+      setError('Invalid week selection');
       return;
     }
 
@@ -66,8 +70,8 @@ export default function SummaryRequestReportsModal({ isOpen, onClose, reportType
     try {
       const response = await axios.get('/reports/weekly', {
         params: {
-          start_date: weeklyStartDate,
-          end_date: weeklyEndDate,
+          start_date: week.start,
+          end_date: week.end,
         },
         responseType: 'blob',
       });
@@ -75,10 +79,13 @@ export default function SummaryRequestReportsModal({ isOpen, onClose, reportType
       const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Weekly_Report_${weeklyStartDate}_to_${weeklyEndDate}.pdf`);
+      link.setAttribute(
+        'download',
+        `Weekly_Report_${week.start}_to_${week.end}.pdf`
+      );
       document.body.appendChild(link);
       link.click();
-      link.parentNode.removeChild(link);
+      link.remove();
 
       onClose();
     } catch (err) {
@@ -117,6 +124,63 @@ export default function SummaryRequestReportsModal({ isOpen, onClose, reportType
     }
   };
 
+    const generateWeeks = (year, month) => {
+    const weeks = []; 
+
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay = new Date(year, month, 0);
+
+    let current = new Date(firstDay);
+    let week = [];
+    let weekIndex = 1;
+
+    const format = (date) => date.toISOString().split('T')[0];
+
+    const formatLabel = (start, end, index) => {
+      return `Week ${index}`;
+    };
+
+    while (current <= lastDay) {
+      const day = current.getDay(); // 0 Sun - 6 Sat
+
+      // Monday–Friday only
+      if (day >= 1 && day <= 5) {
+        week.push(new Date(current));
+      }
+
+      const isFriday = day === 5;
+      const isLastDay = current.getTime() === lastDay.getTime();
+
+      if ((isFriday || isLastDay) && week.length > 0) {
+        const start = week[0];
+        const end = week[week.length - 1];
+
+        weeks.push({
+          label: `${formatLabel(start, end, weekIndex)} (${format(start)} - ${format(end)})`,
+          start: format(start),
+          end: format(end),
+          days: week.map(d => ({
+            date: format(d),
+            day: d.toLocaleDateString('en-US', { weekday: 'short' })
+          }))
+        });
+
+        week = [];
+        weekIndex++;
+      }
+
+      current.setDate(current.getDate() + 1);
+    }
+
+    return weeks;
+  };
+
+  useEffect(() => {
+    const generatedWeeks = generateWeeks(weeklyYear, weeklyMonth);
+    setWeeks(generatedWeeks);
+    setSelectedWeek(generatedWeeks.length ? 0 : null);
+  }, [weeklyYear, weeklyMonth]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
@@ -152,31 +216,61 @@ export default function SummaryRequestReportsModal({ isOpen, onClose, reportType
           )}
 
           {reportType === 'weekly' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={weeklyStartDate}
-                  onChange={(e) => setWeeklyStartDate(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={weeklyEndDate}
-                  onChange={(e) => setWeeklyEndDate(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+          <div className="space-y-4">
+            {/* Year */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Year
+              </label>
+              <input
+                type="number"
+                value={weeklyYear}
+                onChange={(e) => setWeeklyYear(parseInt(e.target.value))}
+                className="w-full px-4 py-2 border rounded-lg"
+              />
             </div>
-          )}
+
+            {/* Month */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Month
+              </label>
+              <select
+                value={weeklyMonth}
+                onChange={(e) => setWeeklyMonth(parseInt(e.target.value))}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {new Date(2000, i).toLocaleString('default', { month: 'long' })}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Week */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Select Week
+              </label>
+              <select
+                value={selectedWeek ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSelectedWeek(value === '' ? null : Number(value));
+                }}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                <option value="">Select a week</option>
+                {weeks.map((week, index) => (
+                  <option key={index} value={index}>
+                    {week.days.map(d => d.day).join(', ')} ({week.start} - {week.end})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
 
           {reportType === 'monthly' && (
             <div className="space-y-4">
