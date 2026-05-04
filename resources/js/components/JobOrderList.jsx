@@ -47,6 +47,11 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   const [queueModalOpen, setQueueModalOpen] = useState(false);
   const [selectedJobForQueue, setSelectedJobForQueue] = useState(null);
 
+  // User queue badge state (non-admin)
+  const [userQueuePosition, setUserQueuePosition] = useState(null); // number | null
+  const [userQueueTotal, setUserQueueTotal] = useState(null); // number | null
+  const [queueBadgeLoading, setQueueBadgeLoading] = useState(false);
+
   // Use props if provided, otherwise fallback to localStorage
   let user = userProp;
   if (!user) {
@@ -60,6 +65,44 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   const isAdmin = typeof isAdminProp === 'boolean' ? isAdminProp : isRole(user, 'admin');
   const isTechnician = isRole(user, 'technician');
   const userId = user?.id;
+
+  // Fetch the user’s queue position for the badge.
+  // We use /queue/user-jobs (already exists) and show the earliest (minimum) position
+  // in case the requester has multiple queued jobs.
+  const fetchUserQueueBadge = useCallback(async () => {
+    if (!userId || isAdmin) return;
+    setQueueBadgeLoading(true);
+    try {
+      const res = await axios.get('/queue/user-jobs');
+      const rows = res.data?.data || [];
+
+      const positions = rows
+        .map(r => r.position)
+        .filter(p => typeof p === 'number' && p > 0);
+
+      if (positions.length === 0) {
+        setUserQueuePosition(null);
+        setUserQueueTotal(null);
+        return;
+      }
+
+      setUserQueuePosition(Math.min(...positions));
+      // total_in_queue is the same for every row; fall back to null if missing
+      const anyTotal = rows.find(r => typeof r.total_in_queue === 'number')?.total_in_queue ?? null;
+      setUserQueueTotal(anyTotal);
+    } catch (e) {
+      // Don’t toast; badge is non-critical.
+      setUserQueuePosition(null);
+      setUserQueueTotal(null);
+    } finally {
+      setQueueBadgeLoading(false);
+    }
+  }, [userId, isAdmin]);
+
+  // Keep badge reasonably fresh when list changes (and on initial mount)
+  useEffect(() => {
+    fetchUserQueueBadge();
+  }, [fetchUserQueueBadge, activeTab, search, page, filter]);
 
   // Fetch job orders with filters
   const fetchJobs = useCallback(async (searchValue = search, pageValue = page, filterValue = filter) => {
@@ -346,11 +389,22 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
           {/* USER SIDE - Show Queue button */}
           {!isAdmin && (
             <button
-              onClick={() => setQueueModalOpen(true)}
-              className="inline-flex items-center px-2 py-2 bg-blue-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all shadow-md hover:shadow-lg"
+              onClick={async () => {
+                // Make sure badge is up to date right before opening.
+                await fetchUserQueueBadge();
+                setQueueModalOpen(true);
+              }}
+              className="relative inline-flex items-center px-2 py-2 bg-blue-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all shadow-md hover:shadow-lg"
             >
               <FaList className="w-5 h-5 mr-2" />
               <span className="font-semibold">View Queue</span>
+
+              {/* Badge: show requester’s queue position if they have something queued */}
+              {!queueBadgeLoading && typeof userQueuePosition === 'number' && (
+                <span className="ml-2 inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full bg-red-600 text-white text-xs font-bold leading-none">
+                  {userQueueTotal ? `${userQueuePosition}` : userQueuePosition}
+                </span>
+              )}
             </button>
           )}
         </div>  
@@ -659,6 +713,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         isOpen={queueModalOpen}
         onClose={() => setQueueModalOpen(false)}
         user={user}
+        showNotification={showNotification}
       />
     </div>
   );

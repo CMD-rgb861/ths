@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import SummaryRequestReportsModal from './SummaryRequestReportsModal';
 
-export default function JobOrderStatusSummary({ totals = {}, statusOptions = [], serviceTotals = {} }) {
+export default function JobOrderStatusSummary({ totals = {}, statusOptions = [], serviceTotals = {}, showNotification }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('request');
   const [showReportModal, setShowReportModal] = useState(false);
@@ -294,6 +294,7 @@ export default function JobOrderStatusSummary({ totals = {}, statusOptions = [],
           isOpen={showReportModal}
           onClose={handleCloseReportModal}
           reportType={selectedReportType}
+          showNotification={showNotification}
         />
       )}
     </div>

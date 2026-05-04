@@ -566,6 +566,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
         totals={totals}
         statusOptions={statusOptions}
         serviceTotals={serviceTotals}
+        showNotification={showNotification}
       />
 
       {/* Filter Panel */}

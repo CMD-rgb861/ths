@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use App\Models\JobOrder;
 use Illuminate\Http\Request;
 use TCPDF_FONTS;
+use Illuminate\Support\Facades\Validator;
 
 class SummaryRequestReportController extends Controller
 {
@@ -15,9 +16,17 @@ class SummaryRequestReportController extends Controller
      */
     public function daily(Request $request)
     {
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'date' => 'required|date_format:Y-m-d',
         ]);
+
+        if ($validator->fails()) {
+            return $this->errorResponse(
+                'Validation failed',
+                422,
+                $validator->errors()
+            );
+        }
 
         $date = Carbon::createFromFormat('Y-m-d', $request->date);
         
@@ -25,7 +34,10 @@ class SummaryRequestReportController extends Controller
         $jobOrders = $this->getCompletedJobOrdersForDate($date);
 
         if ($jobOrders->isEmpty()) {
-            return response()->json(['message' => 'No completed job orders found for this date'], 404);
+            return $this->errorResponse(
+                'No completed job orders found for this date',
+                404
+            );
         }
 
         return $this->generateBulkPDFs($jobOrders, "Daily_Report_{$date->format('Y-m-d')}");
@@ -36,10 +48,18 @@ class SummaryRequestReportController extends Controller
      */
     public function weekly(Request $request)
     {
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'start_date' => 'required|date_format:Y-m-d',
             'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
         ]);
+
+        if ($validator->fails()) {
+            return $this->errorResponse(
+                'Validation failed',
+                422,
+                $validator->errors()
+            );
+        }
 
         $startDate = Carbon::createFromFormat('Y-m-d', $request->start_date);
         $endDate = Carbon::createFromFormat('Y-m-d', $request->end_date);
@@ -48,7 +68,10 @@ class SummaryRequestReportController extends Controller
         $jobOrders = $this->getCompletedJobOrdersForDateRange($startDate, $endDate);
 
         if ($jobOrders->isEmpty()) {
-            return response()->json(['message' => 'No completed job orders found for this week'], 404);
+            return $this->errorResponse(
+                'No completed job orders found for this week',
+                404
+            );
         }
 
         $fileName = "Weekly_Report_{$startDate->format('Y-m-d')}_to_{$endDate->format('Y-m-d')}";
@@ -60,10 +83,18 @@ class SummaryRequestReportController extends Controller
      */
     public function monthly(Request $request)
     {
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'year' => 'required|integer|min:2000|max:' . date('Y'),
             'month' => 'required|integer|min:1|max:12',
         ]);
+
+        if ($validator->fails()) {
+            return $this->errorResponse(
+                'Validation failed',
+                422,
+                $validator->errors()
+            );
+        }
 
         $startDate = Carbon::create($request->year, $request->month, 1);
         $endDate = $startDate->copy()->endOfMonth();
@@ -72,7 +103,10 @@ class SummaryRequestReportController extends Controller
         $jobOrders = $this->getCompletedJobOrdersForDateRange($startDate, $endDate);
 
         if ($jobOrders->isEmpty()) {
-            return response()->json(['message' => 'No completed job orders found for this month'], 404);
+            return $this->errorResponse(
+                'No completed job orders found for this month',
+                404
+            );
         }
 
         $fileName = "Monthly_Report_{$startDate->format('Y-m')}";
@@ -175,7 +209,11 @@ class SummaryRequestReportController extends Controller
                 ->header('Content-Disposition', "inline; filename=\"Job_Order_{$jobOrder->job_order_no}.pdf\"");
 
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to generate PDF: ' . $e->getMessage()], 500);
+            return $this->errorResponse(
+                'Failed to generate PDF',
+                500,
+                ['exception' => $e->getMessage()]
+            );
         }
     }
 
@@ -196,7 +234,11 @@ class SummaryRequestReportController extends Controller
                 ->header('Content-Disposition', "inline; filename=\"{$reportName}.pdf\"");
 
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to generate PDF: ' . $e->getMessage()], 500);
+            return $this->errorResponse(
+                'Failed to generate PDF',
+                500,
+                ['exception' => $e->getMessage()]
+            );
         }
     }
 
@@ -235,7 +277,8 @@ class SummaryRequestReportController extends Controller
     {
         $fontPath = public_path("fonts/{$fontFile}");
         if (!file_exists($fontPath)) {
-            throw new \Exception("Font file not found: {$fontFile}");
+            // Keep exception message informative; controller catches and normalizes via errorResponse.
+            throw new \Exception("Font file not found in /public/fonts: {$fontFile}");
         }
         return \TCPDF_FONTS::addTTFfont($fontPath, 'TrueTypeUnicode', '', 96);
     }
@@ -659,7 +702,14 @@ class SummaryRequestReportController extends Controller
                         $value = $jobOrder->actionReport->date_finished ? Carbon::parse($jobOrder->actionReport->date_finished)->format('m/d/Y h:i A') : '';
                         break;
                     case '*CONFORME (Requestor):':
-                        $value = $jobOrder->requester->name ?? ($jobOrder->conformed_by ?? '');
+                        $value = (!empty($jobOrder->actionReport) && $jobOrder->actionReport->conformed)
+                            ? (
+                                $jobOrder->requester->name
+                                ?? $jobOrder->conformer->name
+                                ?? $jobOrder->conformed_by
+                                ?? ''
+                            )
+                            : '';
                         break;
                 }
                 if (!empty($value)) {
@@ -726,5 +776,14 @@ class SummaryRequestReportController extends Controller
             $pdf->SetXY($smallLabelX, $startY + 4);
             $pdf->Cell($smallLabelWidth, 5, $smallLabel, 0, 0, 'C');
         }
+    }
+
+    private function errorResponse($message, $status = 400, $errors = null)
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+            'errors' => $errors,
+        ], $status);
     }
 }
