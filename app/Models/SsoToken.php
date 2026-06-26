@@ -10,12 +10,10 @@ class SsoToken extends Model
         'token',
         'id_number',
         'expires_at',
-        'used',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
-        'used' => 'boolean',
     ];
 
     public function isValid(): bool
@@ -25,7 +23,6 @@ class SsoToken extends Model
 
     public function scopeValid($query)
     {
-        return $query->where('expires_at', '>', now())
-                     ->where('used', false);
+        return $query->where('expires_at', '>', now());
     }
 }
