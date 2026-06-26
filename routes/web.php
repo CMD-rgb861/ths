@@ -1,33 +1,26 @@
 <?php
 
+use App\Http\Controllers\ProfileController;
+use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\UnserviceableReportController;
-use App\Http\Controllers\CompletedReportController;
-use App\Http\Controllers\JobOrderExportController;
+use Inertia\Inertia;
 
-/*
-|--------------------------------------------------------------------------
-| PDF Route (NO auth middleware)
-|--------------------------------------------------------------------------
-*/
+Route::get('/', function () {
+    return redirect()->route('login');
+});
 
-Route::get('/job-orders/{job}/unserviceable/pdf',
-    [UnserviceableReportController::class, 'generate']
-)->name('unserviceable.pdf');
+Route::get('/dashboard', function () {
+    return Inertia::render('Dashboard');
+})->name('dashboard');
 
-Route::get('/job-orders/{job}/completed/pdf',
-    [CompletedReportController::class, 'generate']
-)->name('completed.pdf');
+Route::get('/dashboard/{any}', function () {
+    return Inertia::render('Dashboard');
+})->where('any', '.*');
 
-Route::get('/job-orders/export/csv',
-    [JobOrderExportController::class, 'exportCsv']
-)->name('job-orders.export.csv');
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
 
-
-/*
-|--------------------------------------------------------------------------
-| SPA Catch-All (MUST BE LAST)
-|--------------------------------------------------------------------------
-*/
-
-Route::view('/{any}', 'welcome')->where('any', '.*');
+require __DIR__.'/auth.php';

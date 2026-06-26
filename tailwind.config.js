@@ -1,35 +1,22 @@
+import defaultTheme from 'tailwindcss/defaultTheme';
+import forms from '@tailwindcss/forms';
+
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./resources/**/*.blade.php",
-    "./resources/**/*.jsx",
-  ],
-  theme: {
-    extend: {
-      colors: {
-        surface: "#ffffff",
-        background: "#f8fafc",
-        border: "#e5e7eb",
+    content: [
+        './vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php',
+        './storage/framework/views/*.php',
+        './resources/views/**/*.blade.php',
+        './resources/js/**/*.jsx',
+    ],
 
-        text: {
-          primary: "#0f172a",
-          secondary: "#475569",
-          muted: "#94a3b8",
+    theme: {
+        extend: {
+            fontFamily: {
+                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+            },
         },
-
-        brand: {
-          primary: "#1e40af",
-          soft: "#dbeafe",
-        },
-
-        status: {
-          pending: "#f59e0b",
-          ongoing: "#3b82f6",
-          completed: "#16a34a",
-          cancelled: "#ef4444",
-        },
-      },
     },
-  },
-  plugins: [],
+
+    plugins: [forms],
 };

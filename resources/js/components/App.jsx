@@ -6,7 +6,7 @@ import JobOrderReports from './JobOrderReports';
 import JobOrderStatusPage from './JobOrderStatusPage';
 import UserList from './UserList';
 import Signatories from './Signatories';
-import Login from './Login';
+import Login from '../pages/Auth/Login';
 import Notification from './Notification';
 import UserJobHistory from './UserJobHistory';
 import UserPendingConfirmation from './UserPendingConfirmation';
@@ -93,6 +93,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/welcome" element={<WelcomePage />} />
+      <Route path="/dashboard/welcome" element={<WelcomePage />} />
       <Route
         path="/*"
         element={
@@ -401,7 +402,7 @@ export default function App() {
         onConfirm={() => {
           setShowSwitchConfirm(false);
           localStorage.removeItem('preferredRole');
-          window.location.href = '/welcome';
+          window.location.href = '/dashboard/welcome';
         }}
         onCancel={() => setShowSwitchConfirm(false)}
       />
