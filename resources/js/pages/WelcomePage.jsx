@@ -1,3 +1,5 @@
+//THIS IS A SWITCH PAGE FOR USERS WITH BOTH ADMIN AND TECHNICIAN ROLES
+
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 

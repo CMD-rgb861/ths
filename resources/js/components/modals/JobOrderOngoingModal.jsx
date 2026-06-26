@@ -2,8 +2,8 @@ import { useEffect, useState, useCallback, memo } from 'react';
 import axios from 'axios';
 import UnserviceableModal from './UnserviceableModal';
 import CSMModal from './CSMModal';
-import SerialNumberSearch from './SerialNumberSearch';
-import SoftwareNameSearch from './SoftwareNameSearch';
+import SerialNumberSearch from '../job-orders/SerialNumberSearch';
+import SoftwareNameSearch from '../job-orders/SoftwareNameSearch';
 
 const TABS = ['Details', 'Dates'];
 

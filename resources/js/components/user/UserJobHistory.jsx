@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import UserJobHistoryModal from './UserJobHistoryModal';
+import UserJobHistoryModal from '../modals/UserJobHistoryModal';
 
 export default function UserJobHistory({ showNotification }) {
   const [orders, setOrders] = useState([]);

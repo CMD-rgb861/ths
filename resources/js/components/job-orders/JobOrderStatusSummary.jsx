@@ -2,7 +2,7 @@
 
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import SummaryRequestReportsModal from './SummaryRequestReportsModal';
+import SummaryRequestReportsModal from '../modals/SummaryRequestReportsModal';
 
 export default function JobOrderStatusSummary({ totals = {}, statusOptions = [], serviceTotals = {}, showNotification }) {
   const navigate = useNavigate();

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import StatusIndicator from './ui/StatusIndicator';
+import StatusIndicator from '../ui/StatusIndicator';
 
 const CATEGORY_FILTERS = ['Computer Desktop', 'Laptop', 'Printer'];
 

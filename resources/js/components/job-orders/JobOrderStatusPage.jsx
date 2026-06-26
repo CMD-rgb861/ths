@@ -1,10 +1,10 @@
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
-import JobOrderModal from './JobOrderModal';
-import JobOrderOngoingModal from './JobOrderOngoingModal';
-import StatusIndicator from './ui/StatusIndicator';
-import StatusBadge from './ui/StatusBadge';
+import JobOrderModal from '../modals/JobOrderModal';
+import JobOrderOngoingModal from '../modals/JobOrderOngoingModal';
+import StatusIndicator from '../ui/StatusIndicator';
+import StatusBadge from '../ui/StatusBadge';
 
 export default function JobOrderStatusPage({ showNotification }) {
   const { status } = useParams();

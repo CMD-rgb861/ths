@@ -2,16 +2,16 @@ import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { useLocation } from 'react-router-dom';
 import { FaBell, FaList } from 'react-icons/fa';
-import JobOrderModal from './JobOrderModal';
-import JobOrderOngoingModal from './JobOrderOngoingModal';
-import StatusBadge from './ui/StatusBadge';
-import StatusIndicator from './ui/StatusIndicator';
+import JobOrderModal from '../modals/JobOrderModal';
+import JobOrderOngoingModal from '../modals/JobOrderOngoingModal';
+import StatusBadge from '../ui/StatusBadge';
+import StatusIndicator from '../ui/StatusIndicator';
 import JobOrderForm from './JobOrderForm';
-import NewJobOrdersModal from './NewJobOrdersModal';
+import NewJobOrdersModal from '../modals/NewJobOrdersModal';
 import PendingConfirmation from './PendingConfirmation';
-import ConfirmModal from './ConfirmModal'; // If not already imported
-import UserPendingConfirmation from './UserPendingConfirmation';
-import QueueModal from './UserQueueModal';
+import ConfirmModal from '../modals/ConfirmModal';
+import UserPendingConfirmation from '../user/UserPendingConfirmation';
+import QueueModal from '../modals/UserQueueModal';
 
 const PER_PAGE = 10;
 

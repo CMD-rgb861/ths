@@ -1,19 +1,19 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
-import JobOrderForm from './JobOrderForm';
-import JobOrderList from './JobOrderList';
-import JobOrderReports from './JobOrderReports';
-import JobOrderStatusPage from './JobOrderStatusPage';
-import UserList from './UserList';
-import Signatories from './Signatories';
+import JobOrderForm from './job-orders/JobOrderForm';
+import JobOrderList from './job-orders/JobOrderList';
+import JobOrderReports from './job-orders/JobOrderReports';
+import JobOrderStatusPage from './job-orders/JobOrderStatusPage';
+import UserList from './user/UserList';
+import Signatories from './job-orders/Signatories';
 import Login from '../pages/Auth/Login';
-import Notification from './Notification';
-import UserJobHistory from './UserJobHistory';
-import UserPendingConfirmation from './UserPendingConfirmation';
-import WelcomePage from './WelcomePage';
-import ConfirmModal from './ConfirmModal';
-import SerialNumberHistory from './SerialNumberHistory';
-import SoftwareHistory from './SoftwareHistory'; // Add this import
+import Notification from './ui/Notification';
+import UserJobHistory from './user/UserJobHistory';
+import UserPendingConfirmation from './user/UserPendingConfirmation';
+import WelcomePage from '../pages/WelcomePage';
+import ConfirmModal from './modals/ConfirmModal';
+import SerialNumberHistory from './reports/SerialNumberHistory';
+import SoftwareHistory from './reports/SoftwareHistory';
 
 // Utility function for role check
 function isRole(user, roleName) {
