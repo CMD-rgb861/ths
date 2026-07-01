@@ -13,7 +13,6 @@ return new class extends Migration
             $table->string('token', 64)->unique();
             $table->string('id_number'); // This matches the id_number in users table
             $table->timestamp('expires_at');
-            $table->boolean('used')->default(false);
             $table->timestamps();
             
             // Add indexes for faster lookups

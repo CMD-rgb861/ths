@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+axios.defaults.withCredentials = true;
 
 let token = document.head.querySelector('meta[name="csrf-token"]');
 
@@ -19,10 +20,5 @@ axios.interceptors.request.use((config) => {
 
     return config;
 });
-
-const apiToken = localStorage.getItem('token');
-if (apiToken) {
-    axios.defaults.headers.common['Authorization'] = `Bearer ${apiToken}`;
-}
 
 export default axios;

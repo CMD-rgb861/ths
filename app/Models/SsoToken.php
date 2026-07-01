@@ -18,7 +18,7 @@ class SsoToken extends Model
 
     public function isValid(): bool
     {
-        return $this->expires_at->isFuture() && !$this->used;
+        return $this->expires_at->isFuture();
     }
 
     public function scopeValid($query)

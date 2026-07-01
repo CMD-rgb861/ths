@@ -11,11 +11,11 @@ Route::get('/', function () {
 
 Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
-})->name('dashboard');
+})->middleware('auth')->name('dashboard');
 
 Route::get('/dashboard/{any}', function () {
     return Inertia::render('Dashboard');
-})->where('any', '.*');
+})->middleware('auth')->where('any', '.*');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

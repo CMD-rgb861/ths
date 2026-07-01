@@ -17,8 +17,6 @@ export default function UserJobHistory({ showNotification }) {
   const [statusOptions, setStatusOptions] = useState([]);
   const [categoryOptions, setCategoryOptions] = useState([]);
 
-  const token = localStorage.getItem('token'); // Get the auth token
-
   // Fetch request statuses for dynamic status filter options
   useEffect(() => {
     axios.get('/request-statuses')
@@ -55,10 +53,6 @@ export default function UserJobHistory({ showNotification }) {
 
       const response = await axios.get('/job-orders', {
         params,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-        },
       });
 
       const safeOrders = Array.isArray(response.data?.data)

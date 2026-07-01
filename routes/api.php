@@ -2,6 +2,7 @@
 // routes/api.php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Http\Request;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\JobOrderController;
@@ -22,6 +23,21 @@ use App\Models\JobOrder;
 |-------------------------------------------------------------------------- 
 */
 Route::post('/login', [LoginController::class, 'login']);
+
+Route::middleware('auth')->get('/auth/status', function (Request $request) {
+    $user = $request->user();
+
+    return response()->json([
+        'authenticated' => (bool) $user,
+        'user' => $user ? [
+            'id' => $user->id,
+            'id_number' => $user->id_number,
+            'name' => $user->name,
+            'email' => $user->email,
+            'roles' => $user->roles->pluck('name')->toArray(),
+        ] : null,
+    ]);
+});
 
 /*
 |-------------------------------------------------------------------------- 

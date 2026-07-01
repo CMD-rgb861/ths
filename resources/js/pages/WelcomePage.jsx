@@ -1,10 +1,12 @@
 //THIS IS A SWITCH PAGE FOR USERS WITH BOTH ADMIN AND TECHNICIAN ROLES
 
 import React, { useEffect } from 'react';
+import { usePage } from '@inertiajs/react';
 import { useNavigate } from 'react-router-dom';
 
 export default function WelcomePage() {
   const navigate = useNavigate();
+  const { auth } = usePage().props;
   const userRaw = localStorage.getItem('user');
   let user = null;
 
@@ -14,16 +16,22 @@ export default function WelcomePage() {
     user = null;
   }
 
+  if (!user && auth?.user) {
+    user = auth.user;
+  }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles.map((role) => (typeof role === 'string' ? role : role?.name)).filter(Boolean)
+    : [];
+  const hasAdminRole = roles.includes('admin');
+  const hasTechnicianRole = roles.includes('technician');
+
   // Redirect if user does not have both admin and technician roles
   useEffect(() => {
-    const roles = Array.isArray(user?.roles) ? user.roles : [];
-    const hasAdminRole = roles.some(r => (typeof r === 'string' ? r : r.name) === 'admin');
-    const hasTechnicianRole = roles.some(r => (typeof r === 'string' ? r : r.name) === 'technician');
-
     if (!(hasAdminRole && hasTechnicianRole)) {
       navigate('/', { replace: true });
     }
-  }, [user, navigate]);
+  }, [hasAdminRole, hasTechnicianRole, navigate]);
 
   const handleRoleSelect = (role) => {
     // Store preferred role for this session

@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
+import { usePage } from '@inertiajs/react';
 import JobOrderForm from './job-orders/JobOrderForm';
 import JobOrderList from './job-orders/JobOrderList';
 import JobOrderReports from './job-orders/JobOrderReports';
@@ -25,12 +26,23 @@ function isRole(user, roleName) {
   return false;
 }
 
+function getRoleNames(user) {
+  if (!user || !Array.isArray(user.roles)) {
+    return [];
+  }
+
+  return user.roles
+    .map((role) => (typeof role === 'string' ? role : role?.name))
+    .filter(Boolean);
+}
+
 export default function App() {
   const location = useLocation();
+  const { auth } = usePage().props;
   const [notifications, setNotifications] = useState([]);
   const [newPendingJobs, setNewPendingJobs] = useState([]);
   const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
-  const token = localStorage.getItem('token');
+  const isAuthenticated = Boolean(auth?.user);
   const userRaw = localStorage.getItem('user');
   let user = null;
   try {
@@ -39,9 +51,19 @@ export default function App() {
     user = null;
   }
 
+  if (!user && auth?.user) {
+    user = auth.user;
+  }
+
+  useEffect(() => {
+    if (auth?.user) {
+      localStorage.setItem('user', JSON.stringify(auth.user));
+    }
+  }, [auth?.user]);
+
   // Use preferredRole if set and user has both roles
   const preferredRole = localStorage.getItem('preferredRole');
-  const roles = user?.roles || [];
+  const roles = getRoleNames(user);
   let isAdmin = false;
   let isTechnician = false;
   const hasDualRole = roles.includes('admin') && roles.includes('technician');
@@ -74,6 +96,8 @@ export default function App() {
       ? 'px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white shadow-sm transition-all duration-200'
       : 'px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200';
 
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+
   const RequirePrivileged = ({ children }) => {
     if (!isPrivileged) {
       return <Navigate to="/" replace />;
@@ -97,7 +121,7 @@ export default function App() {
       <Route
         path="/*"
         element={
-          !token ? (
+          !isAuthenticated ? (
             <Navigate to="/login" replace />
           ) : (
             <>
@@ -155,19 +179,26 @@ export default function App() {
                             Switch Role
                           </button>
                         )}
-                        <button
-                          onClick={() => {
+                        <form
+                          method="POST"
+                          action={route('logout')}
+                          onSubmit={() => {
                             localStorage.removeItem('token');
                             localStorage.removeItem('user');
-                            window.location.href = '/login';
+                            localStorage.removeItem('preferredRole');
                           }}
-                          className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
-                          title="Logout"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                          </svg>
-                        </button>
+                          <input type="hidden" name="_token" value={csrfToken} />
+                          <button
+                            type="submit"
+                            className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                            title="Logout"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                          </button>
+                        </form>
                       </div>
                     </div>
 
@@ -366,7 +397,7 @@ export default function App() {
         }
       />
     </Routes>
-  ), [token, isAuthPage, isPrivileged, isTechnician, isAdmin, user, navLinkClass, showNotification, newPendingJobs, showSwitchConfirm]);
+  ), [isAuthenticated, isAuthPage, isPrivileged, isTechnician, isAdmin, user, navLinkClass, showNotification, newPendingJobs, showSwitchConfirm]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">

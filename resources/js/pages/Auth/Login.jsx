@@ -14,13 +14,7 @@ export default function Login({ status, canResetPassword }) {
         setErrors({});
 
         try {
-            const response = await axios.post('/login', form);
-            const token = response.data.token;
-            const user = response.data;
-
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
-            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            await axios.post('/login', form, { withCredentials: true });
 
             window.location.href = '/dashboard';
         } catch (error) {
