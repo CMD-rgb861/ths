@@ -256,4 +256,69 @@ class SerialNumberController extends Controller
 
         return response()->stream($callback, 200, $headers);
     }
+        /**
+     * Get count of records to export (for validation)
+     */
+    public function exportCount(Request $request)
+    {
+        try {
+            $serial = trim((string) $request->input('serial_number', ''));
+            $category = $request->input('category');
+            $dateFrom = $request->input('date_from');
+            $dateTo = $request->input('date_to');
+
+            $query = JobOrder::whereHas('actionReport', function ($q) {
+                    $q->whereNotNull('serial_number')
+                      ->where('serial_number', '!=', '');
+                })
+                ->with([
+                    'department:id,name',
+                    'requester:id,name',
+                    'categories:id,name',
+                    'actionReport:id,job_order_id,diagnosis,action_taken,status,serviced_by,date_started,date_finished,remarks,serial_number,brand_name,brand_model,software_name,accepted_at,confirmed_at,cancelled_at,cancelled_by',
+                ]);
+
+            // Filter by serial number (partial match)
+            if (!empty($serial) && strlen($serial) >= 3) {
+                $query->whereHas('actionReport', function ($q) use ($serial) {
+                    $q->where('serial_number', 'like', "%{$serial}%");
+                });
+            }
+
+            // Filter by category
+            if (!empty($category)) {
+                $query->whereHas('categories', function ($q) use ($category) {
+                    $q->where('name', $category);
+                });
+            }
+
+            // Filter by date range (created_at)
+            if (!empty($dateFrom)) {
+                $query->whereDate('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+            }
+
+            if (!empty($dateTo)) {
+                $query->whereDate('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
+            }
+
+            $count = $query->count();
+
+            return response()->json([
+                'success' => true,
+                'count' => $count,
+                'has_data' => $count > 0,
+                'message' => $count > 0 
+                    ? "Found {$count} record(s) to export" 
+                    : 'No records found to export. Please refine your filters.',
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Serial number export count failed: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to count records for export.',
+            ], 500);
+        }
+    }
 }

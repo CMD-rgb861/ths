@@ -6,6 +6,7 @@ import JobOrderDepartmentSummary from './JobOrderDepartmentSummary';
 import JobOrderCategorySummary from './JobOrderCategorySummary';
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import ConfirmModal from '../modals/ConfirmModal';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -67,6 +68,10 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
     unserviceable: null,
     closed: null,
   });
+  const [exportLoading, setExportLoading] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportCount, setExportCount] = useState(0);
+  const [exportParams, setExportParams] = useState(null); 
 
   const getOrderStatus = (order) => order.request_status?.name || order.action_report?.status || order.status || '—';
 
@@ -362,121 +367,83 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
     setFilters(prev => ({ ...prev, [field]: value }));
   };
 
-  // Export job orders to CSV
-  const exportToCSV = (statusFilter = null) => {
-    // Use original orders data, not filtered
-    let dataToExport = [...orders];
-
-    // Detect if we're filtering by request status or service status
-    const serviceFilter = SERVICE_STATUS_FILTERS.find(f => f.key === statusFilter);
-
-    if (statusFilter) {
-      if (serviceFilter) {
-        // Filter by service status (action_report.action_taken)
-        dataToExport = dataToExport.filter(o =>
-          (o.action_report?.action_taken || '').toLowerCase() === serviceFilter.match.toLowerCase()
-        );
-      } else {
-        // Default: filter by request status
-        dataToExport = dataToExport.filter(o => getOrderStatus(o) === statusFilter);
-      }
-    }
-
-    if (dataToExport.length === 0) {
-      alert('No data to export');
-      return;
-    }
-
-    const headers = [
-      'Job Order No',
-      'Department',
-      'Request Status',
-      'Service Status',
-      'Requested By',
-      'Signatory',
-      'Accepted By',
-      'Serviced By',
-      'Cancelled By',
-      'Date Created',
-    ];
-
-    const rows = dataToExport.map(order => {
-      const requestStatus = getOrderStatus(order) || 'Pending';
-      const serviceStatus = order.action_report?.action_taken || '';
-      const requestedBy = order.requester?.name || '';
-      const signatory = order.signature_name || '';
-
-      // Derive serviced-by name (technician or raw value)
-      const servicedByRaw = order.action_report?.serviced_by?.name || 
-                        order.action_report?.serviced_by || '';
-      const servicedByTrim = (servicedByRaw || '').toString().trim();
-
-      // Default Accepted By logic (IT Director fallback for normal serviced jobs)
-      let acceptedBy = order.action_report?.accepted_by_user?.name || 
-                        itDirector?.user?.name || 
-                        itDirector?.name || '';
-
-      // If the job is "Closed" and there is no technician, treat it as
-      // administratively declined/closed and *suppress* Accepted By in CSV.
-      const serviceStatusKey = (serviceStatus || '').toString().trim().toLowerCase();
-      if (serviceStatusKey === 'closed' && servicedByTrim === '') {
-        acceptedBy = '';
-      }
-
-      const servicedBy = servicedByRaw;
-
-	  const cancelledBy = order.action_report?.cancelled_by?.name || 
-		itDirector?.user?.name || 
-		itDirector?.name;
-      const dateCreated = order.created_at 
-        ? new Date(order.created_at).toLocaleString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: true
-          })
-        : '';
-
-      return [
-        order.job_order_no || '',
-        order.department?.name || '',
-        requestStatus,
-        serviceStatus,
-        requestedBy,
-        signatory,
-        acceptedBy,
-        servicedBy,
-        cancelledBy,
-        dateCreated
-      ];
-    });
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    const filenameBase = serviceFilter
-      ? serviceFilter.label.toLowerCase().replace(/\s+/g, '_')
-      : (statusFilter ? statusFilter.toLowerCase().replace(/\s+/g, '_') : 'all');
-
-    const filename = `job_orders_${filenameBase}_${new Date().toISOString().split('T')[0]}.csv`;
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
+  // Export job orders to CSV using backend
+  const exportToCSV = async (statusFilter = null) => {
     setShowExportDropdown(false);
+
+    try {
+      // Build params for count check
+      const params = new URLSearchParams();
+      
+      // Convert status name to ID when sending
+      if (filters.status) {
+        const statusObj = statusOptions.find(s => s.name === filters.status);
+        if (statusObj) {
+          params.append('status', statusObj.id);
+        } else {
+          params.append('status', filters.status);
+        }
+      }
+      
+      if (filters.department) params.append('department_id', filters.department);
+      if (filters.from) params.append('date_from', filters.from);
+      if (filters.to) params.append('date_to', filters.to);
+      if (search) params.append('search', search);
+      
+      // Handle dropdown filter (status from dropdown)
+      if (statusFilter) {
+        const serviceFilter = SERVICE_STATUS_FILTERS.find(f => f.key === statusFilter);
+        if (serviceFilter) {
+          params.append('service_status', serviceFilter.match);
+        } else if (statusFilter !== null) {
+          // For status names like 'Pending', 'Ongoing', etc.
+          // Convert to ID
+          const statusObj = statusOptions.find(s => s.name === statusFilter);
+          if (statusObj) {
+            params.append('status', statusObj.id);
+          } else {
+            params.append('status', statusFilter);
+          }
+        }
+      }
+
+      // ✅ FIX: Added /api/ prefix
+      const countResponse = await axios.get(`/api/job-orders/export-count?${params.toString()}`);
+      const countData = countResponse.data;
+      
+      if (!countData.success) {
+        showNotification?.('error', 'Export Error', 'Failed to check export availability');
+        return;
+      }
+      
+      if (!countData.has_data) {
+        showNotification?.('warning', 'No Data', countData.message || 'No records to export');
+        return;
+      }
+      
+      // 2. Store the params and count, then show the confirmation modal
+      setExportCount(countData.count);
+      setExportParams(params.toString());
+      setShowExportModal(true);
+      
+    } catch (error) {
+      console.error('Export error:', error);
+      showNotification?.('error', 'Export Failed', 'Please try again or contact support.');
+    }
+  };
+
+  // Function to actually perform the export after confirmation
+  const performExport = () => {
+    if (exportParams) {
+      // ✅ FIX: Added /api/ prefix
+      window.location.href = `/api/job-orders/export?${exportParams}`;
+      showNotification?.('success', 'Export Started', `Exporting ${exportCount} records...`);
+      
+      // Reset the modal state
+      setShowExportModal(false);
+      setExportParams(null);
+      setExportCount(0);
+    }
   };
 
   return (
@@ -496,15 +463,32 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
           <div className="relative">
             <button
               onClick={() => setShowExportDropdown(!showExportDropdown)}
-              className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              disabled={exportLoading}
+              className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                exportLoading
+                  ? 'bg-green-400 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-700'
+              } text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500`}
             >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Export CSV
-              <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              {exportLoading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Export CSV
+                  <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </>
+              )}
             </button>
 
             {showExportDropdown && (
@@ -951,6 +935,20 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
           </div>
         </div>
       </div>
+      {/* Confirmation Modal for Export */}
+      <ConfirmModal
+        isOpen={showExportModal}
+        title="Confirm Export"
+        message={`Are you sure you want to export ${exportCount} record(s) to CSV?`}
+        confirmText="Yes, Export"
+        cancelText="Cancel"
+        onConfirm={performExport}
+        onCancel={() => {
+          setShowExportModal(false);
+          setExportParams(null);
+          setExportCount(0);
+        }}
+      />
     </div>
   );
 }

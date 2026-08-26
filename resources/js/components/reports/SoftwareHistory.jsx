@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 import StatusIndicator from '../ui/StatusIndicator';
+import ConfirmModal from '../modals/ConfirmModal';
+
 
 const CATEGORY_FILTERS = ['Software'];
 
@@ -192,6 +195,10 @@ export default function SoftwareHistory() {
   const searchTimerRef = useRef(null);
   const searchInputRef = useRef(null);
 
+  const [exportLoading, setExportLoading] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportCount, setExportCount] = useState(0);
+  const [exportParams, setExportParams] = useState(null);
   // Fetch software name history with all filters
   const fetchSoftwareHistory = useCallback(async (page = 1) => {
     setLoading(true);
@@ -225,6 +232,7 @@ export default function SoftwareHistory() {
       setFiltersApplied(true);
     } catch (error) {
       console.error('Error fetching software history:', error);
+      toast.error('Failed to load software history.');
       setJobs([]);
       setTotalCount(0);
       setTotalPages(1);
@@ -308,14 +316,53 @@ export default function SoftwareHistory() {
   };
 
   // Export CSV
-  const exportCsv = () => {
-    const params = new URLSearchParams();
-    
-    if (search && search.length >= 3) params.append('software_name', search);
-    if (dateFrom) params.append('date_from', dateFrom);
-    if (dateTo) params.append('date_to', dateTo);
-    
-    window.location.href = `/api/software-name/export?${params.toString()}`;
+  const exportCsv = async () => {
+    setExportLoading(true);
+
+    try {
+      const params = new URLSearchParams();
+      
+      if (search && search.length >= 3) params.append('software_name', search);
+      if (dateFrom) params.append('date_from', dateFrom);
+      if (dateTo) params.append('date_to', dateTo);
+
+      // 1. Check if there's data to export
+      const countResponse = await axios.get(`/api/software-name/export-count?${params.toString()}`);
+      const countData = countResponse.data;
+      
+      if (!countData.success) {
+        toast.error('Failed to check export availability.');
+        setExportLoading(false);
+        return;
+      }
+      
+      if (!countData.has_data) {
+        toast.warning(countData.message || 'No records to export.');
+        setExportLoading(false);
+        return;
+      }
+      
+      // 2. Store the params and count, then show the confirmation modal
+      setExportCount(countData.count);
+      setExportParams(params.toString());
+      setShowExportModal(true);
+      setExportLoading(false);
+      
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Export failed. Please try again or contact support.');
+      setExportLoading(false);
+    }
+  };
+
+  // Function to actually perform the export after confirmation
+  const performExport = () => {
+    if (exportParams) {
+      window.location.href = `/api/software-name/export?${exportParams}`;
+      setShowExportModal(false);
+      setExportParams(null);
+      setExportCount(0);
+    }
   };
 
   const getRequestStatus = (job) => {
@@ -364,20 +411,37 @@ export default function SoftwareHistory() {
               Clear Filters
             </button>
 
-            <button
+              <button
               type="button"
               onClick={exportCsv}
-              className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+              disabled={exportLoading}
+              className={`inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                exportLoading
+                  ? 'bg-emerald-400 cursor-not-allowed'
+                  : 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500'
+              }`}
             >
-              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path
-                  d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Export CSV
+              {exportLoading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path
+                      d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Export CSV
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -636,6 +700,22 @@ export default function SoftwareHistory() {
         isOpen={!!detailModalJob}
         job={detailModalJob}
         onClose={() => setDetailModalJob(null)}
+      />
+
+      {/* Confirmation Modal for Export */}
+      <ConfirmModal
+        isOpen={showExportModal}
+        title="Confirm Export"
+        message={`Are you sure you want to export ${exportCount} record(s) to CSV?`}
+        confirmText="Yes, Export"
+        cancelText="Cancel"
+        onConfirm={performExport}
+        onCancel={() => {
+          setShowExportModal(false);
+          setExportParams(null);
+          setExportCount(0);
+          setExportLoading(false);
+        }}
       />
     </div>
   );

@@ -158,6 +158,7 @@ class SoftwareNameController extends Controller
 
         return response()->json($softwareNames);
     }
+
     /**
      * Export software name history to CSV.
      */
@@ -251,5 +252,60 @@ class SoftwareNameController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Get count of records to export (for validation)
+     */
+    public function exportCount(Request $request)
+    {
+        try {
+            $software = trim((string) $request->input('software_name', ''));
+            $dateFrom = $request->input('date_from');
+            $dateTo = $request->input('date_to');
+
+            $query = JobOrder::whereHas('actionReport', function ($q) {
+                    $q->whereNotNull('software_name')
+                      ->where('software_name', '!=', '');
+                })
+                ->whereHas('categories', function ($q) {
+                    $q->where('name', 'Software');
+                });
+
+            // Filter by software name (partial match)
+            if (!empty($software) && strlen($software) >= 3) {
+                $query->whereHas('actionReport', function ($q) use ($software) {
+                    $q->where('software_name', 'like', "%{$software}%");
+                });
+            }
+
+            // Filter by date range (created_at)
+            if (!empty($dateFrom)) {
+                $query->whereDate('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+            }
+
+            if (!empty($dateTo)) {
+                $query->whereDate('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
+            }
+
+            $count = $query->count();
+
+            return response()->json([
+                'success' => true,
+                'count' => $count,
+                'has_data' => $count > 0,
+                'message' => $count > 0 
+                    ? "Found {$count} record(s) to export" 
+                    : 'No records found to export. Please refine your filters.',
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Software export count failed: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to count records for export.',
+            ], 500);
+        }
     }
 }

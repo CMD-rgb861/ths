@@ -14,6 +14,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use setasign\Fpdi\Tcpdf\Fpdi;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 
 
@@ -729,5 +732,283 @@ class JobOrderController extends Controller
             }
             return $job;
         });
+    }
+
+    /**
+     * Build the base query for job orders with filters
+     * Used by both export and count methods
+     */
+    private function buildExportQuery(Request $request)
+    {
+        $query = JobOrder::with([
+            'department',
+            'requester',
+            'categories',
+            'actionReport.servicedBy',
+            'actionReport.acceptedBy',
+            'actionReport.cancelledBy',
+            'requestStatus',
+        ]);
+
+        // Apply status filter - CONVERT NAME TO ID
+        if ($request->filled('status')) {
+            $statusName = $request->status;
+            // Find the status ID by name
+            $statusId = DB::table('request_statuses')->where('name', $statusName)->value('id');
+            
+            if ($statusId) {
+                $query->where('job_orders.status', $statusId);
+            } else {
+                // If no ID found, try treating it as an ID (for backward compatibility)
+                if (is_numeric($statusName)) {
+                    $query->where('job_orders.status', (int) $statusName);
+                }
+            }
+        }
+
+        // Apply service status filter (action_taken)
+        if ($request->filled('service_status')) {
+            $query->whereHas('actionReport', function ($q) use ($request) {
+                $q->where('action_taken', $request->service_status);
+            });
+        }
+
+        // Apply department filter
+        if ($request->filled('department_id')) {
+            $query->where('department_id', $request->department_id);
+        }
+
+        // Apply date filters
+        if ($request->filled('date_from')) {
+            $query->whereDate('job_orders.created_at', '>=', Carbon::parse($request->date_from)->startOfDay());
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('job_orders.created_at', '<=', Carbon::parse($request->date_to)->endOfDay());
+        }
+
+        // Apply search filter
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('job_order_no', 'like', "%{$search}%")
+                ->orWhereHas('department', function ($d) use ($search) {
+                    $d->where('name', 'like', "%{$search}%");
+                })
+                ->orWhereHas('requester', function ($r) use ($search) {
+                    $r->where('name', 'like', "%{$search}%");
+                });
+            });
+        }
+
+        // Restrict to own jobs for non-admin/non-technician users
+        if (!$request->user()->isAdmin() && !$request->user()->isTechnician()) {
+            $query->where('job_orders.requested_by', $request->user()->id);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Get count of records to export (for validation)
+     */
+    public function exportCount(Request $request): JsonResponse
+    {
+        try {
+            $query = $this->buildExportQuery($request);
+            $count = $query->count();
+
+            return response()->json([
+                'success' => true,
+                'count' => $count,
+                'has_data' => $count > 0,
+                'message' => $count > 0 
+                    ? "Found {$count} record(s) to export" 
+                    : 'No records found to export. Please refine your filters.',
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Export count failed: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to count records for export.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Export job orders to CSV with full validation
+     */
+    public function export(Request $request): StreamedResponse|JsonResponse
+    {
+        try {
+            // Validate input
+            $request->validate([
+                'status' => 'nullable|string|max:50',
+                'service_status' => 'nullable|string|max:50',
+                'department_id' => 'nullable|integer|exists:departments,id',
+                'date_from' => 'nullable|date',
+                'date_to' => 'nullable|date|after_or_equal:date_from',
+                'search' => 'nullable|string|max:255',
+            ]);
+
+            // Build query
+            $query = $this->buildExportQuery($request);
+
+            // VALIDATION 1: Check if there's data to export
+            $count = $query->count();
+            
+            if ($count === 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No records found to export. Please refine your filters.',
+                    'code' => 'NO_DATA',
+                ], 422);
+            }
+
+            // VALIDATION 2: Enforce maximum row limit
+            $maxExportRows = 10000;
+            
+            if ($count > $maxExportRows) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Export limit exceeded. Maximum {$maxExportRows} rows allowed. Found {$count} records.",
+                    'code' => 'EXPORT_LIMIT_EXCEEDED',
+                    'count' => $count,
+                    'max_limit' => $maxExportRows,
+                ], 422);
+            }
+
+            // VALIDATION 3: Rate limiting
+            $rateLimitKey = 'export_job_orders_' . auth()->id();
+            $maxExportsPerHour = 10;
+            
+            if (cache()->has($rateLimitKey) && cache()->get($rateLimitKey) >= $maxExportsPerHour) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Too many export requests. Please wait before trying again.',
+                    'code' => 'RATE_LIMIT_EXCEEDED',
+                ], 429);
+            }
+
+            // Log the export for audit trail
+            \Log::info('Job order export', [
+                'user_id' => auth()->id(),
+                'user_name' => auth()->user()->name,
+                'count' => $count,
+                'filters' => $request->only(['status', 'service_status', 'department_id', 'date_from', 'date_to', 'search']),
+                'ip' => $request->ip(),
+            ]);
+
+            // Get IT Director for accepted_by fallback
+            $itDirector = Signatory::where('role', 'it_director')->first();
+
+            // Generate filename
+            $filename = 'job_orders_' . date('Y-m-d_His') . '.csv';
+            
+            $headers = [
+                'Content-Type' => 'text/csv',
+                'Content-Disposition' => "attachment; filename=\"$filename\"",
+                'Pragma' => 'no-cache',
+                'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+                'Expires' => '0',
+                'X-Record-Count' => (string) $count,
+            ];
+
+            // Process in chunks for memory efficiency
+            $chunkSize = 500;
+            
+            $callback = function () use ($query, $itDirector, $chunkSize) {
+                $handle = fopen('php://output', 'w');
+                
+                // Add UTF-8 BOM for Excel compatibility
+                fprintf($handle, "\xEF\xBB\xBF");
+
+                // Headers
+                fputcsv($handle, [
+                    'Job Order No',
+                    'Department',
+                    'Request Status',
+                    'Service Status',
+                    'Requested By',
+                    'Signatory',
+                    'Accepted By',
+                    'Serviced By',
+                    'Cancelled By',
+                    'Date Created',
+                ]);
+
+                // Process in chunks to avoid memory issues
+                $query->chunk($chunkSize, function ($orders) use ($handle, $itDirector) {
+                    foreach ($orders as $order) {
+                        $requestStatus = $order->requestStatus?->name ?? '—';
+                        $serviceStatus = $order->actionReport?->action_taken ?? '';
+                        
+                        $servicedByRaw = $order->actionReport?->serviced_by?->name 
+                            ?? $order->actionReport?->serviced_by 
+                            ?? '';
+                        
+                        $acceptedBy = $order->actionReport?->accepted_by_user?->name 
+                            ?? $itDirector?->user?->name 
+                            ?? $itDirector?->name 
+                            ?? '';
+                        
+                        if (strtolower($serviceStatus) === 'closed' && trim((string)$servicedByRaw) === '') {
+                            $acceptedBy = '';
+                        }
+
+                        $cancelledBy = $order->actionReport?->cancelled_by?->name 
+                            ?? $itDirector?->user?->name 
+                            ?? $itDirector?->name 
+                            ?? '';
+
+                        fputcsv($handle, [
+                            $order->job_order_no ?? '',
+                            $order->department?->name ?? '',
+                            $requestStatus,
+                            $serviceStatus,
+                            $order->requester?->name ?? '',
+                            $order->signature_name ?? '',
+                            $acceptedBy,
+                            $servicedByRaw,
+                            $cancelledBy,
+                            $order->created_at?->format('Y-m-d H:i:s') ?? '',
+                        ]);
+                    }
+                });
+
+                fclose($handle);
+            };
+
+            // Increment rate limit counter
+            if (cache()->has($rateLimitKey)) {
+                cache()->increment($rateLimitKey);
+            } else {
+                cache()->put($rateLimitKey, 1, 3600);
+                cache()->put($rateLimitKey . '_timestamp', time(), 3600);
+            }
+
+            return response()->stream($callback, 200, $headers);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid input parameters',
+                'errors' => $e->errors(),
+                'code' => 'VALIDATION_ERROR',
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Job order export failed: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'user_id' => auth()->id(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Export failed. Please try again or contact support.',
+                'code' => 'EXPORT_ERROR',
+            ], 500);
+        }
     }
 }

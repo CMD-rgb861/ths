@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 import StatusIndicator from '../ui/StatusIndicator';
 
 const CATEGORY_FILTERS = ['Computer Desktop', 'Laptop', 'Printer'];
@@ -243,6 +244,7 @@ export default function SerialNumberHistory() {
       setFiltersApplied(true);
     } catch (error) {
       console.error('Error fetching serial history:', error);
+      toast.error('Failed to load serial history.');
       setJobs([]);
       setTotalCount(0);
       setTotalPages(1);

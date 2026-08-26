@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import { usePage } from '@inertiajs/react';
+import { ToastContainer, toast } from 'react-toastify';
 import JobOrderForm from './job-orders/JobOrderForm';
 import JobOrderList from './job-orders/JobOrderList';
 import JobOrderReports from './job-orders/JobOrderReports';
@@ -8,7 +9,6 @@ import JobOrderStatusPage from './job-orders/JobOrderStatusPage';
 import UserList from './user/UserList';
 import Signatories from './job-orders/Signatories';
 import Login from '../pages/Auth/Login';
-import Notification from './ui/Notification';
 import UserJobHistory from './user/UserJobHistory';
 import UserPendingConfirmation from './user/UserPendingConfirmation';
 import WelcomePage from '../pages/WelcomePage';
@@ -39,7 +39,6 @@ function getRoleNames(user) {
 export default function App() {
   const location = useLocation();
   const { auth } = usePage().props;
-  const [notifications, setNotifications] = useState([]);
   const [newPendingJobs, setNewPendingJobs] = useState([]);
   const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
   const isAuthenticated = Boolean(auth?.user);
@@ -78,18 +77,35 @@ export default function App() {
   const isPrivileged = isAdmin || isTechnician;
   const isAuthPage = location.pathname === '/login' || location.pathname === '/forgot_pass';
 
-  const showNotification = useCallback((type, title, message) => {
-    const id = Date.now();
-    const newNotification = { id, type, title, message };
+  const showNotification = (type, title, message) => {
+    const content = (
+      <div className="space-y-1">
+        {title ? <div className="text-sm font-semibold leading-5">{title}</div> : null}
+        {message ? <div className="text-sm leading-5 whitespace-pre-line">{message}</div> : null}
+      </div>
+    );
 
-    setNotifications((prev) => [...prev, newNotification]);
+    const options = {
+      autoClose: 5000,
+      closeOnClick: true,
+      draggable: true,
+      pauseOnHover: true,
+      position: 'top-right',
+      theme: 'light',
+    };
 
-    setTimeout(() => {
-      setNotifications((prev) =>
-        prev.filter((notification) => notification.id !== id)
-      );
-    }, 5000);
-  }, []);
+    switch (type) {
+      case 'success':
+        return toast.success(content, options);
+      case 'warning':
+        return toast.warn(content, options);
+      case 'error':
+        return toast.error(content, options);
+      case 'info':
+      default:
+        return toast.info(content, options);
+    }
+  };
 
   const navLinkClass = ({ isActive }) =>
     isActive
@@ -401,25 +417,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Notifications Container */}
-      <div className="fixed top-4 right-4 z-[9999] w-full max-w-sm pointer-events-none">
-        <div className="flex flex-col space-y-2">
-          {[...notifications].reverse().map((notification, index) => (
-            <Notification
-              key={`${notification.id}-${index}`}
-              id={notification.id}
-              type={notification.type}
-              title={notification.title}
-              message={notification.message}
-              onClose={(id) =>
-                setNotifications((prev) =>
-                  prev.filter((notif) => notif.id !== id)
-                )
-              }
-            />
-          ))}
-        </div>
-      </div>
+      <ToastContainer
+        autoClose={5000}
+        closeOnClick
+        draggable
+        hideProgressBar={false}
+        newestOnTop
+        pauseOnHover
+        position="top-right"
+        theme="light"
+      />
 
       {mainContent}
 

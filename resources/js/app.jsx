@@ -1,4 +1,5 @@
 import '../css/app.css';
+import 'react-toastify/dist/ReactToastify.css';
 import './bootstrap';
 
 import { createInertiaApp } from '@inertiajs/react';

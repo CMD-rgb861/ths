@@ -1,28 +1,18 @@
-import { useState } from 'react';
-import Notification from './Notification';
+import { ToastContainer } from 'react-toastify';
 
 export default function AppLayout({ children }) {
-  const [notification, setNotification] = useState(null);
-
-  // A method to show the notification
-  const showNotification = (type, title, message) => {
-    setNotification({ type, title, message });
-    setTimeout(() => setNotification(null), 5000); // Dismiss after 5 seconds
-  };
-
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Notification */}
-      {notification && (
-        <div className="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-xs">
-          <Notification
-            type={notification.type}
-            title={notification.title}
-            message={notification.message}
-            onClose={() => setNotification(null)}
-          />
-        </div>
-      )}
+      <ToastContainer
+        autoClose={5000}
+        closeOnClick
+        draggable
+        hideProgressBar={false}
+        newestOnTop
+        pauseOnHover
+        position="top-right"
+        theme="light"
+      />
 
       <header className="bg-surface border-b border-border">
         <div className="max-w-7xl mx-auto px-6 py-3 flex justify-between">
@@ -35,7 +25,7 @@ export default function AppLayout({ children }) {
         </div>
       </header>
 
-      <main className={`flex-1 bg-background ${notification ? 'pt-16' : 'pt-6'}`}>
+      <main className="flex-1 bg-background pt-6">
         <div className="max-w-7xl mx-auto px-6 py-6">
           {children}
         </div>

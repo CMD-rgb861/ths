@@ -19,7 +19,7 @@ class SsoController extends Controller
         $id_number = $request->query('id_number');
 
         if (!$token || !$id_number) {
-            Log::warning('SSO validation: Missing parameters');
+            // Log::warning('SSO validation: Missing parameters');
             return redirect()->route('dashboard')->withErrors([
                 'error' => 'Missing SSO credentials.'
             ]);
@@ -35,7 +35,7 @@ class SsoController extends Controller
             ->first();
 
         if (!$ssoToken) {
-            Log::warning('SSO validation: Invalid token', ['token' => $token, 'id_number' => $id_number]);
+            // Log::warning('SSO validation: Invalid token', ['token' => $token, 'id_number' => $id_number]);
             return redirect()->route('dashboard')->withErrors([
                 'error' => 'Invalid SSO token. Please return to SSO and try again.'
             ]);
@@ -58,7 +58,7 @@ class SsoController extends Controller
         $user = User::query()->firstWhere('id_number', $id_number);
 
         if (!$user) {
-            Log::warning('SSO validation: User not found', ['id_number' => $id_number]);
+            // Log::warning('SSO validation: User not found', ['id_number' => $id_number]);
             
             // Delete the token since validation failed
             DB::table('sso_tokens')
@@ -84,11 +84,11 @@ class SsoController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        Log::info('SSO authentication successful', [
-            'user_id' => $user->id,
-            'id_number' => $id_number,
-            'token' => substr($token, 0, 10) . '...'
-        ]);
+        // Log::info('SSO authentication successful', [
+        //     'user_id' => $user->id,
+        //     'id_number' => $id_number,
+        //     'token' => substr($token, 0, 10) . '...'
+        // ]);
 
         return redirect()->intended(route('dashboard'));
     }
