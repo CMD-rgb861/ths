@@ -4,32 +4,26 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\JobOrder;
+use Carbon\Carbon;
 
 class SoftwareNameController extends Controller
 {
     /**
-     * Search job orders by software name (exact match).
-     * Returns total count and a limited list of job orders
-     * including the related data needed by the compare modal.
+     * Search job orders by software name with advanced filters.
+     * Returns total count and paginated list of job orders.
      */
     public function search(Request $request)
     {
         $software = trim((string) $request->input('software_name', ''));
+        $category = $request->input('category');
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+        $perPage = min(max((int) $request->input('per_page', 10), 1), 50);
+        $page = max((int) $request->input('page', 1), 1);
 
-        if ($software === '' || strlen($software) < 3) {
-            return response()->json([
-                'count' => 0,
-                'jobs' => [],
-            ]);
-        }
-
-        // Default 20, max 50
-        $limit = min(max((int) $request->input('limit', 20), 1), 50);
-
-        // Exclude current job order if provided
-        $excludeId = $request->input('exclude_job_id');
-        $query = JobOrder::whereHas('actionReport', function ($q) use ($software) {
-                $q->where('software_name', $software);
+        $query = JobOrder::whereHas('actionReport', function ($q) {
+                $q->whereNotNull('software_name')
+                  ->where('software_name', '!=', '');
             })
             ->with([
                 'department:id,name',
@@ -39,27 +33,223 @@ class SoftwareNameController extends Controller
             ])
             ->orderByDesc('created_at');
 
-        if ($excludeId) {
-            $query->where('id', '!=', $excludeId);
+        // Filter by software name (partial match)
+        if (!empty($software) && strlen($software) >= 3) {
+            $query->whereHas('actionReport', function ($q) use ($software) {
+                $q->where('software_name', 'like', "%{$software}%");
+            });
         }
 
+        // Always filter by "Software" category
+        $query->whereHas('categories', function ($q) {
+            $q->where('name', 'Software');
+        });
+
+        // Additional category filter (if needed)
+        if (!empty($category)) {
+            $query->whereHas('categories', function ($q) use ($category) {
+                $q->where('name', $category);
+            });
+        }
+
+        // Filter by date range (created_at)
+        if (!empty($dateFrom)) {
+            $query->whereDate('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+        }
+
+        if (!empty($dateTo)) {
+            $query->whereDate('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
+        }
+
+        // Get total count for pagination
         $totalCount = (clone $query)->count();
 
+        // Get paginated results
         $jobs = $query
-            ->limit($limit)
-            ->get([
-                'id',
-                'job_order_no',
-                'department_id',
-                'requested_by',
-                'created_at',
-                'status',
-                'request_description',
-            ]);
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Transform data to match frontend expectations
+        $transformedJobs = $jobs->getCollection()->map(function ($job) {
+            return [
+                'id' => $job->id,
+                'job_order_no' => $job->job_order_no,
+                'department' => $job->department ? [
+                    'id' => $job->department->id,
+                    'name' => $job->department->name,
+                ] : null,
+                'requester' => $job->requester ? [
+                    'id' => $job->requester->id,
+                    'name' => $job->requester->name,
+                ] : null,
+                'categories' => $job->categories->map(function ($category) {
+                    return [
+                        'id' => $category->id,
+                        'name' => $category->name,
+                    ];
+                }),
+                'action_report' => $job->actionReport ? [
+                    'id' => $job->actionReport->id,
+                    'job_order_id' => $job->actionReport->job_order_id,
+                    'diagnosis' => $job->actionReport->diagnosis,
+                    'action_taken' => $job->actionReport->action_taken,
+                    'status' => $job->actionReport->status,
+                    'serviced_by' => $job->actionReport->serviced_by,
+                    'date_started' => $job->actionReport->date_started,
+                    'date_finished' => $job->actionReport->date_finished,
+                    'remarks' => $job->actionReport->remarks,
+                    'serial_number' => $job->actionReport->serial_number,
+                    'brand_name' => $job->actionReport->brand_name,
+                    'brand_model' => $job->actionReport->brand_model,
+                    'software_name' => $job->actionReport->software_name,
+                    'accepted_at' => $job->actionReport->accepted_at,
+                    'confirmed_at' => $job->actionReport->confirmed_at,
+                    'cancelled_at' => $job->actionReport->cancelled_at,
+                    'cancelled_by' => $job->actionReport->cancelled_by,
+                ] : null,
+                'created_at' => $job->created_at,
+                'updated_at' => $job->updated_at,
+            ];
+        });
 
         return response()->json([
-            'count' => $totalCount,
-            'jobs' => $jobs,
+            'data' => $transformedJobs,
+            'current_page' => $jobs->currentPage(),
+            'last_page' => $jobs->lastPage(),
+            'per_page' => $jobs->perPage(),
+            'total' => $jobs->total(),
+            'from' => $jobs->firstItem(),
+            'to' => $jobs->lastItem(),
         ]);
+    }
+
+    /**
+     * Get software name history with filters (alias for search).
+     */
+    public function history(Request $request)
+    {
+        return $this->search($request);
+    }
+
+    /**
+     * Get unique software names for autocomplete.
+     */
+    public function autocomplete(Request $request)
+    {
+        $search = trim((string) $request->input('search', ''));
+        
+        if (empty($search) || strlen($search) < 2) {
+            return response()->json([]);
+        }
+
+        $softwareNames = JobOrder::whereHas('actionReport', function ($q) use ($search) {
+                $q->where('software_name', 'like', "%{$search}%")
+                  ->whereNotNull('software_name')
+                  ->where('software_name', '!=', '');
+            })
+            ->whereHas('categories', function ($q) {
+                $q->where('name', 'Software');
+            })
+            ->limit(10)
+            ->get()
+            ->pluck('actionReport.software_name')
+            ->unique()
+            ->values()
+            ->toArray();
+
+        return response()->json($softwareNames);
+    }
+    /**
+     * Export software name history to CSV.
+     */
+    public function export(Request $request)
+    {
+        $software = trim((string) $request->input('software_name', ''));
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+
+        $query = JobOrder::whereHas('actionReport', function ($q) {
+                $q->whereNotNull('software_name')
+                  ->where('software_name', '!=', '');
+            })
+            ->with([
+                'department:id,name',
+                'requester:id,name',
+                'categories:id,name',
+                'actionReport:id,job_order_id,diagnosis,action_taken,status,serviced_by,date_started,date_finished,remarks,serial_number,brand_name,brand_model,software_name,accepted_at,confirmed_at,cancelled_at,cancelled_by',
+            ])
+            ->whereHas('categories', function ($q) {
+                $q->where('name', 'Software');
+            })
+            ->orderByDesc('created_at');
+
+        // Filter by software name (partial match)
+        if (!empty($software) && strlen($software) >= 3) {
+            $query->whereHas('actionReport', function ($q) use ($software) {
+                $q->where('software_name', 'like', "%{$software}%");
+            });
+        }
+
+        // Filter by date range (created_at)
+        if (!empty($dateFrom)) {
+            $query->whereDate('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+        }
+
+        if (!empty($dateTo)) {
+            $query->whereDate('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
+        }
+
+        // Get all results (no pagination for export)
+        $jobs = $query->get();
+
+        // Create CSV content
+        $filename = 'software_name_history_' . date('Y-m-d_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"$filename\"",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ];
+
+        $callback = function () use ($jobs) {
+            $handle = fopen('php://output', 'w');
+
+            // Add headers
+            fputcsv($handle, [
+                'Job Order No',
+                'Software Name',
+                'Requester',
+                'Department',
+                'Date Created',
+                'Status'
+            ]);
+
+            // Add data rows
+            foreach ($jobs as $job) {
+                $ar = $job->actionReport;
+                
+                // Get status
+                $status = $ar->status ?? '—';
+                if ($status === 'Cancelled' && $ar->cancelled_by && $job->requester) {
+                    $cancelledById = is_object($ar->cancelled_by) ? $ar->cancelled_by->id : $ar->cancelled_by;
+                    if ($cancelledById === $job->requester->id) {
+                        $status = 'Cancelled by User';
+                    }
+                }
+
+                fputcsv($handle, [
+                    $job->job_order_no,
+                    $ar->software_name ?? '—',
+                    $job->requester->name ?? '—',
+                    $job->department->name ?? '—',
+                    $job->created_at ? $job->created_at->format('Y-m-d H:i') : '—',
+                    $status,
+                ]);
+            }
+
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 }

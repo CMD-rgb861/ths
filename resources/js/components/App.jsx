@@ -138,10 +138,10 @@ export default function App() {
                         />
                         <div>
                           <h1 className="text-lg font-semibold text-gray-900 leading-tight">
-                            Technical Hardware System
+                            IT Support & Maintenance System
                           </h1>
                           <p className="text-xs text-gray-500 leading-tight">
-                            Job Order Management Portal
+                            IT Job Order Management Portal
                           </p>
                         </div>
                       </div>

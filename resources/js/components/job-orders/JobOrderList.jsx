@@ -362,7 +362,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                 {newPendingJobs.length > 0 && (
                   <button
                     onClick={handleBellClick}
-                    className="absolute -top-2 -right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg animate-pulse"
+                    className="absolute -top-2 -right-9 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg animate-pulse"
                   >
                     <FaBell className="w-4 h-4" />
                     <span className="absolute -top-1 -right-1 bg-red-700 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center font-bold">

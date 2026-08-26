@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
 import StatusIndicator from '../ui/StatusIndicator';
 
@@ -188,46 +188,155 @@ export default function SerialNumberHistory() {
   const [loading, setLoading] = useState(false);
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [detailModalJob, setDetailModalJob] = useState(null);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const perPage = 10;
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [perPage] = useState(10);
 
-  useEffect(() => {
+  // Track if filters have been applied
+  const [filtersApplied, setFiltersApplied] = useState(false);
+
+  // Debounce timer ref
+  const searchTimerRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  // Fetch serial number history with all filters
+  const fetchSerialHistory = useCallback(async (page = 1) => {
     setLoading(true);
-    axios
-      .get('/job-orders', { params: { per_page: 1000, history: true } })
-      .then((res) => {
-        setJobs(Array.isArray(res.data?.data) ? res.data.data : []);
-      })
-      .catch(() => setJobs([]))
-      .finally(() => setLoading(false));
-  }, []);
+    
+    try {
+      const params = {
+        page: page,
+        per_page: perPage,
+      };
 
-  // Reset to first page on filter/search
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, category]);
+      // Add search filter (only if 3+ characters)
+      if (search && search.length >= 3) {
+        params.serial_number = search;
+      }
 
-  const filtered = jobs.filter((job) => {
-    const ar = job.action_report;
+      // Add category filter
+      if (category) {
+        params.category = category;
+      }
 
-    if (!ar || !ar.serial_number) return false;
+      // Add date filters
+      if (dateFrom) {
+        params.date_from = dateFrom;
+      }
 
-    if (category) {
-      const cats = job.categories?.map((c) => c.name) || [];
-      if (!cats.includes(category)) return false;
+      if (dateTo) {
+        params.date_to = dateTo;
+      }
+
+      const res = await axios.get('/api/serial-number/search', { params });
+
+      setJobs(res.data.data || []);
+      setTotalCount(res.data.total || 0);
+      setTotalPages(res.data.last_page || 1);
+      setCurrentPage(res.data.current_page || 1);
+      setFiltersApplied(true);
+    } catch (error) {
+      console.error('Error fetching serial history:', error);
+      setJobs([]);
+      setTotalCount(0);
+      setTotalPages(1);
+    } finally {
+      setLoading(false);
+    }
+  }, [search, category, dateFrom, dateTo, perPage]);
+
+  // Debounced search handler
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    
+    // Clear existing timer
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
     }
 
-    if (search && !ar.serial_number.toLowerCase().includes(search.toLowerCase())) return false;
+    // Set new timer (300ms debounce)
+    searchTimerRef.current = setTimeout(() => {
+      setSearch(value);
+    }, 300);
+  };
 
-    return true;
-  });
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, category, dateFrom, dateTo]);
 
-  // Pagination logic
-  const pageCount = Math.ceil(filtered.length / perPage);
-  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  // Fetch data when filters or page changes
+  useEffect(() => {
+    // Check if any filter is applied
+    const hasFilters = search.length >= 3 || category || dateFrom || dateTo;
+    
+    if (hasFilters || currentPage === 1) {
+      fetchSerialHistory(currentPage);
+    } else if (search.length > 0 && search.length < 3) {
+      // Don't fetch if search is too short
+      setJobs([]);
+      setTotalCount(0);
+      setTotalPages(1);
+      setFiltersApplied(false);
+    }
+  }, [search, category, dateFrom, dateTo, currentPage, fetchSerialHistory]);
+
+  // Clear all filters - FINAL FIX
+  const clearFilters = () => {
+    // Clear search timer if running
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+    
+    // Check if any filters are actually applied using current state values
+    const hasActiveFilters = search.length >= 3 || category || dateFrom || dateTo;
+    
+    // Reset the input field value FIRST (before state changes)
+    if (searchInputRef.current) {
+      searchInputRef.current.value = '';
+    }
+    
+    // Reset all filter states
+    setSearch('');
+    setCategory('');
+    setDateFrom('');
+    setDateTo('');
+    setCurrentPage(1);
+    
+    // ONLY clear jobs if there were actual filters applied
+    if (hasActiveFilters) {
+      setJobs([]);
+      setTotalCount(0);
+      setTotalPages(1);
+      setFiltersApplied(false);
+    }
+    // If no filters were applied, do NOTHING - keep the jobs list intact
+  };
+
+  // Handle page change
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  // Export CSV
+  const exportCsv = () => {
+    const params = new URLSearchParams();
+    
+    if (search && search.length >= 3) params.append('serial_number', search);
+    if (category) params.append('category', category);
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    
+    window.location.href = `/api/serial-number/export?${params.toString()}`;
+  };
 
   const getRequestStatus = (job) => {
     if (
@@ -251,73 +360,151 @@ export default function SerialNumberHistory() {
   const getStatusBadgeClass = (status) =>
     STATUS_BADGE_STYLES[status] || 'bg-gray-100 text-gray-700';
 
-  const exportCsv = () => {
-    window.location.href = '/job-orders/export/csv?type=serial-history';
-  };
-
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Serial Number History</h1>
             <p className="mt-1 text-gray-600">
-              View the history of serial numbers from past job orders. Filter by device type or
-              search by serial number.
+              Search and filter serial numbers from past job orders
             </p>
+            {filtersApplied && (
+              <div className="mt-2 text-sm text-gray-500">
+                Found {totalCount} record{totalCount !== 1 ? 's' : ''}
+              </div>
+            )}
           </div>
 
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
-          >
-            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path
-                d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Export CSV
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+            >
+              Clear Filters
+            </button>
+
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+            >
+              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path
+                  d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Export CSV
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm md:flex-row">
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase text-gray-500">
-            Device Type
-          </label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Types</option>
-            {CATEGORY_FILTERS.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
+      {/* Filters */}
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {/* Serial Number Search */}
+          <div>
+            <label className="mb-2 block text-xs font-semibold uppercase text-gray-500">
+              Serial Number
+            </label>
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search serial number..."
+              defaultValue={search}
+              onChange={handleSearchChange}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {search && search.length < 3 && (
+              <p className="mt-1 text-xs text-yellow-600">Enter at least 3 characters</p>
+            )}
+          </div>
+
+          {/* Device Type Filter */}
+          <div>
+            <label className="mb-2 block text-xs font-semibold uppercase text-gray-500">
+              Device Type
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Types</option>
+              {CATEGORY_FILTERS.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date From */}
+          <div>
+            <label className="mb-2 block text-xs font-semibold uppercase text-gray-500">
+              Date From
+            </label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Date To */}
+          <div>
+            <label className="mb-2 block text-xs font-semibold uppercase text-gray-500">
+              Date To
+            </label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         </div>
 
-        <div className="flex-1">
-          <label className="mb-2 block text-xs font-semibold uppercase text-gray-500">
-            Serial Number
-          </label>
-          <input
-            type="text"
-            placeholder="Search serial number..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+        {/* Active filters summary */}
+        {(search || category || dateFrom || dateTo) && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
+            <span className="text-xs font-semibold uppercase text-gray-500">Active Filters:</span>
+            
+            {search && search.length >= 3 && (
+              <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+                Serial: {search}
+              </span>
+            )}
+            
+            {category && (
+              <span className="inline-flex items-center rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-800">
+                Type: {category}
+              </span>
+            )}
+            
+            {dateFrom && (
+              <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+                From: {new Date(dateFrom).toLocaleDateString()}
+              </span>
+            )}
+            
+            {dateTo && (
+              <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+                To: {new Date(dateTo).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
+      {/* Results Table */}
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
         <table className="min-w-full">
           <thead className="border-b border-gray-200 bg-gray-50">
@@ -352,40 +539,61 @@ export default function SerialNumberHistory() {
           <tbody className="divide-y divide-gray-200 bg-white">
             {loading ? (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-gray-500">
-                  Loading...
+                <td colSpan={8} className="py-12 text-center text-gray-500">
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="mb-3 h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
+                    <span>Loading serial history...</span>
+                  </div>
                 </td>
               </tr>
-            ) : filtered.length === 0 ? (
+            ) : !filtersApplied ? (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-gray-400">
-                  No records found.
+                <td colSpan={8} className="py-12 text-center text-gray-400">
+                  <div className="flex flex-col items-center justify-center">
+                    <svg className="mb-3 h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <p className="font-medium">Enter search criteria to find serial numbers</p>
+                    <p className="text-sm">Search by serial number, device type, or date range</p>
+                  </div>
+                </td>
+              </tr>
+            ) : jobs.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="py-12 text-center text-gray-400">
+                  <div className="flex flex-col items-center justify-center">
+                    <svg className="mb-3 h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p className="font-medium">No matching records found</p>
+                    <p className="text-sm">Try adjusting your search criteria</p>
+                  </div>
                 </td>
               </tr>
             ) : (
-              paginated.map((job) => {
+              jobs.map((job) => {
                 const ar = job.action_report;
                 const cats = job.categories?.map((c) => c.name).join(', ') || '';
                 const reqStatus = getRequestStatus(job);
 
                 return (
-                  <tr key={job.id}>
+                  <tr key={job.id} className="hover:bg-gray-50">
                     <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900">
                       {job.job_order_no}
                     </td>
 
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{cats}</td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{cats || '—'}</td>
 
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
-                      {ar.serial_number}
+                    <td className="whitespace-nowrap px-6 py-4 text-sm font-mono text-gray-700">
+                      {ar?.serial_number || '—'}
                     </td>
 
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
-                      {ar.brand_name || '—'}
+                      {ar?.brand_name || '—'}
                     </td>
 
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
-                      {ar.brand_model || '—'}
+                      {ar?.brand_model || '—'}
                     </td>
 
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
@@ -402,7 +610,7 @@ export default function SerialNumberHistory() {
                           {reqStatus}
                         </span>
 
-                        {reqStatus === 'Ongoing' && (
+                        {reqStatus === 'Ongoing' && ar && (
                           <div className="mt-1">
                             <StatusIndicator
                               status={ar.status}
@@ -413,7 +621,7 @@ export default function SerialNumberHistory() {
                         )}
 
                         {(reqStatus === 'Cancelled' || reqStatus === 'Cancelled by User') &&
-                          ar.remarks && (
+                          ar?.remarks && (
                             <div className="mt-1 text-xs text-gray-500">Reason: {ar.remarks}</div>
                           )}
                       </div>
@@ -453,26 +661,39 @@ export default function SerialNumberHistory() {
           </tbody>
         </table>
       </div>
-      {/* Always show pagination controls */}
-      <div className="flex justify-center items-center gap-6 mt-4">
-        <button
-          className="flex items-center px-4 py-2 rounded border text-sm font-medium disabled:opacity-50"
-          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-          disabled={currentPage === 1}
-        >
-          <span className="mr-2">&lt;</span> Previous
-        </button>
-        <span className="text-sm font-medium">
-          Page {pageCount === 0 ? 0 : currentPage} of {pageCount === 0 ? 1 : pageCount}
-        </span>
-        <button
-          className="flex items-center px-4 py-2 rounded border text-sm font-medium disabled:opacity-50"
-          onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
-          disabled={currentPage === pageCount || pageCount === 0}
-        >
-          Next <span className="ml-2">&gt;</span>
-        </button>
-      </div>
+
+      {/* Pagination */}
+      {totalCount > 0 && (
+        <div className="flex flex-col items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white px-6 py-4 shadow-sm sm:flex-row">
+          <div className="text-sm text-gray-500">
+            Showing {jobs.length} of {totalCount} records
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              className="flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage <= 1}
+            >
+              <span className="mr-2">&lt;</span> Previous
+            </button>
+
+            <span className="text-sm font-medium">
+              Page {currentPage} of {totalPages}
+            </span>
+
+            <button
+              className="flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+            >
+              Next <span className="ml-2">&gt;</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Modal */}
       <SerialNumberDetailModal
         isOpen={!!detailModalJob}
         job={detailModalJob}

@@ -491,7 +491,7 @@ export default function JobOrderOngoingModal({
                                   <button
                                     onClick={() =>
                                       window.open(
-                                        `/job-orders/${jobId}/unserviceable/pdf`,
+                                        `/api/job-orders/${jobId}/unserviceable/pdf`,
                                         "_blank"
                                       )
                                     }

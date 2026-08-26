@@ -50,7 +50,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [LoginController::class, 'logout']);
 
     // Users routes
+    // Users
     Route::get('/users', [UserController::class, 'index']);
+    Route::get('/users/counts', [UserController::class, 'counts']);
+    Route::get('/roles', [UserController::class, 'roles']);
+    Route::put('/users/{user}/role', [UserController::class, 'updateRole']);
+
+    // Technicians
     Route::get('/technicians', [UserController::class, 'technicians']);
 
     // Reference data routes
@@ -90,15 +96,19 @@ Route::middleware('auth:sanctum')->group(function () {
     // ===============================
     // UNSERVICEABLE REPORT ROUTES
     // ===============================
+    Route::get('/job-orders/{job}/unserviceable/pdf',
+        [UnserviceableReportController::class, 'generate']
+    );
+
     Route::get('/job-orders/{job}/unserviceable/view',
-        [UnserviceableReportController::class, 'view']
+        [UnserviceableReportController::class, 'generate']
     );
 
     // ===============================
     // COMPLETED REPORT ROUTES
     // ===============================
     Route::get('/job-orders/{job}/completed/view',
-        [CompletedReportController::class, 'view']
+        [CompletedReportController::class, 'generate']
     );
 
     // Add this new route to fetch the pending count
@@ -117,8 +127,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Serial number search
     Route::get('/serial-number/search', [SerialNumberController::class, 'search']);
+    Route::get('/serial-number/history', [SerialNumberController::class, 'history']);
+    Route::get('/serial-number/autocomplete', [SerialNumberController::class, 'autocomplete']);
+    Route::get('/serial-number/export', [SerialNumberController::class, 'export']);
     // Software name search
     Route::get('/software-name/search', [\App\Http\Controllers\SoftwareNameController::class, 'search']);
+    Route::get('/software-name/export', [\App\Http\Controllers\SoftwareNameController::class, 'export']);
 
     // Pending Confirmations route (admin/tech only)
     Route::get('/pending-confirmations', [\App\Http\Controllers\PendingConfirmationController::class, 'index']);

@@ -875,7 +875,7 @@ export default function JobOrderOngoingModal({
                     <button
                       onClick={() =>
                         window.open(
-                          `/job-orders/${jobId}/completed/pdf`,
+                          `/api/job-orders/${jobId}/completed/view`,
                           "_blank"
                         )
                       }
@@ -1011,7 +1011,7 @@ export default function JobOrderOngoingModal({
                                     <button
                                       onClick={() =>
                                         window.open(
-                                          `/job-orders/${jobId}/unserviceable/pdf`,
+                                          `/api/job-orders/${jobId}/unserviceable/pdf`,
                                           "_blank"
                                         )
                                       }
