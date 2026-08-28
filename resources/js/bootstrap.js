@@ -10,6 +10,11 @@ if (token) {
 }
 
 axios.interceptors.request.use((config) => {
+    const localToken = localStorage.getItem('token');
+    if (localToken) {
+        config.headers.Authorization = `Bearer ${localToken}`;
+    }
+
     if (!config.url) {
         return config;
     }

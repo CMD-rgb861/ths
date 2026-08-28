@@ -38,6 +38,9 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $user && $canLoadRoles ? $user->loadMissing('roles') : $user,
             ],
+            'flash' => [
+                'api_token' => fn () => $request->session()->get('api_token')
+            ],
         ];
     }
 }

@@ -38,10 +38,18 @@ function getRoleNames(user) {
 
 export default function App() {
   const location = useLocation();
-  const { auth } = usePage().props;
+  const { auth, flash } = usePage().props;
+
   const [newPendingJobs, setNewPendingJobs] = useState([]);
   const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
   const isAuthenticated = Boolean(auth?.user);
+
+  useEffect(() => {
+    if (flash?.api_token) {
+      localStorage.setItem('token', flash.api_token);
+    }
+  }, [flash?.api_token]);
+
   const userRaw = localStorage.getItem('user');
   let user = null;
   try {
@@ -52,7 +60,7 @@ export default function App() {
 
   if (!user && auth?.user) {
     user = auth.user;
-  }
+  }  
 
   useEffect(() => {
     if (auth?.user) {

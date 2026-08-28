@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class LoginController extends Controller
 {
@@ -38,18 +39,35 @@ class LoginController extends Controller
     /**
      * Destroy an authenticated session.
      */
-    public function logout(Request $request): JsonResponse
+    public function logout(Request $request)
     {
-        /** @var \Laravel\Sanctum\PersonalAccessToken|null $token */
-        $token = $request->user()->currentAccessToken();
-        if ($token) {
-            // @phpstan-ignore-next-line
-            $token->delete();
+        // Revoke the current Sanctum token, if available
+        if ($request->user()) {
+            $token = $request->user()->currentAccessToken();
+
+            if ($token) {
+                // @phpstan-ignore-next-line
+                $token->delete();
+            }
         }
 
-        return response()->json([
-            'message' => 'Logged out successfully'
-        ]);
+        // Logout from the Laravel web session
+        Auth::logout();
+
+        // Invalidate the current session
+        $request->session()->invalidate();
+
+        // Regenerate the CSRF token
+        $request->session()->regenerateToken();
+
+        // Redirect back to ITSMS / SSO
+        $ip = getHostByName(getHostName());
+
+        return redirect()->away(
+            "https://{$ip}/ids/itsms/home/n?success=" .
+            urlencode('You have been logged out successfully.')
+        );
     }
+
 }
 

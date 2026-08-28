@@ -40,7 +40,7 @@ class AuthenticatedSessionController extends Controller
     /**
      * Destroy an authenticated session.
      */
-    public function destroy(Request $request): RedirectResponse
+    public function destroy1(Request $request): RedirectResponse
     {
         // ===== DELETE THE SSO TOKEN ON LOGOUT =====
         $ssoToken = session('sso_token');
@@ -60,5 +60,46 @@ class AuthenticatedSessionController extends Controller
 
         // Redirect to SSO Dashboard
         return redirect()->away(config('services.sso.redirect_url', '/'));
+    }
+
+    public function destroy(Request $request)
+    {
+        // Revoke the current Sanctum token, if available
+        if ($request->user()) {
+            $token = $request->user()->currentAccessToken();
+
+            if ($token) {
+                // @phpstan-ignore-next-line
+                $token->delete();
+            }
+        }
+
+        $ssoToken = session('sso_token');
+        
+        if ($ssoToken) {
+            // Delete the token from sso_tokens table
+            DB::table('sso_tokens')->where('token', $ssoToken)->delete();
+            
+            // Clear SSO token from session
+            session()->forget('sso_token');
+        }
+
+        // Logout from the Laravel web session
+        Auth::logout();
+        Auth::guard('web')->logout();
+
+        // Invalidate the current session
+        $request->session()->invalidate();
+
+        // Regenerate the CSRF token
+        $request->session()->regenerateToken();
+
+        // Redirect back to ITSMS / SSO
+        $ip = getHostByName(getHostName());
+
+        return redirect()->away(
+            "https://{$ip}/ids/itsms/home/n?success=" .
+            urlencode('You have been logged out successfully.')
+        );
     }
 }

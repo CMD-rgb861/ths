@@ -14,6 +14,8 @@ use App\Http\Controllers\UnserviceableReportController;
 use App\Http\Controllers\CompletedReportController;
 use App\Http\Controllers\SerialNumberController;
 use App\Http\Controllers\JobOrderQueueController;
+use App\Http\Controllers\PendingConfirmationController;
+use App\Http\Controllers\RequestStatusController;
 use App\Http\Controllers\SummaryRequestReportController;
 use App\Http\Controllers\SoftwareNameController;
 use App\Models\JobOrder;
@@ -63,7 +65,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Reference data routes
     Route::get('/departments', [DepartmentController::class, 'index']);
     Route::get('/categories', [CategoryController::class, 'index']);
-    Route::get('/request-statuses', [\App\Http\Controllers\RequestStatusController::class, 'index']);
+    Route::get('/request-statuses', [RequestStatusController::class, 'index']);
 
     // ============================================
     // JOB ORDERS ROUTES
@@ -157,7 +159,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ===============================
     // PENDING CONFIRMATIONS ROUTE
     // ===============================
-    Route::get('/pending-confirmations', [\App\Http\Controllers\PendingConfirmationController::class, 'index']);
+    Route::get('/pending-confirmations', [PendingConfirmationController::class, 'index']);
 
     // ===============================
     // QUEUE ROUTES
