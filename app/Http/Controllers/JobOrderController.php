@@ -269,7 +269,6 @@ class JobOrderController extends Controller
     {
         $validated = $request->validate([
             'date' => ['required', 'date'],
-            'department_id' => ['required', 'exists:departments,id'],
             'request_description' => ['required', 'string'],
             'contact_no' => ['required', 'string'],
             'signature_name' => ['nullable', 'string'],
@@ -281,7 +280,16 @@ class JobOrderController extends Controller
             'status' => ['nullable', 'integer', 'exists:request_statuses,id'],
         ]);
 
-        return DB::transaction(function () use ($validated, $request) {
+        $departmentId = $request->user()
+            ->departments()
+            ->orderBy('departments.id')
+            ->value('departments.id');
+
+        if (!$departmentId) {
+            abort(422, 'No department is assigned to the current user.');
+        }
+
+        return DB::transaction(function () use ($validated, $request, $departmentId) {
             // Generate Job Order Number
             $signatureName = $validated['signature_name'] ?? $request->user()->name;
             $last = JobOrder::lockForUpdate()->latest('id')->first();
@@ -292,7 +300,7 @@ class JobOrderController extends Controller
             $jobOrder = JobOrder::create([
                 'job_order_no' => $jobOrderNo,
                 'date' => $validated['date'],
-                'department_id' => $validated['department_id'],
+                'department_id' => $departmentId,
                 'requested_by' => $request->user()->id,
                 'created_by' => $request->user()->id,
                 'request_description' => $validated['request_description'],

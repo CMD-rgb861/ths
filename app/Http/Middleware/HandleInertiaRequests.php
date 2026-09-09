@@ -36,7 +36,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $user && $canLoadRoles ? $user->loadMissing('roles') : $user,
+                'user' => $user && $canLoadRoles ? $user->loadMissing('roles', 'departments') : $user,
             ],
             'flash' => [
                 'api_token' => fn () => $request->session()->get('api_token')

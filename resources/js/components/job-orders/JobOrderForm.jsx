@@ -1,14 +1,16 @@
 
 import { useEffect, useState } from 'react';
-import CategorySelector from './CategorySelector';
+import { usePage } from '@inertiajs/react';
 import axios from 'axios';
+import CategorySelector from './CategorySelector';
 
 export default function JobOrderForm({ userRole, showNotification }) {  // Added showNotification
-  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const MAX_FILES = 3;
   const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+  const { auth } = usePage().props;
+  const departments = Array.isArray(auth?.user?.departments) ? auth.user.departments : [];
 
   const formatToManilaDate = () => {
     const date = new Date();
@@ -19,7 +21,7 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
   // Use this function to set the initial date value in Manila time
   const initialForm = {
     date: formatToManilaDate(),
-    department_id: '',
+    department_id: departments[0]?.id ? String(departments[0].id) : '',
     request_description: '',
     contact_no: '',
     signature_name: '',
@@ -27,36 +29,20 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
   };
 
   const [form, setForm] = useState(initialForm);
-  
 
-  /* ---------------- FETCH DEPARTMENTS ---------------- */
   useEffect(() => {
-    axios.get('/departments')
-      .then(res => {
-        const rows = Array.isArray(res.data)
-          ? res.data
-          : Array.isArray(res.data?.data)
-            ? res.data.data
-            : [];
+    if (!form.department_id && departments.length > 0) {
+      setForm(prev => ({
+        ...prev,
+        department_id: String(departments[0].id),
+      }));
+    }
+  }, [departments, form.department_id]);
 
-        if (rows.length > 0) {
-          setDepartments(rows);
-        } else {
-          setDepartments([
-            { id: 1, name: 'REO' },
-            { id: 2, name: 'Admission Office' },
-            { id: 3, name: 'VPSD' }
-          ]);
-        }
-      })
-      .catch(() => {
-        setDepartments([
-          { id: 1, name: 'REO' },
-          { id: 2, name: 'Admission Office' },
-          { id: 3, name: 'VPSD' }
-        ]);
-      });
-  }, []);
+  const departmentName = departments.length > 0
+    ? departments.map(department => department.name).filter(Boolean).join(', ')
+    : 'No department assigned';
+  
 
   /* ---------------- SUBMIT ---------------- */
   // For example, on submit, convert the date to UTC
@@ -137,19 +123,9 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                   Department <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={form.department_id}
-                  onChange={e => setForm({ ...form, department_id: e.target.value })}
-                  required
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                >
-                  <option value="">Select department</option>
-                  {departments.map(d => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="w-full border border-gray-200 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-800">
+                  {departmentName}
+                </div>
               </div>
 
               {/* Contact No */}
