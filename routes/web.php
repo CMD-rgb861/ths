@@ -8,7 +8,11 @@ use Inertia\Inertia;
 use App\Models\JobOrder;
 
 Route::get('/', function () {
-    return redirect()->route('login');
+    // return redirect()->route('login');
+    $ip = getHostByName(getHostName());
+    return redirect()->away(
+        "https://{$ip}/ids/itsms/home/n"
+    );
 });
 
 Route::get('/dashboard', function () {
