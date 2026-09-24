@@ -1,0 +1,6 @@
+before coming to the reservation the app will go through lnu-ids, so in the lnu_id for the dropdown selection, 
+we will be needing to compare the Employee_default function from the users model in the lnu-ids(basically comparing the office_id column of the _work table) 
+to the offices table of the lnu-ids(this is where we are getting the choices for the dropdown) so that it will preselect the department dropdown before proceeding to 
+the other app, and then insert them in the users department?(i need to see if i will be needing to create a new table or just modify the user table for this thing)
+
+you need to edit the _work because the account you are using in the local lnu-ids dont have any data yet in there

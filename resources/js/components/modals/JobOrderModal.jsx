@@ -32,6 +32,7 @@ export default function JobOrderModal({
     user = null;
   }
   const isAdmin = isRole(user, 'admin');
+  const isTechnician = isRole(user, 'technician');
   const isUser = isRole(user, 'user');
   const isLoading = loadingAction !== null;
   const isOwnJob = job?.requester?.id === user?.id;
@@ -82,8 +83,9 @@ export default function JobOrderModal({
       const response = await axios.put(`/job-orders/${job.id}`, { status: statusId });
       const updatedJob = response.data;
 
-      // Clear confirmation flag when admin accepts job
-      if (statusName === 'Ongoing' && isAdmin) {
+
+      // Clear confirmation flag when admin or technician accepts job
+      if (statusName === 'Ongoing' && (isAdmin || isTechnician)) {
         if (updatedJob.action_report) {
           updatedJob.action_report.conformed = undefined;
         }
@@ -383,7 +385,7 @@ export default function JobOrderModal({
         {/* Footer Actions */}
         <div className="bg-gray-50 border-t border-gray-200 px-8 py-4">
           <div className="flex items-center justify-between gap-4">
-            {isAdmin ? (
+            {isAdmin || isTechnician ? (
               <>
                 <div className="flex gap-3">
                   <button
@@ -529,7 +531,7 @@ export default function JobOrderModal({
 
         {/* ConfirmModal for Cancel Request (user) */}
         <ConfirmModal
-          isOpen={showCancelConfirm && !isAdmin}
+          isOpen={showCancelConfirm && !isAdmin && !isTechnician}
           title="Cancel Request"
           message="Are you sure you want to cancel this job order request? This action cannot be undone."
           confirmText="Yes, Cancel"

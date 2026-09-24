@@ -411,9 +411,9 @@ class JobOrderController extends Controller
             // Get the status name from the id
             $statusName = RequestStatus::find($validated['status'])?->name;
 
-            // --- FIX: If admin is denying/closing, always set Completed, but preserve Unserviceable action_taken when appropriate ---
+            // --- FIX: If admin or technician is denying/closing, always set Completed, but preserve Unserviceable action_taken when appropriate ---
             if (
-                $request->user()->isAdmin() &&
+                ($request->user()->isAdmin() || $request->user()->isTechnician()) &&
                 (
                     $statusName === 'Cancelled' ||
                     $statusName === 'Cancelled by User' ||

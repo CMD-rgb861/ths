@@ -1269,9 +1269,26 @@ export default function JobOrderOngoingModal({
 
         {/* Footer Actions */}
         <div className="bg-gray-50 border-t border-gray-200 px-8 py-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
             <div className="flex items-center gap-3">
-              {showConfirmButtonForAdmin && (
+              {showConfirmButtonUser && (
+                <button
+                  onClick={() => setIsCsmModalOpen(true)}
+                  disabled={confirming}
+                  className={`inline-flex items-center px-6 py-2.5 rounded-lg text-white text-sm font-medium transition-all ${
+                    confirming
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                  }`}
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {confirming ? 'Confirming...' : 'Confirm Completion'}
+                </button>
+              )}
+
+              {!showConfirmButtonUser && showConfirmButtonForAdmin && (
                 <button
                   onClick={handleConfirm}
                   disabled={confirming}
@@ -1288,7 +1305,7 @@ export default function JobOrderOngoingModal({
                 </button>
               )}
 
-              {!readOnly && (
+              {!showConfirmButtonUser && !readOnly && (
                 <button
                   onClick={handleSave}
                   disabled={saving}
@@ -1305,31 +1322,6 @@ export default function JobOrderOngoingModal({
                 </button>
               )}
             </div>
-
-
-
-            {/* THIS IS WHERE THE BUTTON LIES */}
-
-            {/* --- Always show CSM checkbox and confirm button for user when confirming --- */}
-            {showConfirmButtonUser && (
-              <div className="flex items-center gap-4">
-                {/* Confirm Button */}
-                <button
-                  onClick={() => setIsCsmModalOpen(true)}
-                  disabled={confirming}
-                  className={`inline-flex items-center px-6 py-2.5 rounded-lg text-white text-sm font-medium transition-all ${
-                    confirming
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
-                  }`}
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  {confirming ? 'Confirming...' : 'Confirm Completion'}
-                </button>
-              </div>
-            )}
 
             <button
               type="button"
