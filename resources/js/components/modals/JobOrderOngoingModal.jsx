@@ -875,8 +875,9 @@ export default function JobOrderOngoingModal({
                     <button
                       onClick={() =>
                         window.open(
-                          `/api/job-orders/${jobId}/completed/view`,
-                          "_blank"
+                          `/job-orders/${jobId}/completed/pdf`,
+                          "_blank",
+                          "noopener,noreferrer"
                         )
                       }
                       className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
@@ -1011,8 +1012,9 @@ export default function JobOrderOngoingModal({
                                     <button
                                       onClick={() =>
                                         window.open(
-                                          `/api/job-orders/${jobId}/unserviceable/pdf`,
-                                          "_blank"
+                                          `/job-orders/${jobId}/unserviceable/pdf`,
+                                          "_blank",
+                                          "noopener,noreferrer"
                                         )
                                       }
                                       className="inline-flex items-center px-4 py-2 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all ml-2"

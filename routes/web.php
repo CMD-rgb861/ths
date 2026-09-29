@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CompletedReportController;
+use App\Http\Controllers\UnserviceableReportController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -30,7 +31,19 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/job-orders/{job}/completed/view', function (JobOrder $job) {
         return app(CompletedReportController::class)->generate($job->id);
-    });
+    })->name('job-orders.completed.view');
+
+    Route::get('/job-orders/{job}/completed/pdf', function (JobOrder $job) {
+        return app(CompletedReportController::class)->generate($job->id);
+    })->name('job-orders.completed.pdf');
+
+    Route::get('/job-orders/{job}/unserviceable/view', function (JobOrder $job) {
+        return app(UnserviceableReportController::class)->generate($job);
+    })->name('job-orders.unserviceable.view');
+
+    Route::get('/job-orders/{job}/unserviceable/pdf', function (JobOrder $job) {
+        return app(UnserviceableReportController::class)->generate($job);
+    })->name('job-orders.unserviceable.pdf');
 });
 
 require __DIR__.'/auth.php';
