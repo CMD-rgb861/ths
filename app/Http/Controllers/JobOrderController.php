@@ -7,7 +7,7 @@ use App\Models\ActionReport;
 use App\Models\User;
 use App\Models\Signatory;
 use App\Models\RequestStatus;
-use App\Notifications\DiagnosisPopulatedNotification; 
+use App\Notifications\DiagnosisPopulatedNotification;
 use App\Notifications\DiagnosisConfirmedNotification;
 use App\Notifications\JobOrderPendingNotification;
 use Illuminate\Http\Request;
@@ -23,9 +23,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class JobOrderController extends Controller
 {
     /*
-    |-------------------------------------------------------------------------- 
-    | INDEX 
-    |--------------------------------------------------------------------------     
+    |--------------------------------------------------------------------------
+    | INDEX
+    |--------------------------------------------------------------------------
     */
    public function index(Request $request)
     {
@@ -39,22 +39,19 @@ class JobOrderController extends Controller
             'actionReport.acceptedBy',
             'actionReport.cancelledBy',
             'clientSatisfactionMeasurements',
-            'requestStatus', // <-- eager load status relation
+            'requestStatus',
         ]);
 
         $statusFilter = $request->input('status');
         $isActionReportStatusFilter = false;
         $statusName = null;
         if ($statusFilter) {
-            // Get the status name from the id
             $statusName = DB::table('request_statuses')->where('id', $statusFilter)->value('name');
             $isActionReportStatusFilter = in_array($statusName, ['Completed', 'Ongoing', 'Cancelled', 'Unserviceable']);
         }
 
-        // Default sort
         $sortBy = $request->input('sort', 'newest');
 
-        // Apply sorting
         switch ($sortBy) {
             case 'oldest':
                 if ($isActionReportStatusFilter) {
@@ -98,19 +95,15 @@ class JobOrderController extends Controller
                 break;
         }
 
-        // If the request is from an admin and the 'created_after' parameter is present
         if ($request->has('created_after')) {
             $query->where('job_orders.created_at', '>', $request->input('created_after'));
         }
 
-        // --- FIX: Only restrict to own jobs for normal users, not for admin/technician ---
         if (!$request->user()->isAdmin() && !$request->user()->isTechnician()) {
             $query->where('job_orders.requested_by', $request->user()->id);
         }
 
-        // 🔥 HISTORY FILTER (NEW)
         if ($request->boolean('history')) {
-            // Fix: Use status IDs for Completed, Cancelled, Unserviceable, Cancelled by User
             $statusNames = ['Completed', 'Cancelled', 'Unserviceable', 'Cancelled by User'];
             $statusIds = DB::table('request_statuses')->whereIn('name', $statusNames)->pluck('id')->toArray();
             $query->whereIn('job_orders.status', $statusIds);
@@ -143,12 +136,10 @@ class JobOrderController extends Controller
             });
         }
 
-        // 🔥 STATUS FILTER
         if ($request->filled('status')) {
-            $query->where('job_orders.status', $request->status); // status is now an id
+            $query->where('job_orders.status', $request->status);
         }
 
-        // 🔥 DATE RANGE FILTER
         if ($request->filled('date_from')) {
             $query->whereDate('job_orders.date', '>=', $request->date_from);
         }
@@ -157,13 +148,10 @@ class JobOrderController extends Controller
             $query->whereDate('job_orders.date', '<=', $request->date_to);
         }
 
-        // Clone query to compute totals without affecting pagination
         $totalsQuery = clone $query;
 
-        // Fetch all request statuses from the database
         $allStatuses = DB::table('request_statuses')->pluck('name', 'id')->toArray();
 
-        // Compute totals for each status by id
         $allJobsQuery = JobOrder::query();
         if (!$request->user()->isAdmin() && !$request->user()->isTechnician()) {
             $allJobsQuery->where('requested_by', $request->user()->id);
@@ -174,14 +162,12 @@ class JobOrderController extends Controller
             $totals[$name] = (clone $allJobsQuery)->where('status', $id)->count();
         }
 
-        // The status filter and conform filter are independent and should stack.
         $conformFilter = $request->input('conform_filter', 'all');
         $statusFilterType = $request->input('status_filter');
         $hasExplicitStatus = $request->filled('status');
 
         if ($statusFilterType !== 'all_status_page' && !$request->boolean('history')) {
             if ($conformFilter === 'all') {
-                // When no explicit status filter is applied, default to Pending/Ongoing.
                 if (!$hasExplicitStatus) {
                     $query->whereHas('actionReport', function ($q) {
                         $q->whereIn('action_reports.status', ['Pending', 'Ongoing']);
@@ -214,12 +200,11 @@ class JobOrderController extends Controller
                 });
             }
         }
-        // If status_filter=all_status_page, do not apply any status or conform filter (show all job orders for this page)
+
         if ($statusFilterType === 'all_status_page') {
             // Do not apply any status or conform filter
         }
 
-        // Remove per_page == 1000 logic, always use pagination
         $perPage = $request->input('per_page', 10);
         $jobs = $query->paginate($perPage);
         $jobsTransformed = $this->transformJobs($jobs->items());
@@ -235,10 +220,11 @@ class JobOrderController extends Controller
             'totals' => $totals,
         ]);
     }
+
     /*
-    |-------------------------------------------------------------------------- 
-    | SHOW 
-    |-------------------------------------------------------------------------- 
+    |--------------------------------------------------------------------------
+    | SHOW
+    |--------------------------------------------------------------------------
     */
     public function show(JobOrder $jobOrder)
     {
@@ -254,10 +240,9 @@ class JobOrderController extends Controller
             'actionReport.acceptedBy',
             'actionReport.cancelledBy',
             'clientSatisfactionMeasurements',
-            'requestStatus', // <-- add this
+            'requestStatus',
         ]);
 
-        // Transform related users
         foreach (['requester', 'creator', 'approver', 'conformer'] as $relation) {
             if ($jobOrder->$relation && $jobOrder->$relation->relationLoaded('role')) {
                 $jobOrder->$relation->role = $jobOrder->$relation->role ? $jobOrder->$relation->role->name : null;
@@ -268,9 +253,9 @@ class JobOrderController extends Controller
     }
 
     /*
-    |-------------------------------------------------------------------------- 
-    | STORE 
-    |-------------------------------------------------------------------------- 
+    |--------------------------------------------------------------------------
+    | STORE
+    |--------------------------------------------------------------------------
     */
     public function store(Request $request)
     {
@@ -287,6 +272,18 @@ class JobOrderController extends Controller
             'status' => ['nullable', 'integer', 'exists:request_statuses,id'],
         ]);
 
+        // ── Submission window gate ───────────────────────────────
+        // Admins, technicians, and admin+technicians bypass this entirely.
+        // Only regular users are gated to Mon–Fri, 8:30 AM – 4:00 PM (Asia/Manila).
+        $isStaff = $request->user()->isAdmin() || $request->user()->isTechnician();
+
+        if (!$isStaff && !$this->withinSubmissionWindow()) {
+            return response()->json([
+                'message' => 'Job order submissions are only accepted on weekdays (Mon–Fri) between 8:30 AM and 4:00 PM (Asia/Manila).',
+            ], 422);
+        }
+        // ─────────────────────────────────────────────────────────
+
         $departmentId = $request->user()
             ->departments()
             ->orderBy('departments.id')
@@ -297,13 +294,11 @@ class JobOrderController extends Controller
         }
 
         return DB::transaction(function () use ($validated, $request, $departmentId) {
-            // Generate Job Order Number
             $signatureName = $validated['signature_name'] ?? $request->user()->name;
             $last = JobOrder::lockForUpdate()->latest('id')->first();
             $nextNumber = str_pad(($last?->id ?? 0) + 1, 6, '0', STR_PAD_LEFT);
             $jobOrderNo = now()->year . '-' . $nextNumber;
 
-            // Create the Job Order
             $jobOrder = JobOrder::create([
                 'job_order_no' => $jobOrderNo,
                 'date' => $validated['date'],
@@ -313,11 +308,10 @@ class JobOrderController extends Controller
                 'request_description' => $validated['request_description'],
                 'contact_no' => $validated['contact_no'],
                 'signature_name' => $signatureName,
-                'status' => $validated['status'] ?? 1, // 1 = Pending (id)
-                'notified' => false,  // New field to mark if the job has been notified
+                'status' => $validated['status'] ?? 1,
+                'notified' => false,
             ]);
 
-            // Attach Categories
             foreach ($validated['categories'] as $category) {
                 $jobOrder->categories()->attach(
                     $category['id'],
@@ -325,13 +319,11 @@ class JobOrderController extends Controller
                 );
             }
 
-            // Create Action Report
             ActionReport::create([
                 'job_order_id' => $jobOrder->id,
                 'status' => 'Pending',
             ]);
 
-            // Handle File Uploads
             if ($request->hasFile('files')) {
                 $mergedPdf = new Fpdi();
                 $mergedPdf->SetAutoPageBreak(false);
@@ -349,25 +341,21 @@ class JobOrderController extends Controller
                 }
             }
 
-            // If diagnosis is populated, send notification
             if (!empty($request->input('diagnosis'))) {
                 $requestedByUser = User::find($jobOrder->requested_by);
                 if ($requestedByUser) {
-                    $requestedByUser->notify(new DiagnosisPopulatedNotification($jobOrder)); // Send notification
+                    $requestedByUser->notify(new DiagnosisPopulatedNotification($jobOrder));
                 }
             }
 
-            // Only send notification if the job order is "Pending" and has not been notified yet
             if ($jobOrder->status === 'Pending' && !$jobOrder->notified) {
-                // Send notification to all admin users about the new pending job order
                 $admins = User::whereHas('roles', function ($q) {
                     $q->where('name', 'admin');
                 })->get();
                 foreach ($admins as $admin) {
-                    $admin->notify(new JobOrderPendingNotification($jobOrder)); // Send the notification
+                    $admin->notify(new JobOrderPendingNotification($jobOrder));
                 }
 
-                // Mark the job as notified
                 $jobOrder->update(['notified' => true]);
             }
 
@@ -380,7 +368,6 @@ class JobOrderController extends Controller
                 'clientSatisfactionMeasurements',
             ]);
 
-            // Transform related users
             foreach (['requester', 'creator', 'approver', 'conformer'] as $relation) {
                 if ($jobOrder->$relation && $jobOrder->$relation->relationLoaded('role')) {
                     $jobOrder->$relation->role = $jobOrder->$relation->role ? $jobOrder->$relation->role->name : null;
@@ -392,9 +379,9 @@ class JobOrderController extends Controller
     }
 
     /*
-    |-------------------------------------------------------------------------- 
-    | UPDATE STATUS 
-    |-------------------------------------------------------------------------- 
+    |--------------------------------------------------------------------------
+    | UPDATE STATUS
+    |--------------------------------------------------------------------------
     */
     public function update(Request $request, JobOrder $jobOrder)
     {
@@ -415,10 +402,8 @@ class JobOrderController extends Controller
                 ], 404);
             }
 
-            // Get the status name from the id
             $statusName = RequestStatus::find($validated['status'])?->name;
 
-            // --- FIX: If admin or technician is denying/closing, always set Completed, but preserve Unserviceable action_taken when appropriate ---
             if (
                 ($request->user()->isAdmin() || $request->user()->isTechnician()) &&
                 (
@@ -429,13 +414,12 @@ class JobOrderController extends Controller
             ) {
                 $completedStatusId = RequestStatus::where('name', 'Completed')->value('id');
 
-                // Preserve Unserviceable when the job is finalized.
                 $keepUnserviceableActionTaken =
                     $actionReport->action_taken === 'Unserviceable';
 
                 $newActionTaken = $keepUnserviceableActionTaken
-                    ? $actionReport->action_taken   // preserve Unserviceable
-                    : 'Closed';                     // normal close
+                    ? $actionReport->action_taken
+                    : 'Closed';
 
                 $jobOrder->update(['status' => $completedStatusId]);
                 $actionReport->update([
@@ -463,7 +447,6 @@ class JobOrderController extends Controller
                 return response()->json($jobOrder, 200);
             }
 
-            // --- FIX: If user cancels, set service status to Closed as well ---
             if (
                 !$request->user()->isAdmin() &&
                 $statusName === 'Cancelled'
@@ -505,7 +488,6 @@ class JobOrderController extends Controller
                 $jobOrder->update(['status' => $validated['status']]);
             }
 
-            // Handle special transitions (Ongoing, Cancelled, Unserviceable, Cancelled by User)
             if ($statusName === 'Ongoing') {
                 $actionReport->update([
                     'status' => 'Ongoing',
@@ -572,13 +554,11 @@ class JobOrderController extends Controller
 
     public function markPendingNotified(Request $request)
     {
-        // Check that the jobs data is provided in the request
         $validated = $request->validate([
             'jobs' => ['required', 'array'],
-            'jobs.*' => ['exists:job_orders,id'] // Ensure each job ID exists in the job_orders table
+            'jobs.*' => ['exists:job_orders,id']
         ]);
 
-        // Mark the jobs as notified
         $jobOrders = JobOrder::whereIn('id', $validated['jobs'])->update(['notified' => true]);
 
         return response()->json([
@@ -587,14 +567,10 @@ class JobOrderController extends Controller
         ], 200);
     }
 
-    /**
-     * Mark all unread notifications for a specific job order as read
-     */
     public function markNotificationsRead(Request $request, JobOrder $jobOrder)
     {
         $user = $request->user();
-        
-        // Mark all unread notifications related to this job order as read
+
         $user->unreadNotifications()
             ->whereJsonContains('data->job_order_id', $jobOrder->id)
             ->update(['read_at' => now()]);
@@ -604,13 +580,8 @@ class JobOrderController extends Controller
         ], 200);
     }
 
-    /**
-     * Approve a job order by setting approved_by and approval_date.
-     * Expects: approved_by (signatory id) and optional approval_date (date string). If approval_date is omitted, now() is used.
-     */
     public function approve(Request $request, JobOrder $jobOrder)
     {
-        // Only admins can perform approval via this endpoint
         if (!$request->user()->isAdmin()) {
             abort(403, 'Unauthorized.');
         }
@@ -642,17 +613,12 @@ class JobOrderController extends Controller
         );
     }
 
-    /**
-     * Get job orders filtered by service status (for Service Status summary cards)
-     * Accepts: ?service_status=unserviceable|closed
-     */
     public function serviceStatus(Request $request)
     {
         $serviceStatus = $request->input('service_status');
         $search = $request->input('search');
         $sort = $request->input('sort', 'newest');
 
-        // Map UI keys to action_report.action_taken values
         $statusMap = [
             'unserviceable' => 'Unserviceable',
             'closed' => 'Closed',
@@ -681,7 +647,6 @@ class JobOrderController extends Controller
               ->whereRaw('BINARY action_taken = ?', [$statusMap[$serviceStatus]]);
         });
 
-        // Search filter
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('job_orders.job_order_no', 'like', "%{$search}%")
@@ -691,7 +656,6 @@ class JobOrderController extends Controller
             });
         }
 
-        // Sorting logic (match request status logic)
         switch ($sort) {
             case 'oldest':
                 $query->join('action_reports', 'job_orders.id', '=', 'action_reports.job_order_id')
@@ -722,12 +686,10 @@ class JobOrderController extends Controller
                 break;
         }
 
-        // Optional: restrict to user's own jobs if not admin/technician
         if (!$request->user()->isAdmin() && !$request->user()->isTechnician()) {
             $query->where('job_orders.requested_by', $request->user()->id);
         }
 
-        // No pagination for service status cards (to match frontend)
         $jobs = $query->get();
 
         return response()->json([
@@ -739,7 +701,6 @@ class JobOrderController extends Controller
     private function transformJobs($jobs)
     {
         return collect($jobs)->map(function ($job) {
-            // Transform related users if loaded
             foreach (['requester', 'creator', 'approver', 'conformer'] as $relation) {
                 if ($job->$relation && $job->$relation->relationLoaded('role')) {
                     $job->$relation->role = $job->$relation->role ? $job->$relation->role->name : null;
@@ -749,10 +710,6 @@ class JobOrderController extends Controller
         });
     }
 
-    /**
-     * Build the base query for job orders with filters
-     * Used by both export and count methods
-     */
     private function buildExportQuery(Request $request)
     {
         $query = JobOrder::with([
@@ -765,35 +722,29 @@ class JobOrderController extends Controller
             'requestStatus',
         ]);
 
-        // Apply status filter - CONVERT NAME TO ID
         if ($request->filled('status')) {
             $statusName = $request->status;
-            // Find the status ID by name
             $statusId = DB::table('request_statuses')->where('name', $statusName)->value('id');
-            
+
             if ($statusId) {
                 $query->where('job_orders.status', $statusId);
             } else {
-                // If no ID found, try treating it as an ID (for backward compatibility)
                 if (is_numeric($statusName)) {
                     $query->where('job_orders.status', (int) $statusName);
                 }
             }
         }
 
-        // Apply service status filter (action_taken)
         if ($request->filled('service_status')) {
             $query->whereHas('actionReport', function ($q) use ($request) {
                 $q->where('action_taken', $request->service_status);
             });
         }
 
-        // Apply department filter
         if ($request->filled('department_id')) {
             $query->where('department_id', $request->department_id);
         }
 
-        // Apply date filters
         if ($request->filled('date_from')) {
             $query->whereDate('job_orders.created_at', '>=', Carbon::parse($request->date_from)->startOfDay());
         }
@@ -802,7 +753,6 @@ class JobOrderController extends Controller
             $query->whereDate('job_orders.created_at', '<=', Carbon::parse($request->date_to)->endOfDay());
         }
 
-        // Apply search filter
         if ($request->filled('search')) {
             $search = trim((string) $request->search);
             $query->where(function ($q) use ($search) {
@@ -816,7 +766,6 @@ class JobOrderController extends Controller
             });
         }
 
-        // Restrict to own jobs for non-admin/non-technician users
         if (!$request->user()->isAdmin() && !$request->user()->isTechnician()) {
             $query->where('job_orders.requested_by', $request->user()->id);
         }
@@ -824,9 +773,6 @@ class JobOrderController extends Controller
         return $query;
     }
 
-    /**
-     * Get count of records to export (for validation)
-     */
     public function exportCount(Request $request): JsonResponse
     {
         try {
@@ -837,14 +783,14 @@ class JobOrderController extends Controller
                 'success' => true,
                 'count' => $count,
                 'has_data' => $count > 0,
-                'message' => $count > 0 
-                    ? "Found {$count} record(s) to export" 
+                'message' => $count > 0
+                    ? "Found {$count} record(s) to export"
                     : 'No records found to export. Please refine your filters.',
             ]);
 
         } catch (\Exception $e) {
             \Log::error('Export count failed: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to count records for export.',
@@ -852,13 +798,9 @@ class JobOrderController extends Controller
         }
     }
 
-    /**
-     * Export job orders to CSV with full validation
-     */
     public function export(Request $request): StreamedResponse|JsonResponse
     {
         try {
-            // Validate input
             $request->validate([
                 'status' => 'nullable|string|max:50',
                 'service_status' => 'nullable|string|max:50',
@@ -868,12 +810,10 @@ class JobOrderController extends Controller
                 'search' => 'nullable|string|max:255',
             ]);
 
-            // Build query
             $query = $this->buildExportQuery($request);
 
-            // VALIDATION 1: Check if there's data to export
             $count = $query->count();
-            
+
             if ($count === 0) {
                 return response()->json([
                     'success' => false,
@@ -882,9 +822,8 @@ class JobOrderController extends Controller
                 ], 422);
             }
 
-            // VALIDATION 2: Enforce maximum row limit
             $maxExportRows = 10000;
-            
+
             if ($count > $maxExportRows) {
                 return response()->json([
                     'success' => false,
@@ -895,10 +834,9 @@ class JobOrderController extends Controller
                 ], 422);
             }
 
-            // VALIDATION 3: Rate limiting
             $rateLimitKey = 'export_job_orders_' . auth()->id();
             $maxExportsPerHour = 10;
-            
+
             if (cache()->has($rateLimitKey) && cache()->get($rateLimitKey) >= $maxExportsPerHour) {
                 return response()->json([
                     'success' => false,
@@ -907,7 +845,6 @@ class JobOrderController extends Controller
                 ], 429);
             }
 
-            // Log the export for audit trail
             \Log::info('Job order export', [
                 'user_id' => auth()->id(),
                 'user_name' => auth()->user()->name,
@@ -916,12 +853,10 @@ class JobOrderController extends Controller
                 'ip' => $request->ip(),
             ]);
 
-            // Get IT Director for accepted_by fallback
             $itDirector = Signatory::where('role', 'it_director')->first();
 
-            // Generate filename
             $filename = 'job_orders_' . date('Y-m-d_His') . '.csv';
-            
+
             $headers = [
                 'Content-Type' => 'text/csv',
                 'Content-Disposition' => "attachment; filename=\"$filename\"",
@@ -931,16 +866,13 @@ class JobOrderController extends Controller
                 'X-Record-Count' => (string) $count,
             ];
 
-            // Process in chunks for memory efficiency
             $chunkSize = 500;
-            
+
             $callback = function () use ($query, $itDirector, $chunkSize) {
                 $handle = fopen('php://output', 'w');
-                
-                // Add UTF-8 BOM for Excel compatibility
+
                 fprintf($handle, "\xEF\xBB\xBF");
 
-                // Headers
                 fputcsv($handle, [
                     'Job Order No',
                     'Department',
@@ -954,28 +886,27 @@ class JobOrderController extends Controller
                     'Date Created',
                 ]);
 
-                // Process in chunks to avoid memory issues
                 $query->chunk($chunkSize, function ($orders) use ($handle, $itDirector) {
                     foreach ($orders as $order) {
                         $requestStatus = $order->requestStatus?->name ?? '—';
                         $serviceStatus = $order->actionReport?->action_taken ?? '';
-                        
-                        $servicedByRaw = $order->actionReport?->serviced_by?->name 
-                            ?? $order->actionReport?->serviced_by 
+
+                        $servicedByRaw = $order->actionReport?->serviced_by?->name
+                            ?? $order->actionReport?->serviced_by
                             ?? '';
-                        
-                        $acceptedBy = $order->actionReport?->accepted_by_user?->name 
-                            ?? $itDirector?->user?->name 
-                            ?? $itDirector?->name 
+
+                        $acceptedBy = $order->actionReport?->accepted_by_user?->name
+                            ?? $itDirector?->user?->name
+                            ?? $itDirector?->name
                             ?? '';
-                        
+
                         if (strtolower($serviceStatus) === 'closed' && trim((string)$servicedByRaw) === '') {
                             $acceptedBy = '';
                         }
 
-                        $cancelledBy = $order->actionReport?->cancelled_by?->name 
-                            ?? $itDirector?->user?->name 
-                            ?? $itDirector?->name 
+                        $cancelledBy = $order->actionReport?->cancelled_by?->name
+                            ?? $itDirector?->user?->name
+                            ?? $itDirector?->name
                             ?? '';
 
                         fputcsv($handle, [
@@ -996,7 +927,6 @@ class JobOrderController extends Controller
                 fclose($handle);
             };
 
-            // Increment rate limit counter
             if (cache()->has($rateLimitKey)) {
                 cache()->increment($rateLimitKey);
             } else {
@@ -1027,17 +957,10 @@ class JobOrderController extends Controller
         }
     }
 
-
-    /**
-     * Lightweight count of un-notified pending job orders.
-     * Safe to poll frequently.
-     */
-
     public function pendingCount(Request $request): JsonResponse
     {
         $user = $request->user();
 
-        // Admins + technicians only
         if (!$user->isAdmin() && !$user->isTechnician()) {
             return response()->json(['count' => 0]);
         }
@@ -1052,59 +975,6 @@ class JobOrderController extends Controller
         return response()->json(['count' => $count]);
     }
 
-    // /**
-    //  * Full list of un-notified pending job orders.
-    //  * Supports optional search + department filters.
-    //  */
-    // public function pendingList(Request $request): JsonResponse
-    // {
-    //     $user = $request->user();
-
-    //     if (!$user->isAdmin() && !$user->isTechnician()) {
-    //         return response()->json(['data' => []]);
-    //     }
-
-    //     $query = JobOrder::query()
-    //         ->with([
-    //             'department:id,name',
-    //             'requester:id,name',
-    //             'categories:id,name',
-    //             'actionReport',
-    //         ])
-    //         ->where('notified', false)
-    //         ->whereHas('actionReport', function ($q) {
-    //             $q->where('status', 'Pending');
-    //         })
-    //         ->orderByDesc('created_at');
-
-    //     // Optional search: job order no, requester name, department name
-    //     if ($request->filled('search')) {
-    //         $search = '%' . trim((string) $request->input('search')) . '%';
-    //         $query->where(function ($q) use ($search) {
-    //             $q->where('job_order_no', 'like', $search)
-    //             ->orWhereHas('requester', fn($r) => $r->where('name', 'like', $search))
-    //             ->orWhereHas('department', fn($d) => $d->where('name', 'like', $search));
-    //         });
-    //     }
-
-    //     // Optional department filter
-    //     if ($request->filled('department_id')) {
-    //         $query->where('department_id', (int) $request->input('department_id'));
-    //     }
-
-    //     $jobs = $query->get();
-
-    //     return response()->json([
-    //         'data' => $this->transformJobs($jobs),
-    //         'count' => $jobs->count(),
-    //     ]);
-    // }
-
-    /**
-     * Paginated list of un-notified pending job orders.
-     * Supports search + department filters.
-     * Default: 5 per page.
-     */
     public function pendingList(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -1164,5 +1034,29 @@ class JobOrderController extends Controller
                 'to'           => $paginated->lastItem(),
             ],
         ]);
+    }
+
+    // =================================================================
+    // SUBMISSION WINDOW HELPER
+    // =================================================================
+
+    /**
+     * Check whether the current moment is within the submission window.
+     * Mon–Fri, 8:30 AM to 4:00 PM (Asia/Manila).
+     */
+    private function withinSubmissionWindow(): bool
+    {
+        $now = Carbon::now('Asia/Manila');
+
+        // Weekdays only (Carbon's isWeekend() covers Sat & Sun)
+        if ($now->isWeekend()) {
+            return false;
+        }
+
+        $minutesNow   = $now->hour * 60 + $now->minute;
+        $openMinutes  = 8 * 60 + 30;   // 8:30 AM
+        $closeMinutes = 16 * 60 + 0;   // 4:00 PM
+
+        return $minutesNow >= $openMinutes && $minutesNow < $closeMinutes;
     }
 }

@@ -942,6 +942,7 @@ export default function JobOrderReports({ isAdmin, user, showNotification }) {
         message={`Are you sure you want to export ${exportCount} record(s) to CSV?`}
         confirmText="Yes, Export"
         cancelText="Cancel"
+        tone="primary"
         onConfirm={performExport}
         onCancel={() => {
           setShowExportModal(false);

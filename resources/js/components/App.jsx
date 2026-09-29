@@ -479,6 +479,7 @@ export default function App() {
         message="Are you sure you want to switch your role? You will be redirected to the role selection page."
         confirmText="Yes, Switch"
         cancelText="Cancel"
+        tone="primary"
         onConfirm={() => {
           setShowSwitchConfirm(false);
           localStorage.removeItem('preferredRole');

@@ -1,18 +1,7 @@
-// C:\laragon\www\ths\resources\js\components\ui\PendingBellButton.jsx
+// resources/js/components/ui/PendingBellButton.jsx
 import React from 'react';
 import { FaBell } from 'react-icons/fa';
 
-/**
- * Bell button + count badge for pending job orders.
- *
- * - Shows a red badge with the count when count > 0.
- * - Grey and non-clickable when count === 0.
- * - Pulsing ring when there is something to look at.
- *
- * Props:
- *   count   — number of unviewed pending job orders
- *   onClick — callback fired when clicked (only called when count > 0)
- */
 export default function PendingBellButton({ count = 0, onClick }) {
   const show = count > 0;
 
@@ -33,12 +22,9 @@ export default function PendingBellButton({ count = 0, onClick }) {
 
       {show && (
         <>
-          {/* Count badge */}
           <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold leading-none shadow">
             {count > 99 ? '99+' : count}
           </span>
-
-          {/* Pulse ring — signals "live / new" without being obnoxious */}
           <span className="absolute inset-0 rounded-lg animate-ping bg-red-500/20 pointer-events-none" />
         </>
       )}

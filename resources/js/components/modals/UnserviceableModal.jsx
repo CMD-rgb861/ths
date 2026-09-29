@@ -18,6 +18,19 @@ export default function UnserviceableModal({
 
   const [saving, setSaving] = useState(false);
 
+  // Reset form whenever the modal opens for a different job
+  useEffect(() => {
+    if (isOpen) {
+      setForm({
+        item: '',
+        findings: '',
+        noted_by_its: '',
+        noted_by_pc: '',
+        date: '',
+      });
+    }
+  }, [isOpen, jobId]);
+
   // Fetch IT Director signatory when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -27,7 +40,7 @@ export default function UnserviceableModal({
           if (res.data?.name) {
             setForm((prev) => ({
               ...prev,
-              noted_by_its: res.data.name,
+              noted_by_its: prev.noted_by_its || res.data.name,
             }));
           }
         })
@@ -44,19 +57,24 @@ export default function UnserviceableModal({
         .get(`/job-orders/${jobId}`)
         .then((res) => {
           const ar = res.data?.action_report;
-          if (ar) {
-            setForm((prev) => ({
-              ...prev,
-              item: ar.item || '',
-              findings: ar.findings || '',
-              noted_by_its: ar.noted_by_its || prev.noted_by_its || '',
-              noted_by_pc: ar.noted_by_pc || '',
-              date: ar.unserviceable_date || '',
-            }));
-          }
+          // The requester's name comes from the eager-loaded `requester` relation
+          const requesterName =
+            res.data?.requester?.name ||
+            res.data?.signature_name ||
+            '';
+
+          setForm((prev) => ({
+            ...prev,
+            item: ar?.item || '',
+            findings: ar?.findings || '',
+            // Prefer saved value, otherwise keep IT Director default
+            noted_by_its: ar?.noted_by_its || prev.noted_by_its || '',
+            // Prefer saved value, otherwise default to requester name
+            noted_by_pc: ar?.noted_by_pc || requesterName || '',
+            date: ar?.unserviceable_date || '',
+          }));
         })
         .catch((err) => {
-          // Optionally handle error
           console.error('Failed to fetch job order for unserviceable modal:', err);
         });
     }
@@ -96,12 +114,11 @@ export default function UnserviceableModal({
           'Unserviceable details saved successfully.'
         );
 
-        // OPTIONAL: send updated data back to parent without reload
         if (onSaved) {
-          onSaved(res.data); 
+          onSaved(res.data);
         }
 
-        onClose(); // just close modal
+        onClose();
       })
       .catch((err) => {
         console.error(err);

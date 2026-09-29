@@ -1,24 +1,134 @@
-
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { usePage } from '@inertiajs/react';
 import axios from 'axios';
 import CategorySelector from './CategorySelector';
+import CutOffModal from '../modals/CutOffModal';
 
-export default function JobOrderForm({ userRole, showNotification }) {  // Added showNotification
+// ── Submission window config (Asia/Manila) ─────────────────────────
+const WINDOW = {
+  openHour: 8,
+  openMinute: 30,
+  closeHour: 16,        // 4:00 PM
+  closeMinute: 0,
+  // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  allowedDays: [1, 2, 3, 4, 5], // Mon–Fri
+};
+
+// Current Manila time as { day, hour, minute }
+function getManilaNow() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+
+  const weekdayShort = get('weekday');
+  const hour = parseInt(get('hour'), 10);
+  const minute = parseInt(get('minute'), 10);
+
+  return {
+    day: weekdayMap[weekdayShort] ?? new Date().getDay(),
+    hour,
+    minute,
+  };
+}
+
+// Is the submission window currently open?
+function isWithinWindow(now) {
+  if (!WINDOW.allowedDays.includes(now.day)) return false;
+
+  const minutesNow = now.hour * 60 + now.minute;
+  const openMinutes = WINDOW.openHour * 60 + WINDOW.openMinute;
+  const closeMinutes = WINDOW.closeHour * 60 + WINDOW.closeMinute;
+
+  return minutesNow >= openMinutes && minutesNow < closeMinutes;
+}
+
+// Human-friendly message about when the window opens again
+function describeNextOpening(now) {
+  const { day, hour, minute } = now;
+  const minutesNow = hour * 60 + minute;
+  const openMinutes = WINDOW.openHour * 60 + WINDOW.openMinute;
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const openTimeLabel = '8:30 AM';
+
+  if (WINDOW.allowedDays.includes(day) && minutesNow < openMinutes) {
+    return `You can submit again today at ${openTimeLabel}.`;
+  }
+
+  if (WINDOW.allowedDays.includes(day) && minutesNow >= openMinutes) {
+    for (let i = 1; i <= 7; i++) {
+      const nextDay = (day + i) % 7;
+      if (WINDOW.allowedDays.includes(nextDay)) {
+        return `You can submit again on ${dayNames[nextDay]} at ${openTimeLabel}.`;
+      }
+    }
+  }
+
+  for (let i = 1; i <= 7; i++) {
+    const nextDay = (day + i) % 7;
+    if (WINDOW.allowedDays.includes(nextDay)) {
+      return `You can submit again on ${dayNames[nextDay]} at ${openTimeLabel}.`;
+    }
+  }
+
+  return `Submissions are open ${openTimeLabel} to 2:39 PM, Monday to Friday.`;
+}
+
+export default function JobOrderForm({ userRole, showNotification }) {
   const [loading, setLoading] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const MAX_FILES = 3;
   const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+
   const { auth } = usePage().props;
   const departments = Array.isArray(auth?.user?.departments) ? auth.user.departments : [];
 
+  // ── Submission window state ────────────────────────────────────
+  const [now, setNow] = useState(getManilaNow);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(getManilaNow()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const isPrivileged = useMemo(() => {
+    const authRoles = Array.isArray(auth?.user?.roles)
+      ? auth.user.roles.map(r => (typeof r === 'string' ? r : r?.name))
+      : [];
+    const allRoles = [userRole, ...authRoles].filter(Boolean);
+
+    return allRoles.some(r =>
+      r === 'admin' || r === 'technician' || r === 'admin+technician'
+    );
+  }, [userRole, auth]);
+
+  const windowOpen = isPrivileged || isWithinWindow(now);
+  const nextOpeningMessage = useMemo(() => describeNextOpening(now), [now]);
+
+  // ── Closed-window modal state ──────────────────────────────────
+  const [closedModalOpen, setClosedModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!windowOpen) {
+      setClosedModalOpen(true);
+    } else {
+      setClosedModalOpen(false);
+    }
+  }, [windowOpen]);
+  // ───────────────────────────────────────────────────────────────
+
   const formatToManilaDate = () => {
     const date = new Date();
-    // Get the date in Manila timezone
-    return new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Manila' })).toISOString().split('T')[0]; 
+    return new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Manila' })).toISOString().split('T')[0];
   };
 
-  // Use this function to set the initial date value in Manila time
   const initialForm = {
     date: formatToManilaDate(),
     department_id: departments[0]?.id ? String(departments[0].id) : '',
@@ -42,12 +152,14 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
   const departmentName = departments.length > 0
     ? departments.map(department => department.name).filter(Boolean).join(', ')
     : 'No department assigned';
-  
 
-  /* ---------------- SUBMIT ---------------- */
-  // For example, on submit, convert the date to UTC
   const submit = async (e) => {
     e.preventDefault();
+
+    if (!windowOpen) {
+      showNotification?.('warning', 'Submission Closed', nextOpeningMessage);
+      return;
+    }
 
     try {
       setLoading(true);
@@ -70,26 +182,19 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
         data.append('files[]', file);
       });
 
-      // Submit form data to the server
-      const response = await axios.post('/job-orders', data, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      await axios.post('/job-orders', data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      // Show success notification
       showNotification?.('success', 'Job Order Submitted', 'Job Order submitted successfully.');
 
-      // Reset form
       setForm(initialForm);
       setAttachments([]);
 
     } catch (error) {
-      // Log the error details to the console for further investigation
       console.log('Submission Error:', error);
-
-      // Show error notification
-      showNotification?.('error', 'Submission Failed', error.response?.data?.message || 'Failed to submit Job Order.');
+      const msg = error.response?.data?.message || 'Failed to submit Job Order.';
+      showNotification?.('error', 'Submission Failed', msg);
     } finally {
       setLoading(false);
     }
@@ -107,7 +212,7 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
 
       <form onSubmit={submit} className="space-y-6">
         {/* Main Form Card */}
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-8">
+        <div className={`bg-white border border-gray-200 rounded-lg shadow-sm p-8 ${!windowOpen ? 'opacity-50 pointer-events-none select-none' : ''}`}>
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-6 flex items-center">
             <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -116,9 +221,7 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
           </h3>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column */}
             <div className="space-y-6">
-              {/* Department */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                   Department <span className="text-red-500">*</span>
@@ -128,7 +231,6 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
                 </div>
               </div>
 
-              {/* Contact No */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                   Contact Number
@@ -147,7 +249,6 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
                 />
               </div>
 
-              {/* Signature Name (Admin Only) */}
               {userRole === 'admin' && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -156,9 +257,7 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
                   <input
                     type="text"
                     value={form.signature_name}
-                    onChange={e =>
-                      setForm({ ...form, signature_name: e.target.value })
-                    }
+                    onChange={e => setForm({ ...form, signature_name: e.target.value })}
                     placeholder="Enter signatory name"
                     className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
@@ -166,9 +265,7 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
               )}
             </div>
 
-            {/* Right Column */}
             <div className="space-y-6">
-              {/* Request Description */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                   Request Description <span className="text-red-500">*</span>
@@ -176,12 +273,7 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
                 <textarea
                   rows="6"
                   value={form.request_description}
-                  onChange={e =>
-                    setForm({
-                      ...form,
-                      request_description: e.target.value
-                    })
-                  }
+                  onChange={e => setForm({ ...form, request_description: e.target.value })}
                   required
                   placeholder="Describe your technical request in detail..."
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
@@ -192,7 +284,7 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
         </div>
 
         {/* Categories Card */}
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-8">
+        <div className={`bg-white border border-gray-200 rounded-lg shadow-sm p-8 ${!windowOpen ? 'opacity-50 pointer-events-none select-none' : ''}`}>
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-6 flex items-center">
             <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -215,7 +307,7 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
         </div>
 
         {/* Attachments Card */}
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-8">
+        <div className={`bg-white border border-gray-200 rounded-lg shadow-sm p-8 ${!windowOpen ? 'opacity-50 pointer-events-none select-none' : ''}`}>
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-6 flex items-center">
             <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -236,67 +328,38 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
                   const files = Array.from(e.target.files);
 
                   if (attachments.length + files.length > MAX_FILES) {
-                    showNotification?.(
-                      'warning',
-                      'Attachment Limit',
-                      'Maximum of 3 images allowed.'
-                    );
+                    showNotification?.('warning', 'Attachment Limit', 'Maximum of 3 images allowed.');
                     return;
                   }
 
                   const validFiles = [];
-
                   for (let file of files) {
                     if (file.size > MAX_SIZE) {
-                      showNotification?.(
-                        'warning',
-                        'File Too Large',
-                        `${file.name} exceeds 10MB limit.`
-                      );
+                      showNotification?.('warning', 'File Too Large', `${file.name} exceeds 10MB limit.`);
                       continue;
                     }
                     validFiles.push(file);
                   }
-
                   setAttachments(prev => [...prev, ...validFiles]);
                 }}
               />
-              <label
-                htmlFor="file-upload"
-                className="flex flex-col items-center cursor-pointer"
-              >
+              <label htmlFor="file-upload" className="flex flex-col items-center cursor-pointer">
                 <svg className="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                <span className="text-sm font-medium text-gray-700 mb-1">
-                  Click to upload images
-                </span>
-                <span className="text-xs text-gray-500">
-                  PNG, JPG, GIF up to 10MB
-                </span>
+                <span className="text-sm font-medium text-gray-700 mb-1">Click to upload images</span>
+                <span className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</span>
               </label>
             </div>
 
-            {/* Preview */}
             {attachments.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {attachments.map((file, index) => (
-                  <div
-                    key={index}
-                    className="relative group border border-gray-200 rounded-lg overflow-hidden"
-                  >
-                    <img
-                      src={URL.createObjectURL(file)}
-                      alt="preview"
-                      className="w-full h-40 object-cover"
-                    />
+                  <div key={index} className="relative group border border-gray-200 rounded-lg overflow-hidden">
+                    <img src={URL.createObjectURL(file)} alt="preview" className="w-full h-40 object-cover" />
                     <button
                       type="button"
-                      onClick={() =>
-                        setAttachments(prev =>
-                          prev.filter((_, i) => i !== index)
-                        )
-                      }
+                      onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
                       className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg opacity-0 group-hover:opacity-100"
                       title="Remove image"
                     >
@@ -318,7 +381,7 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !windowOpen}
             className="inline-flex items-center px-8 py-3 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
             {loading ? (
@@ -334,12 +397,20 @@ export default function JobOrderForm({ userRole, showNotification }) {  // Added
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Submit Job Order
+                {windowOpen ? 'Submit Job Order' : 'Submission Closed'}
               </>
             )}
           </button>
         </div>
       </form>
+
+      {/* Modal — fixed-position, always centered on the viewport.
+          The wrapper is pointer-events-none so the nav/header behind it stay clickable. */}
+      <CutOffModal
+        isOpen={closedModalOpen && !windowOpen}
+        onClose={() => setClosedModalOpen(false)}
+        nextOpeningMsg={nextOpeningMessage}
+      />
     </div>
   );
 }

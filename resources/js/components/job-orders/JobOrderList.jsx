@@ -710,6 +710,7 @@ export default function JobOrderList({
         message="Are you sure you want to close this job order? This will mark it as completed and closed."
         confirmText="Yes, Close"
         cancelText="Cancel"
+        tone="danger"
         loading={closeLoading}
         onConfirm={() => {
           const job = jobs.find(j => j.id === closeJobId);
