@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import StatusBadge from '../ui/StatusBadge';
 import UserPendingConfirmationModal from '../modals/UserPendingConfirmationModal';
@@ -9,17 +9,7 @@ export default function UserPendingConfirmation({ isJobNew, showNotification }) 
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const openModal = (jobId) => {
-    setSelectedJobId(jobId);
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setSelectedJobId(null);
-    setIsModalOpen(false);
-  };
-
-  useEffect(() => {
+  const refreshJobs = useCallback(() => {
     setLoading(true);
     axios.get('/pending-confirmations')
       .then(res => {
@@ -28,6 +18,21 @@ export default function UserPendingConfirmation({ isJobNew, showNotification }) 
       .catch(() => setJobs([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const openModal = (jobId) => {
+    setSelectedJobId(jobId);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setSelectedJobId(null);
+    setIsModalOpen(false);
+    refreshJobs();
+  };
+
+  useEffect(() => {
+    refreshJobs();
+  }, [refreshJobs]);
 
   // ✅ SAFE FUNCTION WRAPPER (prevents crash)
   const checkIfJobNew = (jobId) => {
@@ -151,6 +156,7 @@ export default function UserPendingConfirmation({ isJobNew, showNotification }) 
       <UserPendingConfirmationModal
         isOpen={isModalOpen}
         onClose={closeModal}
+        onStatusChange={refreshJobs}
         jobId={selectedJobId}
         showNotification={showNotification}
       />

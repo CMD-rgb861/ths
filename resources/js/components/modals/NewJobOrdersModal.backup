@@ -2,23 +2,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 
-const PER_PAGE = 5;
-
 export default function NewJobOrdersModal({
   isOpen,
   onClose,
   onViewJob,
   onMarkAllViewed,
-  onOpenQueue,           // ← new optional prop for the "View Full Queue" button
 }) {
   const [jobs, setJobs] = useState([]);
-  const [meta, setMeta] = useState({
-    current_page: 1,
-    last_page: 1,
-    per_page: PER_PAGE,
-    total: 0,
-  });
-  const [page, setPage] = useState(1);
   const [departments, setDepartments] = useState([]);
   const [search, setSearch] = useState('');
   const [departmentId, setDepartmentId] = useState('');
@@ -33,65 +23,43 @@ export default function NewJobOrdersModal({
       .catch(() => setDepartments([]));
   }, [isOpen]);
 
-  // Fetch list on open, page change, or filter change
-  const fetchList = useCallback(async (pageValue = page) => {
+  // Fetch list when open, or when filters change
+  const fetchList = useCallback(async () => {
     if (!isOpen) return;
     setLoading(true);
     try {
-      const params = { per_page: PER_PAGE, page: pageValue };
+      const params = {};
       if (search.trim()) params.search = search.trim();
       if (departmentId) params.department_id = departmentId;
 
       const res = await axios.get('/job-orders/pending', { params });
       const data = Array.isArray(res?.data?.data) ? res.data.data : [];
-      const m = res?.data?.meta || {};
-      const count = typeof res?.data?.count === 'number' ? res.data.count : data.length;
-
       setJobs(data);
-      setMeta({
-        current_page: m.current_page || 1,
-        last_page: m.last_page || 1,
-        per_page: m.per_page || PER_PAGE,
-        total: typeof m.total === 'number' ? m.total : count,
-      });
-
-      // If the current page went empty because items were removed on the server,
-      // bounce back to page 1 so the user sees fresh content.
-      if (data.length === 0 && pageValue > 1) {
-        setPage(1);
-      }
     } catch (err) {
       console.error('pending list failed:', err);
       setJobs([]);
-      setMeta({ current_page: 1, last_page: 1, per_page: PER_PAGE, total: 0 });
     } finally {
       setLoading(false);
     }
-  }, [isOpen, search, departmentId, page]);
+  }, [isOpen, search, departmentId]);
 
-  // Debounce on search/filter changes; also refetch on page change
+  // Debounce search input (300ms) before hitting the endpoint
   useEffect(() => {
     if (!isOpen) return;
-    const t = setTimeout(() => fetchList(page), 300);
+    const t = setTimeout(fetchList, 300);
     return () => clearTimeout(t);
-  }, [isOpen, search, departmentId, page, fetchList]);
+  }, [isOpen, search, departmentId, fetchList]);
 
-  // Reset everything when modal closes
+  // Reset filters when modal closes
   useEffect(() => {
     if (!isOpen) {
       setSearch('');
       setDepartmentId('');
-      setPage(1);
       setJobs([]);
-      setMeta({ current_page: 1, last_page: 1, per_page: PER_PAGE, total: 0 });
     }
   }, [isOpen]);
 
-  // When the user changes search or department, jump back to page 1
-  useEffect(() => {
-    setPage(1);
-  }, [search, departmentId]);
-
+  // Auto-mark a single job as viewed, then open it
   const handleViewJob = useCallback(async (job) => {
     try {
       await axios.post('/job-orders/mark-pending-notified', { jobs: [job.id] });
@@ -102,8 +70,6 @@ export default function NewJobOrdersModal({
   }, [onViewJob]);
 
   const handleMarkAllViewed = useCallback(async () => {
-    // Only mark the currently-visible page. Safer and more predictable
-    // than marking the entire system, which the admin might not expect.
     if (jobs.length === 0) return;
     setMarking(true);
     try {
@@ -112,15 +78,12 @@ export default function NewJobOrdersModal({
       });
       setJobs([]);
       if (typeof onMarkAllViewed === 'function') onMarkAllViewed();
-      // Refetch so the newly promoted rows (if any) appear
-      fetchList(1);
-      setPage(1);
     } catch (err) {
       console.error('mark all viewed failed:', err);
     } finally {
       setMarking(false);
     }
-  }, [jobs, onMarkAllViewed, fetchList]);
+  }, [jobs, onMarkAllViewed]);
 
   const hasActiveFilters = useMemo(
     () => Boolean(search.trim()) || Boolean(departmentId),
@@ -138,39 +101,19 @@ export default function NewJobOrdersModal({
             <div>
               <h2 className="text-2xl font-bold text-gray-900">New Pending Job Orders</h2>
               <p className="text-gray-600 mt-1">
-                {meta.total} {meta.total === 1 ? 'request' : 'requests'} waiting for review
-                {meta.last_page > 1 && (
-                  <span className="ml-2 text-xs text-gray-400">
-                    (page {meta.current_page} of {meta.last_page})
-                  </span>
-                )}
+                {jobs.length} {jobs.length === 1 ? 'request' : 'requests'} waiting for review
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              {typeof onOpenQueue === 'function' && (
-                <button
-                  type="button"
-                  onClick={onOpenQueue}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
-                  title="View the full queue"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h10M4 18h10" />
-                  </svg>
-                  View Full Queue
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onClose}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-100 hover:text-gray-900"
-                aria-label="Close"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-100 hover:text-gray-900"
+              aria-label="Close"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           {/* Filters */}
@@ -291,65 +234,26 @@ export default function NewJobOrdersModal({
           )}
         </div>
 
-        {/* Pager + Footer */}
-        <div className="bg-gray-50 px-8 py-4 border-t border-gray-200 rounded-b-lg flex items-center justify-between gap-3">
-          {/* Pager */}
-          <div className="flex items-center gap-2">
-            {meta.last_page > 1 && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={meta.current_page <= 1 || loading}
-                  className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Prev
-                </button>
-
-                <span className="text-xs font-medium text-gray-600">
-                  {meta.current_page} / {meta.last_page}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))}
-                  disabled={meta.current_page >= meta.last_page || loading}
-                  className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Next
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-3">
-            {jobs.length > 0 && (
-              <button
-                onClick={handleMarkAllViewed}
-                disabled={marking}
-                className="inline-flex items-center px-5 py-2.5 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all disabled:opacity-60"
-                title="Mark the requests on this page as viewed"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                {marking ? 'Marking...' : 'Mark Page as Viewed'}
-              </button>
-            )}
+        {/* Footer */}
+        <div className="bg-gray-50 px-8 py-4 border-t border-gray-200 rounded-b-lg flex justify-end gap-3">
+          {jobs.length > 0 && (
             <button
-              onClick={onClose}
-              className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
+              onClick={handleMarkAllViewed}
+              disabled={marking}
+              className="inline-flex items-center px-5 py-2.5 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all disabled:opacity-60"
             >
-              Close
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              {marking ? 'Marking...' : 'Mark All as Viewed'}
             </button>
-          </div>
+          )}
+          <button
+            onClick={onClose}
+            className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

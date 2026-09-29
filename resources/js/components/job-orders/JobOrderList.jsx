@@ -1,13 +1,13 @@
-import { useEffect, useState, useCallback } from 'react';
+// resources/js/components/job-orders/JobOrderList.jsx
+import { useEffect, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useLocation } from 'react-router-dom';
-import { FaBell, FaList } from 'react-icons/fa';
+import { FaList } from 'react-icons/fa';
 import JobOrderModal from '../modals/JobOrderModal';
 import JobOrderOngoingModal from '../modals/JobOrderOngoingModal';
 import StatusBadge from '../ui/StatusBadge';
 import StatusIndicator from '../ui/StatusIndicator';
 import JobOrderForm from './JobOrderForm';
-import NewJobOrdersModal from '../modals/NewJobOrdersModal';
 import PendingConfirmation from './PendingConfirmation';
 import ConfirmModal from '../modals/ConfirmModal';
 import UserPendingConfirmation from '../user/UserPendingConfirmation';
@@ -25,13 +25,18 @@ function isRole(user, roleName) {
   return false;
 }
 
-export default function JobOrderList({ showNotification, setNewPendingJobs, newPendingJobs, isAdmin: isAdminProp, isTechnician: isTechnicianProp, user: userProp }) {
-  // Tab state for admin
-  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'pending-confirmations'
+export default function JobOrderList({
+  showNotification,
+  isAdmin: isAdminProp,
+  isTechnician: isTechnicianProp,
+  user: userProp,
+}) {
+  const [activeTab, setActiveTab] = useState('all');
   const location = useLocation();
-  
+
   const [jobs, setJobs] = useState([]);
   const [meta, setMeta] = useState({});
+  const [totals, setTotals] = useState({});
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -39,20 +44,24 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedOngoingJob, setSelectedOngoingJob] = useState(null);
   const [ongoingModalOpen, setOngoingModalOpen] = useState(false);
-  const [isNewJobsModalOpen, setIsNewJobsModalOpen] = useState(false);
   const [closeJobId, setCloseJobId] = useState(null);
   const [closeLoading, setCloseLoading] = useState(false);
-  const [filter, setFilter] = useState('all'); // 'all', 'conformed', 'awaiting'
+  const [filter, setFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(null);
 
   const [queueModalOpen, setQueueModalOpen] = useState(false);
-  const [selectedJobForQueue, setSelectedJobForQueue] = useState(null);
 
   // User queue badge state (non-admin)
-  const [userQueuePosition, setUserQueuePosition] = useState(null); // number | null
-  const [userQueueTotal, setUserQueueTotal] = useState(null); // number | null
+  const [userQueuePosition, setUserQueuePosition] = useState(null);
+  const [userQueueTotal, setUserQueueTotal] = useState(null);
   const [queueBadgeLoading, setQueueBadgeLoading] = useState(false);
 
-  // Use props if provided, otherwise fallback to localStorage
+  // Newly-arrived row tracking
+  const [newIds, setNewIds] = useState(() => new Set());
+  const knownIdsRef = useRef(new Set());
+  const newIdsTimerRef = useRef(null);
+
+  // Resolve user
   let user = userProp;
   if (!user) {
     try {
@@ -63,12 +72,11 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
     }
   }
   const isAdmin = typeof isAdminProp === 'boolean' ? isAdminProp : isRole(user, 'admin');
-  const isTechnician = isRole(user, 'technician');
+  const isTechnician = typeof isTechnicianProp === 'boolean'
+    ? isTechnicianProp
+    : isRole(user, 'technician');
   const userId = user?.id;
 
-  // Fetch the user’s queue position for the badge.
-  // We use /queue/user-jobs (already exists) and show the earliest (minimum) position
-  // in case the requester has multiple queued jobs.
   const fetchUserQueueBadge = useCallback(async () => {
     if (!userId || isAdmin) return;
     setQueueBadgeLoading(true);
@@ -87,11 +95,9 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
       }
 
       setUserQueuePosition(Math.min(...positions));
-      // total_in_queue is the same for every row; fall back to null if missing
       const anyTotal = rows.find(r => typeof r.total_in_queue === 'number')?.total_in_queue ?? null;
       setUserQueueTotal(anyTotal);
     } catch (e) {
-      // Don’t toast; badge is non-critical.
       setUserQueuePosition(null);
       setUserQueueTotal(null);
     } finally {
@@ -99,61 +105,101 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
     }
   }, [userId, isAdmin]);
 
-  // Keep badge reasonably fresh when list changes (and on initial mount)
   useEffect(() => {
     fetchUserQueueBadge();
   }, [fetchUserQueueBadge, activeTab, search, page, filter]);
 
-  // Fetch job orders with filters
-  const fetchJobs = useCallback(async (searchValue = search, pageValue = page, filterValue = filter) => {
-    if (loading) return;
-
-    setLoading(true);
+  const fetchJobs = useCallback(async (
+    searchValue = search,
+    pageValue = page,
+    filterValue = filter,
+    statusValue = statusFilter,
+    options = {}
+  ) => {
+    const { silent = false } = options;
+    if (loading && !silent) return;
+    if (!silent) setLoading(true);
 
     try {
-      let params = {
+      const params = {
         search: searchValue,
         per_page: PER_PAGE,
         page: pageValue,
-        conform_filter: filterValue // Only send filter to backend
+        conform_filter: filterValue,
       };
-      // Removed: any client-side filtering for status/conformed/awaiting
+      if (statusValue) {
+        params.status = statusValue;
+      }
+
       const res = await axios.get('/job-orders', { params });
 
-      let data = res.data.data || [];
+      const data = res.data.data || [];
+
+      const incomingIds = new Set(data.map(j => j.id));
+
+      if (knownIdsRef.current.size === 0) {
+        knownIdsRef.current = incomingIds;
+        setNewIds(new Set());
+      } else {
+        const fresh = new Set();
+        data.forEach(j => {
+          if (!knownIdsRef.current.has(j.id)) fresh.add(j.id);
+        });
+
+        knownIdsRef.current = incomingIds;
+
+        if (fresh.size > 0) {
+          setNewIds(fresh);
+
+          if (newIdsTimerRef.current) clearTimeout(newIdsTimerRef.current);
+          newIdsTimerRef.current = setTimeout(() => {
+            setNewIds(new Set());
+            newIdsTimerRef.current = null;
+          }, 2000);
+        }
+      }
 
       setJobs(data);
+      setTotals(res.data.totals || {});
 
       setMeta({
         current_page: res.data.meta?.current_page || 1,
         last_page: res.data.meta?.last_page || 1,
         prev_page_url: res.data.meta?.current_page > 1,
-        next_page_url: res.data.meta?.current_page < res.data.meta?.last_page
+        next_page_url: res.data.meta?.current_page < res.data.meta?.last_page,
       });
-
-      // Always update newPendingJobs from backend data (admin only)
-      if (isAdmin) {
-        const currentPendingJobs = data.filter(
-          job => job.action_report?.status === 'Pending' && !job.notified
-        );
-        setNewPendingJobs(currentPendingJobs);
-      }
     } catch (error) {
-      console.error("Failed to fetch job orders:", error);
+      console.error('Failed to fetch job orders:', error);
       setJobs([]);
       setMeta({});
-      if (isAdmin) setNewPendingJobs([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }, [search, page, loading, isAdmin, isTechnician, userId, setNewPendingJobs, filter]);
+  }, [search, page, loading, filter, statusFilter]);
 
-  // Load jobs when search, page, or filter changes
   useEffect(() => {
-    fetchJobs(search, page, filter);
-  }, [search, page, filter]);
+    fetchJobs(search, page, filter, statusFilter);
+  }, [search, page, filter, statusFilter]);
 
-  // Modal handlers
+  // 13s silent refresh
+  useEffect(() => {
+    if (!isAdmin && !isTechnician) return;
+
+    const intervalId = setInterval(() => {
+      if (document.hidden) return;
+      if (modalOpen || ongoingModalOpen) return;
+      fetchJobs(search, page, filter, statusFilter, { silent: true });
+    }, 13000);
+
+    return () => clearInterval(intervalId);
+  }, [isAdmin, isTechnician, fetchJobs, search, page, filter, statusFilter, modalOpen, ongoingModalOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (newIdsTimerRef.current) clearTimeout(newIdsTimerRef.current);
+    };
+  }, []);
+
   const openModal = (job) => {
     const status = job.action_report?.status;
 
@@ -176,15 +222,10 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
     setSelectedOngoingJob(null);
   };
 
-  const handleStatusChange = (updatedJob = null, wasAccepted = false) => {
-    if (wasAccepted && updatedJob) {
-      setNewPendingJobs(prev => prev.filter(job => job.id !== updatedJob.id));
-    }
-    
+  const handleStatusChange = () => {
     fetchJobs();
   };
 
-  // Helper to get status id for "Completed"
   const [statusOptions, setStatusOptions] = useState([]);
   useEffect(() => {
     axios.get('/request-statuses')
@@ -201,12 +242,9 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
     return found ? found.id : statusName;
   };
 
-  // --- CLOSE JOB LOGIC ---
   const handleCloseJob = async (job) => {
     setCloseLoading(true);
     try {
-      // Only close the request here; the backend will preserve Unserviceable
-      // and may normalize other finalized service statuses to Closed.
       const statusId = getStatusId('Completed');
       await axios.put(`/job-orders/${job.id}`, {
         status: statusId,
@@ -218,125 +256,91 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         'Job Order Closed',
         'The job order has been marked as completed/closed.'
       );
-      // Refresh jobs
       fetchJobs(search, page);
     } catch (error) {
-      showNotification(
-        'error',
-        'Error',
-        'Failed to close the job order.'
-      );
+      showNotification('error', 'Error', 'Failed to close the job order.');
     } finally {
       setCloseLoading(false);
       setCloseJobId(null);
     }
   };
 
-  // Calculated counts (admin only)
-  const pendingCount = jobs.filter(
-    job => job.action_report?.status === 'Pending'
-  ).length;
+  const pendingCount = totals['Pending'] ?? 0;
+  const ongoingCount = totals['Ongoing'] ?? 0;
 
-  const ongoingCount = jobs.filter(
-    job => job.action_report?.status === 'Ongoing'
-  ).length;
+  const pendingStatusId = statusOptions.find(s => s.name === 'Pending')?.id ?? null;
+  const ongoingStatusId = statusOptions.find(s => s.name === 'Ongoing')?.id ?? null;
 
-  // New jobs notification handlers
-  const handleBellClick = () => {
-    setIsNewJobsModalOpen(true);
+  const isPendingFilterActive = statusFilter && statusFilter === pendingStatusId;
+  const isOngoingFilterActive = statusFilter && statusFilter === ongoingStatusId;
+
+  const toggleStatusFilter = (statusId) => {
+    setPage(1);
+    setStatusFilter(prev => (prev === statusId ? null : statusId));
   };
 
-  const handleNewJobsModalClose = () => {
-    setIsNewJobsModalOpen(false);
-    // Do NOT mark as notified here!
+  const isNewPendingJob = (job) => {
+    if (!isAdmin && !isTechnician) return false;
+    if (job?.action_report?.status !== 'Pending') return false;
+    const n = job?.notified;
+    return n === false || n === 0 || n === '0' || n === null || n === undefined;
   };
 
-  const handleMarkAllViewed = () => {
-    const jobIds = newPendingJobs.map(job => job.id);
-
-    axios.post('/job-orders/mark-pending-notified', { jobs: jobIds })
-      .then(() => {
-        setNewPendingJobs([]);
-        setIsNewJobsModalOpen(false);
-        fetchJobs(search, page); // Refresh jobs to update notified state
-      })
-      .catch(error => {
-        console.error('Error marking jobs as notified:', error);
-      });
-  };
-
-  const isJobNew = (jobId) => {
-    return newPendingJobs.some(job => job.id === jobId);
-  };
-
-  const handleViewFromNotification = (job) => {
-    setIsNewJobsModalOpen(false);
-
-    if (job.action_report?.status === 'Ongoing') {
-      setSelectedOngoingJob(job);
-      setOngoingModalOpen(true);
-    } else {
-      setSelectedJob(job);
-      setModalOpen(true);
-    }
-  };
+  const isJobNew = () => false;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        {/* Tabs for admin */}
-          {isAdmin ? (
-            <div className="mb-4 flex gap-2">
-              <button
-                className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
-                  activeTab === 'all'
-                    ? 'border-blue-600 text-blue-700 bg-blue-50'
-                    : 'border-transparent text-gray-600'
-                }`}
-                onClick={() => setActiveTab('all')}
-              >
-                All Job Orders
-              </button>
+        {isAdmin ? (
+          <div className="mb-4 flex gap-2">
+            <button
+              className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
+                activeTab === 'all'
+                  ? 'border-blue-600 text-blue-700 bg-blue-50'
+                  : 'border-transparent text-gray-600'
+              }`}
+              onClick={() => setActiveTab('all')}
+            >
+              All Job Orders
+            </button>
 
-              <button
-                className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
-                  activeTab === 'pending'
-                    ? 'border-blue-600 text-blue-700 bg-blue-50'
-                    : 'border-transparent text-gray-600'
-                }`}
-                onClick={() => setActiveTab('pending')}
-              >
-                Pending Confirmations
-              </button>
-            </div>
-          ) : (
+            <button
+              className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
+                activeTab === 'pending'
+                  ? 'border-blue-600 text-blue-700 bg-blue-50'
+                  : 'border-transparent text-gray-600'
+              }`}
+              onClick={() => setActiveTab('pending')}
+            >
+              Pending Confirmations
+            </button>
+          </div>
+        ) : (
+          <div className="mb-4 flex gap-2">
+            <button
+              className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
+                activeTab === 'all'
+                  ? 'border-blue-600 text-blue-700 bg-blue-50'
+                  : 'border-transparent text-gray-600'
+              }`}
+              onClick={() => setActiveTab('all')}
+            >
+              My Job Orders
+            </button>
 
-            // Tabs for regular users (only show if not admin)
-            <div className="mb-4 flex gap-2">
-              <button
-                className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
-                  activeTab === 'all'
-                    ? 'border-blue-600 text-blue-700 bg-blue-50'
-                    : 'border-transparent text-gray-600'
-                }`}
-                onClick={() => setActiveTab('all')}
-              >
-                My Job Orders
-              </button>
+            <button
+              className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
+                activeTab === 'pending'
+                  ? 'border-blue-600 text-blue-700 bg-blue-50'
+                  : 'border-transparent text-gray-600'
+              }`}
+              onClick={() => setActiveTab('pending')}
+            >
+              Pending Confirmation
+            </button>
+          </div>
+        )}
 
-              <button
-                className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 ${
-                  activeTab === 'pending'
-                    ? 'border-blue-600 text-blue-700 bg-blue-50'
-                    : 'border-transparent text-gray-600'
-                }`}
-                onClick={() => setActiveTab('pending')}
-              >
-                Pending Confirmation
-              </button>
-            </div>
-          )}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Job Orders</h1>
@@ -346,11 +350,20 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                 : 'Track and monitor your submitted IT requests'}
             </p>
           </div>
-          
-          {/* Admin Summary Stats - Inline */}
-          {isAdmin && (
-            <div className="flex items-center space-x-6">
-              <div className="text-center relative">
+
+          {/* Admin stats — clickable filters + View Queue button */}
+          {(isAdmin || isTechnician) && (
+            <div className="flex items-center space-x-4">
+              <button
+                type="button"
+                onClick={() => pendingStatusId && toggleStatusFilter(pendingStatusId)}
+                title={isPendingFilterActive ? 'Clear Pending filter' : 'Show only Pending'}
+                className={`text-center px-3 py-1.5 rounded-lg transition-all ${
+                  isPendingFilterActive
+                    ? 'bg-yellow-50 ring-2 ring-yellow-400'
+                    : 'hover:bg-gray-50'
+                }`}
+              >
                 <div className="flex items-center space-x-2">
                   <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                   <div>
@@ -358,23 +371,20 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                     <p className="text-2xl font-bold text-yellow-600">{pendingCount}</p>
                   </div>
                 </div>
-                
-                {newPendingJobs.length > 0 && (
-                  <button
-                    onClick={handleBellClick}
-                    className="absolute -top-2 -right-9 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg animate-pulse"
-                  >
-                    <FaBell className="w-4 h-4" />
-                    <span className="absolute -top-1 -right-1 bg-red-700 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center font-bold">
-                      {newPendingJobs.length}
-                    </span>
-                  </button>
-                )}
-              </div>
-              
+              </button>
+
               <div className="h-12 w-px bg-gray-300"></div>
-              
-              <div className="text-center">
+
+              <button
+                type="button"
+                onClick={() => ongoingStatusId && toggleStatusFilter(ongoingStatusId)}
+                title={isOngoingFilterActive ? 'Clear Ongoing filter' : 'Show only Ongoing'}
+                className={`text-center px-3 py-1.5 rounded-lg transition-all ${
+                  isOngoingFilterActive
+                    ? 'bg-blue-50 ring-2 ring-blue-400'
+                    : 'hover:bg-gray-50'
+                }`}
+              >
                 <div className="flex items-center space-x-2">
                   <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                   <div>
@@ -382,15 +392,26 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                     <p className="text-2xl font-bold text-blue-600">{ongoingCount}</p>
                   </div>
                 </div>
-              </div>
-            </div>
-          )} {/* ← Fixed: closing parenthesis here */}
+              </button>
 
-          {/* USER SIDE - Show Queue button */}
-          {!isAdmin && (
+              <div className="h-12 w-px bg-gray-300"></div>
+
+              {/* Staff View Queue button */}
+              <button
+                type="button"
+                onClick={() => setQueueModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
+                title="View the worklist queue"
+              >
+                <FaList className="h-4 w-4" />
+                View Queue
+              </button>
+            </div>
+          )}
+
+          {!isAdmin && !isTechnician && (
             <button
               onClick={async () => {
-                // Make sure badge is up to date right before opening.
                 await fetchUserQueueBadge();
                 setQueueModalOpen(true);
               }}
@@ -399,17 +420,37 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
               <FaList className="w-5 h-5 mr-2" />
               <span className="font-semibold">View Queue</span>
 
-              {/* Badge: show requester’s queue position if they have something queued */}
               {!queueBadgeLoading && typeof userQueuePosition === 'number' && (
                 <span className="ml-2 inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full bg-red-600 text-white text-xs font-bold leading-none">
-                  {userQueueTotal ? `${userQueuePosition}` : userQueuePosition}
+                  {userQueuePosition}
                 </span>
               )}
             </button>
           )}
-        </div>  
+        </div>
 
-        {/* Search Bar and Filter */}
+        {statusFilter && (
+          <div className="mt-4 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+            <span className="text-sm font-medium text-blue-800">
+              Filtered by status:{' '}
+              <strong>
+                {statusFilter === pendingStatusId
+                  ? 'Pending'
+                  : statusFilter === ongoingStatusId
+                  ? 'Ongoing'
+                  : 'Custom'}
+              </strong>
+            </span>
+            <button
+              type="button"
+              onClick={() => { setStatusFilter(null); setPage(1); }}
+              className="ml-auto text-xs font-semibold text-blue-700 underline hover:text-blue-900"
+            >
+              Clear filter
+            </button>
+          </div>
+        )}
+
         <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4">
           <div className="relative flex-1">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -424,7 +465,6 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
           </div>
-          {/* Filter Dropdown */}
           <div className="mt-3 sm:mt-0">
             <select
               value={filter}
@@ -432,14 +472,13 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
               className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ml-0 sm:ml-2"
             >
               <option value="all">All</option>
-              <option value="conformed">Conformed</option>
+              <option value="conformed">Confirmed</option>
               <option value="awaiting">Awaiting Confirmation</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* Job Orders Table (tabbed) */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {activeTab === 'all' ? (
           <>
@@ -470,46 +509,31 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Job Order No.
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Department
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Categories
-                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Job Order No.</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Department</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Categories</th>
                       {isAdmin && (
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Requester
-                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Requester</th>
                       )}
-                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Actions
-                      </th>
+                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
 
                   <tbody className="bg-white divide-y divide-gray-200">
                     {jobs.map((job) => (
-                      <tr key={job.id} className="hover:bg-gray-50 transition-colors duration-150">
+                      <tr
+                        key={job.id}
+                        className={`hover:bg-gray-50 transition-colors duration-150 ${
+                          newIds.has(job.id) ? 'animate-row-in' : ''
+                        }`}
+                      >
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center space-x-2">
-                            {isJobNew(job.id) && (
-                              <span className="relative flex h-3 w-3">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-                              </span>
+                          <div className="flex items-center gap-2">
+                            {isNewPendingJob(job) && (
+                              <span className="inline-flex items-center justify-center w-2.5 h-2.5 bg-red-500 rounded-full shadow-sm ring-2 ring-white" title="New pending request" />
                             )}
                             <span className="text-sm font-semibold text-gray-900">{job.job_order_no}</span>
-                            {isJobNew(job.id) && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                                NEW
-                              </span>
-                            )}
                           </div>
                         </td>
 
@@ -564,13 +588,12 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                             </svg>
                             View Details
                           </button>
-                          {/* --- Show Close button if conformed is true and status is Ongoing, or substatus is 'Waiting for confirmation', and user is admin/technician --- */}
+
                           {(() => {
                             const isOngoing = job.action_report?.status === 'Ongoing';
                             const isConformed = job.action_report?.conformed === true || job.action_report?.conformed === 1;
-                            // Substatus logic: mimic StatusIndicator logic
-                            const user = userProp || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user')) : null);
-                            const isRequester = user?.id === job.requester?.id;
+                            const currentUser = userProp || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user')) : null);
+                            const isRequester = currentUser?.id === job.requester?.id;
                             const hasReportContent = job.action_report && (
                               !!job.action_report.diagnosis ||
                               !!job.action_report.action_taken ||
@@ -582,9 +605,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
                             const isConfirmed = !!(job.action_report?.confirmed_at || job.action_report?.confirmed || job.action_report?.conformed);
                             let showForSubStatus = false;
                             if (isOngoing && hasReportContent && !isConfirmed) {
-                              // Substatus string as in StatusIndicator
-                              const subStatus = isRequester ? 'Waiting for your confirmation' : 'Waiting for confirmation';
-                              showForSubStatus = true; // If you want to show for both cases
+                              showForSubStatus = true;
                             }
                             if ((isOngoing && (isConformed || showForSubStatus)) && (isAdmin || isTechnician)) {
                               return (
@@ -625,7 +646,6 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         )}
       </div>
 
-      {/* Pagination */}
       {!loading && jobs.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-6 py-4">
           <div className="flex items-center justify-center gap-4">
@@ -659,7 +679,6 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         </div>
       )}
 
-      {/* Job Order Form (only on /create route) */}
       {location.pathname === '/create' && (
         <JobOrderForm
           userRole={user?.role}
@@ -668,7 +687,6 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         />
       )}
 
-      {/* Modals */}
       <JobOrderModal
         isOpen={modalOpen}
         job={selectedJob}
@@ -686,15 +704,6 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         isAdmin={isAdmin}
       />
 
-      <NewJobOrdersModal
-        isOpen={isNewJobsModalOpen}
-        onClose={handleNewJobsModalClose}
-        newPendingJobs={newPendingJobs}
-        onViewJob={handleViewFromNotification}
-        onMarkAllViewed={handleMarkAllViewed}
-      />
-
-      {/* Confirm Close Modal */}
       <ConfirmModal
         isOpen={!!closeJobId}
         title="Close Job Order"
@@ -714,6 +723,7 @@ export default function JobOrderList({ showNotification, setNewPendingJobs, newP
         onClose={() => setQueueModalOpen(false)}
         user={user}
         showNotification={showNotification}
+        viewerIsStaff={isAdmin || isTechnician}
       />
     </div>
   );

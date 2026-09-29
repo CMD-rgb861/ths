@@ -174,36 +174,43 @@ class JobOrderController extends Controller
             $totals[$name] = (clone $allJobsQuery)->where('status', $id)->count();
         }
 
-        // --- Add conform_filter backend filtering ---
+        // The status filter and conform filter are independent and should stack.
         $conformFilter = $request->input('conform_filter', 'all');
         $statusFilterType = $request->input('status_filter');
-        // Only apply conform_filter if no explicit status filter is set and not the special all_status_page filter and not history filter
-        if (!$request->filled('status') && $statusFilterType !== 'all_status_page' && !$request->boolean('history')) {
+        $hasExplicitStatus = $request->filled('status');
+
+        if ($statusFilterType !== 'all_status_page' && !$request->boolean('history')) {
             if ($conformFilter === 'all') {
-                // Only Pending/Ongoing by default (scalable, paginated)
-                $query->whereHas('actionReport', function ($q) {
-                    $q->whereIn('status', ['Pending', 'Ongoing']);
-                });
+                // When no explicit status filter is applied, default to Pending/Ongoing.
+                if (!$hasExplicitStatus) {
+                    $query->whereHas('actionReport', function ($q) {
+                        $q->whereIn('action_reports.status', ['Pending', 'Ongoing']);
+                    });
+                }
             } elseif ($conformFilter === 'conformed') {
-                $query->whereHas('actionReport', function ($q) {
+                $query->whereHas('actionReport', function ($q) use ($hasExplicitStatus) {
                     $q->where(function ($sub) {
-                        $sub->where('conformed', true)
-                            ->orWhere('conformed', 1);
-                    })
-                    ->where('status', 'Ongoing'); // Only Ongoing jobs
+                        $sub->where('action_reports.conformed', true)
+                            ->orWhere('action_reports.conformed', 1);
+                    });
+
+                    if (!$hasExplicitStatus) {
+                        $q->where('action_reports.status', 'Ongoing');
+                    }
                 });
             } elseif ($conformFilter === 'awaiting') {
-                $query->whereHas('actionReport', function ($q) {
-                    $q->where(function ($sub) {
-                        $sub->where(function ($c) {
-                            $c->where('conformed', false)
-                              ->orWhere('conformed', 0)
-                              ->orWhereNull('conformed');
-                        })
-                        ->whereNotNull('diagnosis')
-                        ->whereNotNull('action_taken')
-                        ->where('status', 'Ongoing'); // Only Ongoing jobs
-                    });
+                $query->whereHas('actionReport', function ($q) use ($hasExplicitStatus) {
+                    $q->where(function ($c) {
+                        $c->where('action_reports.conformed', false)
+                        ->orWhere('action_reports.conformed', 0)
+                        ->orWhereNull('action_reports.conformed');
+                    })
+                    ->whereNotNull('action_reports.diagnosis')
+                    ->whereNotNull('action_reports.action_taken');
+
+                    if (!$hasExplicitStatus) {
+                        $q->where('action_reports.status', 'Ongoing');
+                    }
                 });
             }
         }
@@ -1018,5 +1025,144 @@ class JobOrderController extends Controller
                 'code' => 'EXPORT_ERROR',
             ], 500);
         }
+    }
+
+
+    /**
+     * Lightweight count of un-notified pending job orders.
+     * Safe to poll frequently.
+     */
+
+    public function pendingCount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        // Admins + technicians only
+        if (!$user->isAdmin() && !$user->isTechnician()) {
+            return response()->json(['count' => 0]);
+        }
+
+        $count = JobOrder::query()
+            ->where('notified', false)
+            ->whereHas('actionReport', function ($q) {
+                $q->where('status', 'Pending');
+            })
+            ->count();
+
+        return response()->json(['count' => $count]);
+    }
+
+    // /**
+    //  * Full list of un-notified pending job orders.
+    //  * Supports optional search + department filters.
+    //  */
+    // public function pendingList(Request $request): JsonResponse
+    // {
+    //     $user = $request->user();
+
+    //     if (!$user->isAdmin() && !$user->isTechnician()) {
+    //         return response()->json(['data' => []]);
+    //     }
+
+    //     $query = JobOrder::query()
+    //         ->with([
+    //             'department:id,name',
+    //             'requester:id,name',
+    //             'categories:id,name',
+    //             'actionReport',
+    //         ])
+    //         ->where('notified', false)
+    //         ->whereHas('actionReport', function ($q) {
+    //             $q->where('status', 'Pending');
+    //         })
+    //         ->orderByDesc('created_at');
+
+    //     // Optional search: job order no, requester name, department name
+    //     if ($request->filled('search')) {
+    //         $search = '%' . trim((string) $request->input('search')) . '%';
+    //         $query->where(function ($q) use ($search) {
+    //             $q->where('job_order_no', 'like', $search)
+    //             ->orWhereHas('requester', fn($r) => $r->where('name', 'like', $search))
+    //             ->orWhereHas('department', fn($d) => $d->where('name', 'like', $search));
+    //         });
+    //     }
+
+    //     // Optional department filter
+    //     if ($request->filled('department_id')) {
+    //         $query->where('department_id', (int) $request->input('department_id'));
+    //     }
+
+    //     $jobs = $query->get();
+
+    //     return response()->json([
+    //         'data' => $this->transformJobs($jobs),
+    //         'count' => $jobs->count(),
+    //     ]);
+    // }
+
+    /**
+     * Paginated list of un-notified pending job orders.
+     * Supports search + department filters.
+     * Default: 5 per page.
+     */
+    public function pendingList(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user->isAdmin() && !$user->isTechnician()) {
+            return response()->json([
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'per_page' => 5,
+                    'total' => 0,
+                ],
+            ]);
+        }
+
+        $perPage = min(max((int) $request->input('per_page', 5), 1), 50);
+        $page = max((int) $request->input('page', 1), 1);
+
+        $query = JobOrder::query()
+            ->with([
+                'department:id,name',
+                'requester:id,name',
+                'categories:id,name',
+                'actionReport',
+            ])
+            ->where('notified', false)
+            ->whereHas('actionReport', function ($q) {
+                $q->where('status', 'Pending');
+            })
+            ->orderByDesc('created_at');
+
+        if ($request->filled('search')) {
+            $search = '%' . trim((string) $request->input('search')) . '%';
+            $query->where(function ($q) use ($search) {
+                $q->where('job_order_no', 'like', $search)
+                ->orWhereHas('requester', fn($r) => $r->where('name', 'like', $search))
+                ->orWhereHas('department', fn($d) => $d->where('name', 'like', $search));
+            });
+        }
+
+        if ($request->filled('department_id')) {
+            $query->where('department_id', (int) $request->input('department_id'));
+        }
+
+        $paginated = $query->paginate($perPage, ['*'], 'page', $page);
+
+        return response()->json([
+            'data' => $this->transformJobs($paginated->items()),
+            'count' => $paginated->total(),
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page'    => $paginated->lastPage(),
+                'per_page'     => $paginated->perPage(),
+                'total'        => $paginated->total(),
+                'from'         => $paginated->firstItem(),
+                'to'           => $paginated->lastItem(),
+            ],
+        ]);
     }
 }

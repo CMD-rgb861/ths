@@ -236,11 +236,17 @@ export default function SerialNumberHistory() {
       }
 
       const res = await axios.get('/api/serial-number/search', { params });
+      const payload = res.data || {};
+      const rows = Array.isArray(payload.data)
+        ? payload.data
+        : Array.isArray(payload.jobs)
+          ? payload.jobs
+          : [];
 
-      setJobs(res.data.data || []);
-      setTotalCount(res.data.total || 0);
-      setTotalPages(res.data.last_page || 1);
-      setCurrentPage(res.data.current_page || 1);
+      setJobs(rows);
+      setTotalCount(Number(payload.total ?? payload.count ?? rows.length ?? 0));
+      setTotalPages(Number(payload.last_page ?? 1));
+      setCurrentPage(Number(payload.current_page ?? 1));
       setFiltersApplied(true);
     } catch (error) {
       console.error('Error fetching serial history:', error);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use App\Models\JobOrder;
 use Carbon\Carbon;
 
@@ -300,7 +301,7 @@ class SoftwareNameController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Software export count failed: ' . $e->getMessage());
+            Log::error('Software export count failed: ' . $e->getMessage());
             
             return response()->json([
                 'success' => false,

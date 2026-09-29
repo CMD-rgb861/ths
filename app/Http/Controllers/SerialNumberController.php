@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use App\Models\JobOrder;
 use Carbon\Carbon;
 
@@ -100,8 +101,13 @@ class SerialNumberController extends Controller
         })->values();
 
         return response()->json([
+            'data' => $transformedJobs,
+            'current_page' => 1,
+            'last_page' => 1,
+            'per_page' => $transformedJobs->count(),
+            'total' => $transformedJobs->count(),
             'count' => $transformedJobs->count(),
-            'jobs'  => $transformedJobs,
+            'jobs' => $transformedJobs,
         ]);
     }
 
@@ -301,7 +307,7 @@ class SerialNumberController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Serial number export count failed: ' . $e->getMessage());
+            Log::error('Serial number export count failed: ' . $e->getMessage());
             
             return response()->json([
                 'success' => false,

@@ -21,9 +21,9 @@ use App\Http\Controllers\SoftwareNameController;
 use App\Models\JobOrder;
 
 /*
-|-------------------------------------------------------------------------- 
-| PUBLIC ROUTES 
-|-------------------------------------------------------------------------- 
+|--------------------------------------------------------------------------
+| PUBLIC ROUTES
+|--------------------------------------------------------------------------
 */
 Route::post('/login', [LoginController::class, 'login']);
 
@@ -43,9 +43,9 @@ Route::middleware('auth')->get('/auth/status', function (Request $request) {
 });
 
 /*
-|-------------------------------------------------------------------------- 
-| PROTECTED ROUTES 
-|-------------------------------------------------------------------------- 
+|--------------------------------------------------------------------------
+| PROTECTED ROUTES
+|--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -53,7 +53,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [LoginController::class, 'logout']);
 
     // Users routes
-    // Users
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/counts', [UserController::class, 'counts']);
     Route::get('/roles', [UserController::class, 'roles']);
@@ -72,16 +71,28 @@ Route::middleware('auth:sanctum')->group(function () {
     // ============================================
     Route::get('/job-orders', [JobOrderController::class, 'index']);
     Route::post('/job-orders', [JobOrderController::class, 'store']);
-    Route::get('/job-orders/service-status', [JobOrderController::class, 'serviceStatus']);
 
     // ============================================
-    // JOB ORDER EXPORT ROUTES
+    // STATIC / SPECIFIC JOB ORDER ROUTES
+    // MUST be declared BEFORE /job-orders/{jobOrder}
     // ============================================
+    Route::get('/job-orders/service-status', [JobOrderController::class, 'serviceStatus']);
+
+    // Export routes
     Route::get('/job-orders/export-count', [JobOrderController::class, 'exportCount']);
     Route::get('/job-orders/export', [JobOrderController::class, 'export']);
 
+    // Pending bell routes (must be BEFORE {jobOrder} wildcard)
+    Route::get('/job-orders/pending-count', [JobOrderController::class, 'pendingCount']);
+    Route::get('/job-orders/pending', [JobOrderController::class, 'pendingList']);
+
+    // Pending notification actions
+    Route::post('/job-orders/mark-pending-notified', [JobOrderController::class, 'markPendingNotified']);
+    Route::post('/job-orders/{jobOrder}/mark-notifications-read', [JobOrderController::class, 'markNotificationsRead']);
+
     // ============================================
     // SINGLE JOB ORDER ROUTES
+    // (wildcard {jobOrder} MUST come after all static routes above)
     // ============================================
     Route::get('/job-orders/{jobOrder}', [JobOrderController::class, 'show'])->name('job-orders.show');
     Route::put('/job-orders/{jobOrder}', [JobOrderController::class, 'update']);
@@ -95,7 +106,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/job-orders/{jobOrder}/action-report', [ActionReportController::class, 'store']);
     Route::put('/job-orders/{jobOrder}/action-report', [ActionReportController::class, 'update']);
     Route::post('/job-orders/{jobOrder}/action-report/csm', [ActionReportController::class, 'storeCsm']);
-    Route::put('/job-orders/{jobOrder}/action-report/unserviceable', [ActionReportController::class, 'updateUnserviceable']);  
+    Route::put('/job-orders/{jobOrder}/action-report/unserviceable', [ActionReportController::class, 'updateUnserviceable']);
 
     // Service Statuses for action_taken dropdown
     Route::get('/service-statuses', [ActionReportController::class, 'serviceStatuses']);
@@ -124,13 +135,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/job-orders/{job}/completed/view',
         [CompletedReportController::class, 'generate']
     );
-
-    // ===============================
-    // PENDING NOTIFICATIONS ROUTES
-    // ===============================
-    Route::middleware('auth:sanctum')->get('/job-orders/pending-count', [JobOrderController::class, 'pendingCount']);
-    Route::post('/job-orders/mark-pending-notified', [JobOrderController::class, 'markPendingNotified']);
-    Route::post('/job-orders/{jobOrder}/mark-notifications-read', [JobOrderController::class, 'markNotificationsRead']);
 
     // ===============================
     // SIGNATORY ROUTES (IT Director)
@@ -168,6 +172,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/queue/stats', [JobOrderQueueController::class, 'getStats']);
     Route::get('/queue/user-jobs', [JobOrderQueueController::class, 'getUserJobsInQueue']);
     Route::get('/queue/{jobOrder}/position', [JobOrderQueueController::class, 'getPosition']);
+    Route::get('/queue/user-window', [JobOrderQueueController::class, 'getUserWindow']);
 
     // ===============================
     // SUMMARY REQUEST REPORT ROUTES
