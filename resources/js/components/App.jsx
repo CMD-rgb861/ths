@@ -103,6 +103,11 @@ export default function App() {
   const [bellOngoingJob, setBellOngoingJob] = useState(null);
   const [bellOngoingOpen, setBellOngoingOpen] = useState(false);
 
+  // When true, closing the bell's detail modal reopens the NewJobOrdersModal.
+  // Set only when the detail was opened via the bell's "View Details" button,
+  // so opening the same detail from the Job Orders list does NOT reopen the bell.
+  const [reopenBellOnDetailClose, setReopenBellOnDetailClose] = useState(false);
+
   const handleBellModalClose = useCallback(() => {
     setBellModalOpen(false);
     refreshPendingBell();
@@ -110,6 +115,10 @@ export default function App() {
 
   const handleBellViewJob = useCallback((job) => {
     setBellModalOpen(false);
+    // Remember that this detail was opened from the bell, so closing it
+    // (without deciding) returns the user to the bell list.
+    setReopenBellOnDetailClose(true);
+
     if (job.action_report?.status === 'Ongoing') {
       setBellOngoingJob(job);
       setBellOngoingOpen(true);
@@ -502,6 +511,15 @@ export default function App() {
         onClose={() => {
           setBellDetailOpen(false);
           setBellSelectedJob(null);
+
+          // If the detail was opened from the bell, return to it.
+          // Opening the same detail from the Job Orders list leaves
+          // this flag false, so no bell will pop up there.
+          if (reopenBellOnDetailClose) {
+            setBellModalOpen(true);
+            setReopenBellOnDetailClose(false);
+          }
+
           refreshPendingBell();
         }}
         onStatusChange={() => refreshPendingBell()}

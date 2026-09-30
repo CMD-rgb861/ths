@@ -295,22 +295,53 @@ class JobOrderController extends Controller
 
         return DB::transaction(function () use ($validated, $request, $departmentId) {
             $signatureName = $validated['signature_name'] ?? $request->user()->name;
-            $last = JobOrder::lockForUpdate()->latest('id')->first();
-            $nextNumber = str_pad(($last?->id ?? 0) + 1, 6, '0', STR_PAD_LEFT);
-            $jobOrderNo = now()->year . '-' . $nextNumber;
 
-            $jobOrder = JobOrder::create([
-                'job_order_no' => $jobOrderNo,
-                'date' => $validated['date'],
-                'department_id' => $departmentId,
-                'requested_by' => $request->user()->id,
-                'created_by' => $request->user()->id,
-                'request_description' => $validated['request_description'],
-                'contact_no' => $validated['contact_no'],
-                'signature_name' => $signatureName,
-                'status' => $validated['status'] ?? 1,
-                'notified' => false,
-            ]);
+            $jobOrder = null;
+            $maxAttempts = 5;
+
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                $period = now()->format('Ym');
+
+                $last = JobOrder::where('job_order_no', 'like', $period . '%')
+                    ->lockForUpdate()
+                    ->orderByDesc('job_order_no')
+                    ->first();
+
+                $nextSequence = $last
+                    ? ((int) substr($last->job_order_no, -4)) + 1
+                    : 1;
+
+                $jobOrderNo = $period . str_pad($nextSequence, 4, '0', STR_PAD_LEFT);
+
+                try {
+                    $jobOrder = JobOrder::create([
+                        'job_order_no' => $jobOrderNo,
+                        'date' => $validated['date'],
+                        'department_id' => $departmentId,
+                        'requested_by' => $request->user()->id,
+                        'created_by' => $request->user()->id,
+                        'request_description' => $validated['request_description'],
+                        'contact_no' => $validated['contact_no'],
+                        'signature_name' => $signatureName,
+                        'status' => $validated['status'] ?? 1,
+                        'notified' => false,
+                    ]);
+                    break;
+                } catch (\Illuminate\Database\QueryException $e) {
+                    // 23000 = integrity constraint violation (duplicate key)
+                    if ($e->getCode() !== '23000' || $attempt === $maxAttempts) {
+                        throw $e;
+                    }
+                    // brief pause to let the competing transaction finish
+                    usleep(50_000); // 50ms
+                }
+            }
+
+            // Safety net: if the loop exhausted attempts without creating a row,
+            // fail loudly rather than continuing with a null $jobOrder.
+            if (!$jobOrder) {
+                throw new \RuntimeException('Failed to generate a unique job order number after multiple attempts.');
+            }
 
             foreach ($validated['categories'] as $category) {
                 $jobOrder->categories()->attach(
