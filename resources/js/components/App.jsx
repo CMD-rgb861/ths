@@ -210,7 +210,7 @@ export default function App() {
                         />
                         <div>
                           <h1 className="text-lg font-semibold text-gray-900 leading-tight">
-                            IT Support & Maintenance System
+                            IT Service Request & Maintenance System
                           </h1>
                           <p className="text-xs text-gray-500 leading-tight">
                             IT Job Order Management Portal
