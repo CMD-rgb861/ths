@@ -12,7 +12,7 @@ Route::get('/', function () {
     // return redirect()->route('login');
     $ip = getHostByName(getHostName());
     return redirect()->away(
-        "https://{$ip}/ids/itsms/home/n"
+        "https://{$ip}/ids/itsrms/home/n"
     );
 });
 

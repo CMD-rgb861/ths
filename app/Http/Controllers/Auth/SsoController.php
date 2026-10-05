@@ -20,7 +20,7 @@ class SsoController extends Controller
 
         if (!$token || !$id_number) {
             return redirect()->away(
-                "https://{$ip}/ids/itsms/home/n?error=" .
+                "https://{$ip}/ids/itsrms/home/n?error=" .
                 urlencode('Missing SSO credentials.')
             );
         }
@@ -38,7 +38,7 @@ class SsoController extends Controller
 
         if (!$ssoToken) {
             return redirect()->away(
-                "https://{$ip}/ids/itsms/home/n?error=" .
+                "https://{$ip}/ids/itsrms/home/n?error=" .
                 urlencode('Invalid SSO token. Please return to SSO and try again.')
             );
         }
@@ -53,7 +53,7 @@ class SsoController extends Controller
                 ->delete();
 
             return redirect()->away(
-                "https://{$ip}/ids/itsms/home/n?error=" .
+                "https://{$ip}/ids/itsrms/home/n?error=" .
                 urlencode('SSO token has expired. Please return to SSO and try again.')
             );
         }
@@ -71,7 +71,7 @@ class SsoController extends Controller
                 ->delete();
 
             return redirect()->away(
-                "https://{$ip}/ids/itsms/home/n?error=" .
+                "https://{$ip}/ids/itsrms/home/n?error=" .
                 urlencode('User not found in this system.')
             );
         }

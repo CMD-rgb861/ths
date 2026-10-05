@@ -64,7 +64,7 @@ class LoginController extends Controller
         $ip = getHostByName(getHostName());
 
         return redirect()->away(
-            "https://{$ip}/ids/itsms/home/n?success=" .
+            "https://{$ip}/ids/itsrms/home/n?success=" .
             urlencode('You have been logged out successfully.')
         );
     }
