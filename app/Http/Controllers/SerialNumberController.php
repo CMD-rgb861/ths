@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use App\Models\JobOrder;
 use Carbon\Carbon;
 
@@ -18,12 +19,11 @@ class SerialNumberController extends Controller
         $category = $request->input('category');
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');
-        $perPage = min(max((int) $request->input('per_page', 10), 1), 50);
-        $page = max((int) $request->input('page', 1), 1);
+        $excludeJobId = $request->input('exclude_job_id');   // ← NEW
 
         $query = JobOrder::whereHas('actionReport', function ($q) {
                 $q->whereNotNull('serial_number')
-                  ->where('serial_number', '!=', '');
+                ->where('serial_number', '!=', '');
             })
             ->with([
                 'department:id,name',
@@ -33,21 +33,18 @@ class SerialNumberController extends Controller
             ])
             ->orderByDesc('created_at');
 
-        // Filter by serial number (partial match)
         if (!empty($serial) && strlen($serial) >= 3) {
             $query->whereHas('actionReport', function ($q) use ($serial) {
                 $q->where('serial_number', 'like', "%{$serial}%");
             });
         }
 
-        // Filter by category
         if (!empty($category)) {
             $query->whereHas('categories', function ($q) use ($category) {
                 $q->where('name', $category);
             });
         }
 
-        // Filter by date range (created_at)
         if (!empty($dateFrom)) {
             $query->whereDate('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
         }
@@ -56,15 +53,14 @@ class SerialNumberController extends Controller
             $query->whereDate('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
         }
 
-        // Get total count for pagination
-        $totalCount = (clone $query)->count();
+        // ← NEW: exclude the current job from its own history
+        if (!empty($excludeJobId)) {
+            $query->where('id', '!=', $excludeJobId);
+        }
 
-        // Get paginated results
-        $jobs = $query
-            ->paginate($perPage, ['*'], 'page', $page);
+        $jobs = $query->get();
 
-        // Transform data to match frontend expectations
-        $transformedJobs = $jobs->getCollection()->map(function ($job) {
+        $transformedJobs = $jobs->map(function ($job) {
             return [
                 'id' => $job->id,
                 'job_order_no' => $job->job_order_no,
@@ -76,12 +72,10 @@ class SerialNumberController extends Controller
                     'id' => $job->requester->id,
                     'name' => $job->requester->name,
                 ] : null,
-                'categories' => $job->categories->map(function ($category) {
-                    return [
-                        'id' => $category->id,
-                        'name' => $category->name,
-                    ];
-                }),
+                'categories' => $job->categories->map(fn ($c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                ]),
                 'action_report' => $job->actionReport ? [
                     'id' => $job->actionReport->id,
                     'job_order_id' => $job->actionReport->job_order_id,
@@ -104,16 +98,16 @@ class SerialNumberController extends Controller
                 'created_at' => $job->created_at,
                 'updated_at' => $job->updated_at,
             ];
-        });
+        })->values();
 
         return response()->json([
             'data' => $transformedJobs,
-            'current_page' => $jobs->currentPage(),
-            'last_page' => $jobs->lastPage(),
-            'per_page' => $jobs->perPage(),
-            'total' => $jobs->total(),
-            'from' => $jobs->firstItem(),
-            'to' => $jobs->lastItem(),
+            'current_page' => 1,
+            'last_page' => 1,
+            'per_page' => $transformedJobs->count(),
+            'total' => $transformedJobs->count(),
+            'count' => $transformedJobs->count(),
+            'jobs' => $transformedJobs,
         ]);
     }
 
@@ -313,7 +307,7 @@ class SerialNumberController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Serial number export count failed: ' . $e->getMessage());
+            Log::error('Serial number export count failed: ' . $e->getMessage());
             
             return response()->json([
                 'success' => false,

@@ -12,8 +12,15 @@ export default {
 
     theme: {
         extend: {
-            fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+            keyframes: {
+            rowIn: {
+                '0%':   { backgroundColor: 'rgb(254 249 195)', opacity: '0.35', transform: 'translateY(-6px)' },
+                '40%':  { backgroundColor: 'rgb(254 249 195)', opacity: '1',    transform: 'translateY(0)' },
+                '100%': { backgroundColor: 'transparent',      opacity: '1',    transform: 'translateY(0)' },
+            },
+            },
+            animation: {
+            'row-in': 'rowIn 1.8s ease-out',
             },
         },
     },

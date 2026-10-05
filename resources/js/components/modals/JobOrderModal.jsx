@@ -515,13 +515,14 @@ export default function JobOrderModal({
           </div>
         )}
 
-        {/* ConfirmModal for Cancel Request (admin) */}
+        {/* ConfirmModal for Deny Request (admin/tech) */}
         <ConfirmModal
-          isOpen={showCancelConfirm}
+          isOpen={showCancelConfirm && (isAdmin || isTechnician)}
           title="Deny Request"
           message="Are you sure you want to deny this job order request? This action cannot be undone."
           confirmText="Yes, Deny"
           cancelText="No"
+          tone="danger"
           onConfirm={() => {
             setShowCancelConfirm(false);
             handleAdminCancel();
@@ -536,6 +537,7 @@ export default function JobOrderModal({
           message="Are you sure you want to cancel this job order request? This action cannot be undone."
           confirmText="Yes, Cancel"
           cancelText="No"
+          tone="danger"
           onConfirm={() => {
             setShowCancelConfirm(false);
             handleUserCancel();

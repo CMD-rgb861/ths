@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import { usePage } from '@inertiajs/react';
 import { ToastContainer, toast } from 'react-toastify';
@@ -16,21 +16,23 @@ import ConfirmModal from './modals/ConfirmModal';
 import SerialNumberHistory from './reports/SerialNumberHistory';
 import SoftwareHistory from './reports/SoftwareHistory';
 
-// Utility function for role check
+import usePendingBell from '../hooks/usePendingBell';
+import PendingBellButton from './ui/PendingBellButton';
+import NewJobOrdersModal from './modals/NewJobOrdersModal';
+import JobOrderModal from './modals/JobOrderModal';
+import JobOrderOngoingModal from './modals/JobOrderOngoingModal';
+import QueueModal from './modals/UserQueueModal';
+
 function isRole(user, roleName) {
   if (!user) return false;
   if (Array.isArray(user.roles)) {
-    // roles can be array of strings or objects
     return user.roles.some(r => (typeof r === 'string' ? r : r.name) === roleName);
   }
   return false;
 }
 
 function getRoleNames(user) {
-  if (!user || !Array.isArray(user.roles)) {
-    return [];
-  }
-
+  if (!user || !Array.isArray(user.roles)) return [];
   return user.roles
     .map((role) => (typeof role === 'string' ? role : role?.name))
     .filter(Boolean);
@@ -40,7 +42,6 @@ export default function App() {
   const location = useLocation();
   const { auth, flash } = usePage().props;
 
-  const [newPendingJobs, setNewPendingJobs] = useState([]);
   const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
   const isAuthenticated = Boolean(auth?.user);
 
@@ -50,17 +51,18 @@ export default function App() {
     }
   }, [flash?.api_token]);
 
-  const userRaw = localStorage.getItem('user');
-  let user = null;
-  try {
-    user = userRaw ? JSON.parse(userRaw) : null;
-  } catch (e) {
-    user = null;
-  }
+  const user = useMemo(() => {
+    if (auth?.user) return auth.user;
 
-  if (!user && auth?.user) {
-    user = auth.user;
-  }  
+    const userRaw = localStorage.getItem('user');
+    if (!userRaw) return null;
+
+    try {
+      return JSON.parse(userRaw);
+    } catch (e) {
+      return null;
+    }
+  }, [auth?.user]);
 
   useEffect(() => {
     if (auth?.user) {
@@ -68,8 +70,7 @@ export default function App() {
     }
   }, [auth?.user]);
 
-  // Use preferredRole if set and user has both roles
-  const preferredRole = localStorage.getItem('preferredRole');
+  const preferredRole = useMemo(() => localStorage.getItem('preferredRole'), [auth?.user]);
   const roles = getRoleNames(user);
   let isAdmin = false;
   let isTechnician = false;
@@ -85,7 +86,59 @@ export default function App() {
   const isPrivileged = isAdmin || isTechnician;
   const isAuthPage = location.pathname === '/login' || location.pathname === '/forgot_pass';
 
-  const showNotification = (type, title, message) => {
+  // ============================================================
+  // Pending bell — polls for admins + technicians
+  // ============================================================
+  const canSeeBell = isAuthenticated && (isAdmin || isTechnician);
+
+  const { count: pendingBellCount, refresh: refreshPendingBell } = usePendingBell({
+    enabled: canSeeBell,
+  });
+
+  const [bellModalOpen, setBellModalOpen] = useState(false);
+  const [bellQueueOpen, setBellQueueOpen] = useState(false);
+
+  const [bellSelectedJob, setBellSelectedJob] = useState(null);
+  const [bellDetailOpen, setBellDetailOpen] = useState(false);
+  const [bellOngoingJob, setBellOngoingJob] = useState(null);
+  const [bellOngoingOpen, setBellOngoingOpen] = useState(false);
+
+  // When true, closing the bell's detail modal reopens the NewJobOrdersModal.
+  // Set only when the detail was opened via the bell's "View Details" button,
+  // so opening the same detail from the Job Orders list does NOT reopen the bell.
+  const [reopenBellOnDetailClose, setReopenBellOnDetailClose] = useState(false);
+
+  const handleBellModalClose = useCallback(() => {
+    setBellModalOpen(false);
+    refreshPendingBell();
+  }, [refreshPendingBell]);
+
+  const handleBellViewJob = useCallback((job) => {
+    setBellModalOpen(false);
+    // Remember that this detail was opened from the bell, so closing it
+    // (without deciding) returns the user to the bell list.
+    setReopenBellOnDetailClose(true);
+
+    if (job.action_report?.status === 'Ongoing') {
+      setBellOngoingJob(job);
+      setBellOngoingOpen(true);
+    } else {
+      setBellSelectedJob(job);
+      setBellDetailOpen(true);
+    }
+    refreshPendingBell();
+  }, [refreshPendingBell]);
+
+  const handleBellMarkAllViewed = useCallback(() => {
+    refreshPendingBell();
+  }, [refreshPendingBell]);
+
+  const handleBellOpenQueue = useCallback(() => {
+    setBellModalOpen(false);
+    setBellQueueOpen(true);
+  }, []);
+
+  const showNotification = useCallback((type, title, message) => {
     const content = (
       <div className="space-y-1">
         {title ? <div className="text-sm font-semibold leading-5">{title}</div> : null}
@@ -113,30 +166,26 @@ export default function App() {
       default:
         return toast.info(content, options);
     }
-  };
+  }, []);
 
-  const navLinkClass = ({ isActive }) =>
+  const navLinkClass = useCallback(({ isActive }) =>
     isActive
       ? 'px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white shadow-sm transition-all duration-200'
-      : 'px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200';
+      : 'px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200',
+  []);
 
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 
   const RequirePrivileged = ({ children }) => {
-    if (!isPrivileged) {
-      return <Navigate to="/" replace />;
-    }
+    if (!isPrivileged) return <Navigate to="/" replace />;
     return children;
   };
 
   const RequireAdmin = ({ children }) => {
-    if (!isAdmin) {
-      return <Navigate to="/" replace />;
-    }
+    if (!isAdmin) return <Navigate to="/" replace />;
     return children;
   };
 
-  // Memoize the main content to prevent re-renders when notifications change
   const mainContent = useMemo(() => (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -153,7 +202,6 @@ export default function App() {
                 <header className="sticky top-0 z-40 bg-white shadow-sm">
                   <div className="px-6 sm:px-8 lg:px-12">
                     <div className="flex items-center justify-between h-16">
-                      {/* Logo & Title */}
                       <div className="flex items-center space-x-4">
                         <img
                           src="/images/cmt-logo.png"
@@ -170,8 +218,14 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* User Info & Logout */}
                       <div className="flex items-center space-x-4">
+                        {canSeeBell && (
+                          <PendingBellButton
+                            count={pendingBellCount}
+                            onClick={() => setBellModalOpen(true)}
+                          />
+                        )}
+
                         {user && (
                           <div className="hidden sm:flex items-center space-x-3 px-3 py-2 bg-gray-50 rounded-lg">
                             <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
@@ -193,7 +247,7 @@ export default function App() {
                             </div>
                           </div>
                         )}
-                        {/* Switch Role button for dual-role users */}
+
                         {hasDualRole && (
                           <button
                             onClick={() => setShowSwitchConfirm(true)}
@@ -203,6 +257,7 @@ export default function App() {
                             Switch Role
                           </button>
                         )}
+
                         <form
                           method="POST"
                           action={route('logout')}
@@ -226,7 +281,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Navigation */}
                     <div className="border-t border-gray-200">
                       <nav className="flex space-x-1 py-2 overflow-x-auto">
                         <NavLink to="/" end className={navLinkClass}>
@@ -246,24 +300,14 @@ export default function App() {
                           </span>
                         </NavLink>
                         {!isPrivileged && (
-                          <>
-                            {/* <NavLink to="/pending-confirmations" className={navLinkClass}>
-                              <span className="flex items-center space-x-2">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                <span>Pending Confirmation</span>
-                              </span>
-                            </NavLink> */}
-                            <NavLink to="/history" className={navLinkClass}>
-                              <span className="flex items-center space-x-2">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span>History</span>
-                              </span>
-                            </NavLink>
-                          </>
+                          <NavLink to="/history" className={navLinkClass}>
+                            <span className="flex items-center space-x-2">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span>History</span>
+                            </span>
+                          </NavLink>
                         )}
                         {isPrivileged && (
                           <>
@@ -275,7 +319,6 @@ export default function App() {
                                 <span>Reports</span>
                               </span>
                             </NavLink>
-                            {/* Show Serial History for both admin and technician */}
                             <NavLink to="/serial-history" className={navLinkClass}>
                               <span className="flex items-center space-x-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -284,7 +327,6 @@ export default function App() {
                                 <span>Serial History</span>
                               </span>
                             </NavLink>
-                            {/* Add Software History link */}
                             <NavLink to="/software-history" className={navLinkClass}>
                               <span className="flex items-center space-x-2">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -329,9 +371,7 @@ export default function App() {
                       element={
                         <JobOrderList
                           showNotification={showNotification}
-                          setNewPendingJobs={setNewPendingJobs}
-                          newPendingJobs={newPendingJobs}
-                          isAdmin={isPrivileged} // <-- use isPrivileged here
+                          isAdmin={isPrivileged}
                           isTechnician={isTechnician}
                           user={user}
                         />
@@ -358,7 +398,6 @@ export default function App() {
                       path="/reports/status/:status"
                       element={<JobOrderStatusPage showNotification={showNotification} />}
                     />
-                    {/* Add this route for service status cards */}
                     <Route
                       path="/reports/service-status/:status"
                       element={<JobOrderStatusPage showNotification={showNotification} />}
@@ -387,15 +426,8 @@ export default function App() {
                         </RequireAdmin>
                       }
                     />
-                    <Route
-                      path="/serial-history"
-                      element={<SerialNumberHistory />}
-                    />
-                    {/* Add Software History route */}
-                    <Route
-                      path="/software-history"
-                      element={<SoftwareHistory />}
-                    />
+                    <Route path="/serial-history" element={<SerialNumberHistory />} />
+                    <Route path="/software-history" element={<SoftwareHistory />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </div>
@@ -421,7 +453,19 @@ export default function App() {
         }
       />
     </Routes>
-  ), [isAuthenticated, isAuthPage, isPrivileged, isTechnician, isAdmin, user, navLinkClass, showNotification, newPendingJobs, showSwitchConfirm]);
+  ), [
+    isAuthenticated,
+    isAuthPage,
+    isPrivileged,
+    isTechnician,
+    isAdmin,
+    user,
+    navLinkClass,
+    showNotification,
+
+    canSeeBell,
+    pendingBellCount,
+  ]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -438,19 +482,70 @@ export default function App() {
 
       {mainContent}
 
-      {/* Confirmation Modal for Switch Role */}
       <ConfirmModal
         isOpen={showSwitchConfirm}
         title="Switch Role"
         message="Are you sure you want to switch your role? You will be redirected to the role selection page."
         confirmText="Yes, Switch"
         cancelText="Cancel"
+        tone="primary"
         onConfirm={() => {
           setShowSwitchConfirm(false);
           localStorage.removeItem('preferredRole');
           window.location.href = '/dashboard/welcome';
         }}
         onCancel={() => setShowSwitchConfirm(false)}
+      />
+
+      <NewJobOrdersModal
+        isOpen={bellModalOpen}
+        onClose={handleBellModalClose}
+        onViewJob={handleBellViewJob}
+        onMarkAllViewed={handleBellMarkAllViewed}
+        onOpenQueue={handleBellOpenQueue}
+      />
+
+      <JobOrderModal
+        isOpen={bellDetailOpen}
+        job={bellSelectedJob}
+        onClose={() => {
+          setBellDetailOpen(false);
+          setBellSelectedJob(null);
+
+          // If the detail was opened from the bell, return to it.
+          // Opening the same detail from the Job Orders list leaves
+          // this flag false, so no bell will pop up there.
+          if (reopenBellOnDetailClose) {
+            setBellModalOpen(true);
+            setReopenBellOnDetailClose(false);
+          }
+
+          refreshPendingBell();
+        }}
+        onStatusChange={() => refreshPendingBell()}
+        showNotification={showNotification}
+      />
+
+      <JobOrderOngoingModal
+        isOpen={bellOngoingOpen}
+        jobId={bellOngoingJob?.id}
+        onClose={() => {
+          setBellOngoingOpen(false);
+          setBellOngoingJob(null);
+          refreshPendingBell();
+        }}
+        onStatusChange={() => refreshPendingBell()}
+        showNotification={showNotification}
+        isAdmin={isAdmin}
+      />
+
+      {/* Staff Queue modal opened from the NewJobOrdersModal "View Full Queue" button */}
+      <QueueModal
+        isOpen={bellQueueOpen}
+        onClose={() => setBellQueueOpen(false)}
+        user={user}
+        showNotification={showNotification}
+        viewerIsStaff={isPrivileged}
       />
     </div>
   );
