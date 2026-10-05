@@ -19,7 +19,7 @@ class TechnicianSeeder extends Seeder
                 'password' => Hash::make('password123'),
             ]
         );
-        $user1->roles()->syncWithoutDetaching([2]); // 2 = technician
+        $user1->roles()->syncWithoutDetaching([2]); 
 
         $user2 = User::updateOrCreate(
             ['id_number' => 'TECH-0002'],
