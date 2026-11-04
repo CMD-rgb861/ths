@@ -98,7 +98,7 @@ class AuthenticatedSessionController extends Controller
         $ip = getHostByName(getHostName());
 
         return redirect()->away(
-            "https://{$ip}/ids/itsrms/home/n?success=" .
+            "https://{$ip}/ids/uniserve/home/n?success=" .
             urlencode('You have been logged out successfully.')
         );
     }

@@ -166,14 +166,52 @@ class JobOrderController extends Controller
         $statusFilterType = $request->input('status_filter');
         $hasExplicitStatus = $request->filled('status');
 
-        if ($statusFilterType !== 'all_status_page' && !$request->boolean('history')) {
-            if ($conformFilter === 'all') {
-                if (!$hasExplicitStatus) {
-                    $query->whereHas('actionReport', function ($q) {
-                        $q->whereIn('action_reports.status', ['Pending', 'Ongoing']);
+        if ($statusFilterType !== 'all_status_page' && !$request->boolean('history') && !$hasExplicitStatus) {
+            $activeStatusIds = DB::table('request_statuses')
+                ->whereIn('name', ['Pending', 'Ongoing'])
+                ->pluck('id')
+                ->toArray();
+
+            $closedStatusIds = DB::table('request_statuses')
+                ->whereIn('name', ['Completed', 'Cancelled', 'Unserviceable'])
+                ->pluck('id')
+                ->toArray();
+
+            $query->whereNotIn('job_orders.status', $closedStatusIds);
+
+            $query->where(function ($mainQuery) use ($activeStatusIds) {
+                $mainQuery->whereIn('job_orders.status', $activeStatusIds)
+                    ->orWhereHas('actionReport', function ($q) {
+                        $q->where(function ($sub) {
+                            $sub->where('action_reports.conformed', true)
+                                ->orWhere('action_reports.conformed', 1);
+                        });
                     });
-                }
-            } elseif ($conformFilter === 'conformed') {
+            });
+
+            $query->whereDoesntHave('actionReport', function ($q) {
+                $q->where(function ($c) {
+                    $c->where('action_reports.conformed', false)
+                        ->orWhere('action_reports.conformed', 0)
+                        ->orWhereNull('action_reports.conformed');
+                })
+                ->whereIn('action_reports.action_taken', ['Closed', 'Unserviceable', 'Diagnosed', 'Serviced'])
+                ->where(function ($sub) {
+                    $sub->whereNotNull('action_reports.diagnosis')->where('action_reports.diagnosis', '<>', '')
+                        ->orWhereNotNull('action_reports.serviced_by')
+                        ->orWhereNotNull('action_reports.date_started')
+                        ->orWhereNotNull('action_reports.date_finished')
+                        ->orWhereNotNull('action_reports.remarks')->where('action_reports.remarks', '<>', '');
+                });
+            });
+
+            $isStaff = $request->user()->isAdmin() || $request->user()->isTechnician();
+
+            if (!$isStaff && $conformFilter === 'pending') {
+                $query->where('job_orders.status', DB::table('request_statuses')->where('name', 'Pending')->value('id'));
+            } elseif (!$isStaff && $conformFilter === 'ongoing') {
+                $query->where('job_orders.status', DB::table('request_statuses')->where('name', 'Ongoing')->value('id'));
+            } elseif ($conformFilter === 'confirmed' || $conformFilter === 'conformed') {
                 $query->whereHas('actionReport', function ($q) use ($hasExplicitStatus) {
                     $q->where(function ($sub) {
                         $sub->where('action_reports.conformed', true)
@@ -188,11 +226,17 @@ class JobOrderController extends Controller
                 $query->whereHas('actionReport', function ($q) use ($hasExplicitStatus) {
                     $q->where(function ($c) {
                         $c->where('action_reports.conformed', false)
-                        ->orWhere('action_reports.conformed', 0)
-                        ->orWhereNull('action_reports.conformed');
+                            ->orWhere('action_reports.conformed', 0)
+                            ->orWhereNull('action_reports.conformed');
                     })
-                    ->whereNotNull('action_reports.diagnosis')
-                    ->whereNotNull('action_reports.action_taken');
+                    ->whereIn('action_reports.action_taken', ['Closed', 'Unserviceable', 'Diagnosed', 'Serviced'])
+                    ->where(function ($sub) {
+                        $sub->whereNotNull('action_reports.diagnosis')->where('action_reports.diagnosis', '<>', '')
+                            ->orWhereNotNull('action_reports.serviced_by')
+                            ->orWhereNotNull('action_reports.date_started')
+                            ->orWhereNotNull('action_reports.date_finished')
+                            ->orWhereNotNull('action_reports.remarks')->where('action_reports.remarks', '<>', '');
+                    });
 
                     if (!$hasExplicitStatus) {
                         $q->where('action_reports.status', 'Ongoing');

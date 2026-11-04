@@ -18,7 +18,12 @@ use App\Http\Controllers\PendingConfirmationController;
 use App\Http\Controllers\RequestStatusController;
 use App\Http\Controllers\SummaryRequestReportController;
 use App\Http\Controllers\SoftwareNameController;
+use App\Http\Controllers\GeneralJobOrderControllers\Users\NewRequestController;
+use App\Http\Controllers\GeneralJobOrderControllers\Users\DashboardController;
+use App\Http\Controllers\GeneralJobOrderControllers\Users\HistoryController;
+use App\Http\Controllers\GeneralJobOrderControllers\Users\RequestQueueController;
 use App\Models\JobOrder;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -181,4 +186,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/weekly', [SummaryRequestReportController::class, 'weekly']);
     Route::get('/reports/monthly', [SummaryRequestReportController::class, 'monthly']);
 
+
+    // ============================================
+    // GJOR — USER
+    // ============================================
+    // Dashboard Routes
+    Route::get('/gjor/my-job-orders', [DashboardController::class, 'index']);
+
+    // Static routes must stay before the wildcard route below
+    Route::get('/gjor/job-orders/history', [HistoryController::class, 'index']);
+    Route::get('/gjor/queue/window', [RequestQueueController::class, 'getUserWindow']);
+    Route::patch('/gjor/job-orders/{jobOrder}/cancel', [DashboardController::class, 'cancel']);
+    Route::get('/gjor/job-orders/{jobOrder}', [DashboardController::class, 'show']);
+
+    // New Request routes
+    Route::post('/gjor/job-orders', [NewRequestController::class, 'store']);
 });

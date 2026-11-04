@@ -121,11 +121,15 @@ export default function JobOrderList({
     if (!silent) setLoading(true);
 
     try {
+      const allowedFilters = isAdmin || isTechnician
+        ? ['confirmed']
+        : ['pending', 'ongoing', 'confirmed'];
+
       const params = {
         search: searchValue,
         per_page: PER_PAGE,
         page: pageValue,
-        conform_filter: filterValue,
+        conform_filter: allowedFilters.includes(filterValue) ? filterValue : 'all',
       };
       if (statusValue) {
         params.status = statusValue;
@@ -465,17 +469,40 @@ export default function JobOrderList({
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
           </div>
-          <div className="mt-3 sm:mt-0">
-            <select
-              value={filter}
-              onChange={e => setFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ml-0 sm:ml-2"
-            >
-              <option value="all">All</option>
-              <option value="conformed">Confirmed</option>
-              <option value="awaiting">Awaiting Confirmation</option>
-            </select>
-          </div>
+
+          {activeTab === 'all' && (
+            <div className="mt-3 sm:mt-0 flex items-center rounded-xl border border-gray-200 bg-gray-50 p-1">
+              {(isAdmin || isTechnician
+                ? [
+                    { key: 'all', label: 'All' },
+                    { key: 'confirmed', label: 'Confirmed' },
+                  ]
+                : [
+                    { key: 'all', label: 'All' },
+                    { key: 'pending', label: 'Pending' },
+                    { key: 'ongoing', label: 'Ongoing' },
+                    { key: 'confirmed', label: 'Confirmed' },
+                  ]
+              ).map((option) => {
+                const isActive = filter === option.key;
+
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setFilter(option.key)}
+                    className={`relative rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      isActive
+                        ? 'bg-white text-blue-700 shadow-sm ring-1 ring-blue-100'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

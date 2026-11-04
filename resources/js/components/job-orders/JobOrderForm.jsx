@@ -88,7 +88,8 @@ export default function JobOrderForm({ userRole, showNotification }) {
   const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
   const { auth } = usePage().props;
-  const departments = Array.isArray(auth?.user?.departments) ? auth.user.departments : [];
+  const assignedDepartments = Array.isArray(auth?.user?.departments) ? auth.user.departments : [];
+  const [allDepartments, setAllDepartments] = useState([]);
 
   // ── Submission window state ────────────────────────────────────
   const [now, setNow] = useState(getManilaNow);
@@ -109,6 +110,23 @@ export default function JobOrderForm({ userRole, showNotification }) {
     );
   }, [userRole, auth]);
 
+  useEffect(() => {
+    if (!isPrivileged) {
+      setAllDepartments([]);
+      return;
+    }
+
+    axios.get('/departments')
+      .then(({ data }) => {
+        const list = Array.isArray(data) ? data : [];
+        setAllDepartments(list.filter((department) => department?.name));
+      })
+      .catch(() => {
+        setAllDepartments([]);
+      });
+  }, [isPrivileged]);
+
+  const departments = isPrivileged ? allDepartments : assignedDepartments;
   const windowOpen = isPrivileged || isWithinWindow(now);
   const nextOpeningMessage = useMemo(() => describeNextOpening(now), [now]);
 
@@ -131,7 +149,7 @@ export default function JobOrderForm({ userRole, showNotification }) {
 
   const initialForm = {
     date: formatToManilaDate(),
-    department_id: departments[0]?.id ? String(departments[0].id) : '',
+    department_id: assignedDepartments[0]?.id ? String(assignedDepartments[0].id) : (allDepartments[0]?.id ? String(allDepartments[0].id) : ''),
     request_description: '',
     contact_no: '',
     signature_name: '',
@@ -226,9 +244,29 @@ export default function JobOrderForm({ userRole, showNotification }) {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                   Department <span className="text-red-500">*</span>
                 </label>
-                <div className="w-full border border-gray-200 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-800">
-                  {departmentName}
-                </div>
+
+                {isPrivileged ? (
+                  <select
+                    value={form.department_id}
+                    onChange={(e) => setForm({ ...form, department_id: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white"
+                    required
+                  >
+                    {departments.length === 0 ? (
+                      <option value="">No departments available</option>
+                    ) : (
+                      departments.map((department) => (
+                        <option key={department.id} value={String(department.id)}>
+                          {department.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                ) : (
+                  <div className="w-full border border-gray-200 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-800">
+                    {departmentName}
+                  </div>
+                )}
               </div>
 
               <div>

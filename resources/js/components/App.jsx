@@ -1,7 +1,11 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
-import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { usePage } from '@inertiajs/react';
 import { ToastContainer, toast } from 'react-toastify';
+
+// ============================================================
+// IT Job Order Request modules (existing current system)
+// ============================================================
 import JobOrderForm from './job-orders/JobOrderForm';
 import JobOrderList from './job-orders/JobOrderList';
 import JobOrderReports from './job-orders/JobOrderReports';
@@ -12,6 +16,7 @@ import Login from '../pages/Auth/Login';
 import UserJobHistory from './user/UserJobHistory';
 import UserPendingConfirmation from './user/UserPendingConfirmation';
 import WelcomePage from '../pages/WelcomePage';
+
 import ConfirmModal from './modals/ConfirmModal';
 import SerialNumberHistory from './reports/SerialNumberHistory';
 import SoftwareHistory from './reports/SoftwareHistory';
@@ -22,6 +27,13 @@ import NewJobOrdersModal from './modals/NewJobOrdersModal';
 import JobOrderModal from './modals/JobOrderModal';
 import JobOrderOngoingModal from './modals/JobOrderOngoingModal';
 import QueueModal from './modals/UserQueueModal';
+
+// ============================================================
+// General Job Request modules
+// ============================================================
+import GeneralServiceUserDashboard from '../pages/GeneralServiceRequest/User/DashboardPage';
+import HistoryPage from '../pages/GeneralServiceRequest/User/HistoryPage';
+import NewRequestPage from '../pages/GeneralServiceRequest/User/NewRequestPage';
 
 function isRole(user, roleName) {
   if (!user) return false;
@@ -40,6 +52,7 @@ function getRoleNames(user) {
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { auth, flash } = usePage().props;
 
   const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
@@ -84,7 +97,20 @@ export default function App() {
     isTechnician = roles.includes('technician');
   }
   const isPrivileged = isAdmin || isTechnician;
+  const isUserOnly = roles.includes('user') && !isAdmin && !isTechnician;
   const isAuthPage = location.pathname === '/login' || location.pathname === '/forgot_pass';
+  const isItsrmsSystem = [
+    '/job-orders',
+    '/create',
+    '/history',
+    '/pending-confirmations',
+    '/reports',
+    '/serial-history',
+    '/software-history',
+    '/users',
+    '/signatories',
+  ].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`));
+  const isGjorSystem = location.pathname.startsWith('/requests/general-service');
 
   // ============================================================
   // Pending bell — polls for admins + technicians
@@ -103,9 +129,6 @@ export default function App() {
   const [bellOngoingJob, setBellOngoingJob] = useState(null);
   const [bellOngoingOpen, setBellOngoingOpen] = useState(false);
 
-  // When true, closing the bell's detail modal reopens the NewJobOrdersModal.
-  // Set only when the detail was opened via the bell's "View Details" button,
-  // so opening the same detail from the Job Orders list does NOT reopen the bell.
   const [reopenBellOnDetailClose, setReopenBellOnDetailClose] = useState(false);
 
   const handleBellModalClose = useCallback(() => {
@@ -115,8 +138,6 @@ export default function App() {
 
   const handleBellViewJob = useCallback((job) => {
     setBellModalOpen(false);
-    // Remember that this detail was opened from the bell, so closing it
-    // (without deciding) returns the user to the bell list.
     setReopenBellOnDetailClose(true);
 
     if (job.action_report?.status === 'Ongoing') {
@@ -176,6 +197,11 @@ export default function App() {
 
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 
+  const RequireAuth = ({ children }) => {
+    if (!isAuthenticated) return <Navigate to="/login" replace />;
+    return children;
+  };
+
   const RequirePrivileged = ({ children }) => {
     if (!isPrivileged) return <Navigate to="/" replace />;
     return children;
@@ -188,9 +214,57 @@ export default function App() {
 
   const mainContent = useMemo(() => (
     <Routes>
+      {/* Shared / auth routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/welcome" element={<WelcomePage />} />
       <Route path="/dashboard/welcome" element={<WelcomePage />} />
+
+      {/* Legacy chooser route retained only as a redirect to the real ITSRMS flow. */}
+      <Route
+        path="/choose-request-type"
+        element={
+          <RequireAuth>
+            <Navigate to="/job-orders" replace />
+          </RequireAuth>
+        }
+      />
+
+      {/* ✅ IT Job Order URL aliases now redirect into the real ITSRMS routes. */}
+      <Route
+        path="/requests/job-order/user"
+        element={<Navigate to="/job-orders" replace />}
+      />
+      <Route
+        path="/requests/job-order/admin"
+        element={<Navigate to="/job-orders" replace />}
+      />
+
+      {/* General Service Request routes */}
+      <Route
+        path="/requests/general-service/user"
+        element={
+          <RequireAuth>
+            <GeneralServiceUserDashboard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/requests/general-service/history"
+        element={
+          <RequireAuth>
+            <HistoryPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/requests/general-service/new-request"
+        element={
+          <RequireAuth>
+            <NewRequestPage />
+          </RequireAuth>
+        }
+      />
+
       <Route
         path="/*"
         element={
@@ -202,21 +276,77 @@ export default function App() {
                 <header className="sticky top-0 z-40 bg-white shadow-sm">
                   <div className="px-6 sm:px-8 lg:px-12">
                     <div className="flex items-center justify-between h-16">
-                      <div className="flex items-center space-x-4">
-                        <img
-                          src="/images/cmt-logo.png"
-                          alt="CMT Logo"
-                          className="w-10 h-10 object-contain"
-                        />
-                        <div>
-                          <h1 className="text-lg font-semibold text-gray-900 leading-tight">
-                            IT Service Request & Maintenance System
-                          </h1>
-                          <p className="text-xs text-gray-500 leading-tight">
-                            IT Job Order Management Portal
-                          </p>
+                      {isUserOnly ? (
+                        <div className="flex items-center rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 ease-out">
+                          <NavLink
+                            to="/job-orders"
+                            className={() =>
+                              `relative flex items-center gap-2 rounded-lg px-3 py-2 transition-all duration-250 ease-out ${
+                                isItsrmsSystem
+                                  ? 'bg-blue-50 text-blue-800'
+                                  : 'text-slate-600 hover:bg-white hover:text-slate-800'
+                              }`
+                            }
+                          >
+                            <span className={`absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-blue-600 transition-all duration-250 ${isItsrmsSystem ? 'opacity-100' : 'opacity-0'}`} />
+                            <img
+                              src="/images/cmt-logo.png"
+                              alt="CMT Logo"
+                              className="h-6 w-6 object-contain"
+                            />
+                            <div className="text-left">
+                              <div className="text-sm font-semibold leading-tight">
+                                IT Service Request & Maintenance System
+                              </div>
+                              <div className="text-[10px] leading-tight text-inherit opacity-85">
+                                IT Job Order Management Portal
+                              </div>
+                            </div>
+                          </NavLink>
+
+                          <NavLink
+                            to="/requests/general-service/user"
+                            className={() =>
+                              `relative flex items-center gap-2 rounded-lg px-3 py-2 transition-all duration-250 ease-out ${
+                                isGjorSystem
+                                  ? 'bg-blue-50 text-blue-800'
+                                  : 'text-slate-600 hover:bg-white hover:text-slate-800'
+                              }`
+                            }
+                          >
+                            <span className={`absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-blue-600 transition-all duration-250 ${isGjorSystem ? 'opacity-100' : 'opacity-0'}`} />
+                            <img
+                              src="/images/lnu_logo.png"
+                              alt="GJOR Logo"
+                              className="h-6 w-6 object-contain"
+                            />
+                            <div className="text-left">
+                              <div className="text-sm font-semibold leading-tight">
+                                General Job Order Request System
+                              </div>
+                              <div className="text-[10px] leading-tight text-inherit opacity-85">
+                                GJOR Management Portal
+                              </div>
+                            </div>
+                          </NavLink>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="flex items-center space-x-4">
+                          <img
+                            src="/images/cmt-logo.png"
+                            alt="CMT Logo"
+                            className="w-10 h-10 object-contain"
+                          />
+                          <div>
+                            <h1 className="text-lg font-semibold text-gray-900 leading-tight">
+                              IT Service Request & Maintenance System
+                            </h1>
+                            <p className="text-xs text-gray-500 leading-tight">
+                              IT Job Order Management Portal
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="flex items-center space-x-4">
                         {canSeeBell && (
@@ -225,6 +355,7 @@ export default function App() {
                             onClick={() => setBellModalOpen(true)}
                           />
                         )}
+
 
                         {user && (
                           <div className="hidden sm:flex items-center space-x-3 px-3 py-2 bg-gray-50 rounded-lg">
@@ -247,6 +378,7 @@ export default function App() {
                             </div>
                           </div>
                         )}
+
 
                         {hasDualRole && (
                           <button
@@ -283,7 +415,7 @@ export default function App() {
 
                     <div className="border-t border-gray-200">
                       <nav className="flex space-x-1 py-2 overflow-x-auto">
-                        <NavLink to="/" end className={navLinkClass}>
+                        <NavLink to="/job-orders" end className={navLinkClass}>
                           <span className="flex items-center space-x-2">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -368,6 +500,11 @@ export default function App() {
                   <Routes>
                     <Route
                       path="/"
+                      element={<Navigate to={isUserOnly ? '/job-orders' : '/choose-request-type'} replace />}
+                    />
+
+                    <Route
+                      path="/job-orders"
                       element={
                         <JobOrderList
                           showNotification={showNotification}
@@ -386,6 +523,7 @@ export default function App() {
                         />
                       }
                     />
+
                     <Route
                       path="/pending-confirmations"
                       element={<UserPendingConfirmation showNotification={showNotification} />}
@@ -459,10 +597,11 @@ export default function App() {
     isPrivileged,
     isTechnician,
     isAdmin,
+    isUserOnly,
     user,
     navLinkClass,
     showNotification,
-
+    navigate,
     canSeeBell,
     pendingBellCount,
   ]);
@@ -512,9 +651,6 @@ export default function App() {
           setBellDetailOpen(false);
           setBellSelectedJob(null);
 
-          // If the detail was opened from the bell, return to it.
-          // Opening the same detail from the Job Orders list leaves
-          // this flag false, so no bell will pop up there.
           if (reopenBellOnDetailClose) {
             setBellModalOpen(true);
             setReopenBellOnDetailClose(false);
@@ -539,7 +675,6 @@ export default function App() {
         isAdmin={isAdmin}
       />
 
-      {/* Staff Queue modal opened from the NewJobOrdersModal "View Full Queue" button */}
       <QueueModal
         isOpen={bellQueueOpen}
         onClose={() => setBellQueueOpen(false)}
