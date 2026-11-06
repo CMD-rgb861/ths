@@ -188,7 +188,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
-                  Website Information Requests
+                  My Website Information Requests
                 </h1>
                 <p className="text-sm text-gray-600 mt-1">
                   Track and monitor your submitted website information requests
