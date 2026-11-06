@@ -210,9 +210,6 @@ export default function NewRequestPage() {
           <form className="space-y-6" onSubmit={handleSubmit} noValidate>
             <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
               <div className="mb-6 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-                  📝
-                </div>
                 <div>
                   <h2 className="text-lg font-bold uppercase tracking-wide text-slate-800">Request Information</h2>
                 </div>

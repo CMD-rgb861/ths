@@ -35,6 +35,13 @@ import GeneralServiceUserDashboard from '../pages/GeneralServiceRequest/User/Das
 import HistoryPage from '../pages/GeneralServiceRequest/User/HistoryPage';
 import NewRequestPage from '../pages/GeneralServiceRequest/User/NewRequestPage';
 
+// ============================================================
+// Website Information Posting / Update Request modules
+// ============================================================
+import WebsiteInformationUserDashboard from '../pages/WebsiteInformation/User/WIPURDashboardPage';
+import WebsiteInformationHistoryPage from '../pages/WebsiteInformation/User/WIPURHistoryPage';
+import WebsiteInformationNewRequestPage from '../pages/WebsiteInformation/User/WIPURNewRequestPage';
+
 function isRole(user, roleName) {
   if (!user) return false;
   if (Array.isArray(user.roles)) {
@@ -111,6 +118,7 @@ export default function App() {
     '/signatories',
   ].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`));
   const isGjorSystem = location.pathname.startsWith('/requests/general-service');
+  const isWebsiteInformationSystem = location.pathname.startsWith('/requests/website-information');
 
   // ============================================================
   // Pending bell — polls for admins + technicians
@@ -265,6 +273,36 @@ export default function App() {
         }
       />
 
+      {/* Website Information Posting / Update Request routes */}
+      <Route
+        path="/requests/website-information"
+        element={<Navigate to="/requests/website-information/user" replace />}
+      />
+      <Route
+        path="/requests/website-information/user"
+        element={
+          <RequireAuth>
+            <WebsiteInformationUserDashboard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/requests/website-information/history"
+        element={
+          <RequireAuth>
+            <WebsiteInformationHistoryPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/requests/website-information/new-request"
+        element={
+          <RequireAuth>
+            <WebsiteInformationNewRequestPage />
+          </RequireAuth>
+        }
+      />
+
       <Route
         path="/*"
         element={
@@ -300,6 +338,32 @@ export default function App() {
                               </div>
                               <div className="text-[10px] leading-tight text-inherit opacity-85">
                                 IT Job Order Management Portal
+                              </div>
+                            </div>
+                          </NavLink>
+
+                          <NavLink
+                            to="/requests/website-information/user"
+                            className={() =>
+                              `relative flex items-center gap-2 rounded-lg px-3 py-2 transition-all duration-250 ease-out ${
+                                isWebsiteInformationSystem
+                                  ? 'bg-blue-50 text-blue-800'
+                                  : 'text-slate-600 hover:bg-white hover:text-slate-800'
+                              }`
+                            }
+                          >
+                            <span className={`absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-blue-600 transition-all duration-250 ${isWebsiteInformationSystem ? 'opacity-100' : 'opacity-0'}`} />
+                            <img
+                              src="/images/lnu_logo.png"
+                              alt="WIPUR Logo"
+                              className="h-6 w-6 object-contain"
+                            />
+                            <div className="text-left">
+                              <div className="text-sm font-semibold leading-tight">
+                                Website Information Posting/Update Request
+                              </div>
+                              <div className="text-[10px] leading-tight text-inherit opacity-85">
+                                WIPUR Management Portal
                               </div>
                             </div>
                           </NavLink>

@@ -52,6 +52,7 @@ export default function GJORNavigationPanel({ role: roleProp }) {
     '/users',
     '/signatories',
   ].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`));
+  const isWebsiteInformationSystem = location.pathname.startsWith('/requests/website-information');
   const isGjorSystem = location.pathname.startsWith('/requests/general-service');
 
   const items = [
@@ -117,6 +118,28 @@ export default function GJORNavigationPanel({ role: roleProp }) {
                   <div className="text-left">
                     <div className="text-sm font-semibold leading-tight">IT Service Request & Maintenance System</div>
                     <div className="text-[10px] leading-tight text-inherit opacity-85">IT Job Order Management Portal</div>
+                  </div>
+                </NavLink>
+
+                <NavLink
+                  to="/requests/website-information/user"
+                  className={() =>
+                    `relative flex items-center gap-2 rounded-lg px-3 py-2 transition-all duration-250 ease-out ${
+                      isWebsiteInformationSystem
+                        ? 'bg-blue-50 text-blue-800'
+                        : 'text-slate-600 hover:bg-white hover:text-slate-800'
+                    }`
+                  }
+                >
+                  <span className={`absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-blue-600 transition-all duration-250 ${isWebsiteInformationSystem ? 'opacity-100' : 'opacity-0'}`} />
+                  <img
+                    src="/images/lnu_logo.png"
+                    alt="WIPUR Logo"
+                    className="h-6 w-6 object-contain"
+                  />
+                  <div className="text-left">
+                    <div className="text-sm font-semibold leading-tight">Website Information Posting/Update Request</div>
+                    <div className="text-[10px] leading-tight text-inherit opacity-85">WIPUR Management Portal</div>
                   </div>
                 </NavLink>
 

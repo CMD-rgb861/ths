@@ -11,7 +11,17 @@ class Department extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name'];
+    public $timestamps = false;
+
+    protected $fillable = [
+        'name',
+        'shorten',
+        'parent_office_id',
+        'icon',
+        'updated_by',
+        'created_at',
+        'update_at',
+    ];
 
     public function users()
     {

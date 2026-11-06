@@ -22,6 +22,9 @@ use App\Http\Controllers\GeneralJobOrderControllers\Users\NewRequestController;
 use App\Http\Controllers\GeneralJobOrderControllers\Users\DashboardController;
 use App\Http\Controllers\GeneralJobOrderControllers\Users\HistoryController;
 use App\Http\Controllers\GeneralJobOrderControllers\Users\RequestQueueController;
+use App\Http\Controllers\WebsiteInformation\Users\WIPURDashboardController;
+use App\Http\Controllers\WebsiteInformation\Users\WIPURHistoryController;
+use App\Http\Controllers\WebsiteInformation\Users\WIPURNewRequestController;
 use App\Models\JobOrder;
 
 
@@ -201,4 +204,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // New Request routes
     Route::post('/gjor/job-orders', [NewRequestController::class, 'store']);
+
+    // ============================================
+    // WEBSITE INFORMATION — USER
+    // ============================================
+    Route::get('/website-information/my-requests', [WIPURDashboardController::class, 'index']);
+    Route::get('/website-information/history', [WIPURHistoryController::class, 'index']);
+    Route::post('/website-information/requests', [WIPURNewRequestController::class, 'store']);
+    Route::patch('/website-information/requests/{wipurRequest}/cancel', [WIPURDashboardController::class, 'cancel']);
+    Route::get('/website-information/requests/{wipurRequest}', [WIPURDashboardController::class, 'show']);
 });

@@ -4,11 +4,32 @@ import StatusBadge from '../ui/StatusBadge';
 import StatusIndicator from '../ui/StatusIndicator';
 import PendingConfirmationModal from '../modals/PendingConfirmationModal';
 
-export default function PendingConfirmation({ isJobNew }) {
+export default function PendingConfirmation({ isJobNew, showNotification }) {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  let currentUser = null;
+  try {
+    const userRaw = localStorage.getItem('user');
+    currentUser = userRaw ? JSON.parse(userRaw) : null;
+  } catch (e) {
+    currentUser = null;
+  }
+
+  function isRole(user, roleName) {
+    if (!user) return false;
+    if (Array.isArray(user.roles)) {
+      return user.roles.some(r => (typeof r === 'string' ? r : r.name) === roleName);
+    }
+    if (typeof user.role === 'string') return user.role === roleName;
+    if (typeof user.role === 'object' && user.role?.name) return user.role.name === roleName;
+    return false;
+  }
+
+  const isAdmin = isRole(currentUser, 'admin');
+  const isTechnician = isRole(currentUser, 'technician');
 
   const openModal = (jobId) => {
     setSelectedJobId(jobId);
@@ -143,6 +164,9 @@ export default function PendingConfirmation({ isJobNew }) {
         isOpen={isModalOpen}
         onClose={closeModal}
         jobId={selectedJobId}
+        isAdmin={isAdmin}
+        isTechnician={isTechnician}
+        showNotification={showNotification}
       />
     </>
   );

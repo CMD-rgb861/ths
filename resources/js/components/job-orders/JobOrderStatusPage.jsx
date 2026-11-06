@@ -2,6 +2,7 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import JobOrderModal from '../modals/JobOrderModal';
+import PendingConfirmationModal from '../modals/PendingConfirmationModal';
 import JobOrderOngoingModal from '../modals/JobOrderOngoingModal';
 import StatusIndicator from '../ui/StatusIndicator';
 import StatusBadge from '../ui/StatusBadge';
@@ -137,12 +138,47 @@ export default function JobOrderStatusPage({ showNotification }) {
     }
   }, [status, statusOptions]);
 
+  const isWaitingForConfirmation = (job) => {
+    if (!job) return false;
+
+    const jobStatus = String(job?.action_report?.status ?? job?.status ?? job?.request_status?.name ?? '').trim().toLowerCase();
+    const subStatusValues = [
+      job?.sub_status,
+      job?.action_report?.sub_status,
+      job?.request_status?.sub_status,
+    ].filter(Boolean).map(value => String(value).trim().toLowerCase().replace(/\s+/g, ' '));
+
+    const isWaitingBySubStatus = subStatusValues.some(value =>
+      value === 'waiting for confirmation' || value === 'waiting for your confirmation'
+    );
+
+    const hasReportContent = !!(
+      job?.action_report?.diagnosis ||
+      job?.action_report?.action_taken ||
+      job?.action_report?.serviced_by ||
+      job?.action_report?.date_started ||
+      job?.action_report?.date_finished ||
+      job?.action_report?.remarks ||
+      job?.action_report?.serial_number ||
+      job?.action_report?.software_name
+    );
+
+    const isConfirmed = !!(
+      job?.action_report?.confirmed_at ||
+      job?.action_report?.confirmed ||
+      job?.action_report?.conformed
+    );
+
+    return jobStatus === 'ongoing' && (isWaitingBySubStatus || (hasReportContent && !isConfirmed));
+  };
+
   // Handle view button click
   const handleView = (job) => {
     const jobStatus = job.action_report?.status || 'Pending';
 
-    if (jobStatus === 'Pending') {
+    if (jobStatus === 'Pending' || isWaitingForConfirmation(job)) {
       setSelectedJob(job);
+      setSelectedJobId(job.id);
       setShowPendingModal(true);
     } else {
       setSelectedJobId(job.id);
@@ -497,17 +533,34 @@ export default function JobOrderStatusPage({ showNotification }) {
 
       {/* Pending Modal */}
       {showPendingModal && selectedJob && (
-        <JobOrderModal
-          isOpen={showPendingModal}
-          job={selectedJob}
-          onClose={() => {
-            loadOrders();
-            setShowPendingModal(false);
-            setSelectedJobId(null);
-          }}
-          onStatusChange={loadOrders}
-          showNotification={showNotification}
-        />
+        isWaitingForConfirmation(selectedJob) ? (
+          <PendingConfirmationModal
+            isOpen={showPendingModal}
+            onClose={() => {
+              loadOrders();
+              setShowPendingModal(false);
+              setSelectedJob(null);
+              setSelectedJobId(null);
+            }}
+            jobId={selectedJob.id}
+            isAdmin={isAdmin}
+            isTechnician={isTechnician}
+            showNotification={showNotification}
+          />
+        ) : (
+          <JobOrderModal
+            isOpen={showPendingModal}
+            job={selectedJob}
+            onClose={() => {
+              loadOrders();
+              setShowPendingModal(false);
+              setSelectedJob(null);
+              setSelectedJobId(null);
+            }}
+            onStatusChange={loadOrders}
+            showNotification={showNotification}
+          />
+        )
       )}
     </div>
   );

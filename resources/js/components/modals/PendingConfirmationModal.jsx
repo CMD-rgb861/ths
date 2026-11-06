@@ -22,10 +22,31 @@ export default function JobOrderOngoingModal({
   onStatusChange,
   showNotification,
   isAdmin,
+  isTechnician,
   isEditable = true
 }) {
+  const currentUser = (() => {
+    try {
+      const userRaw = localStorage.getItem('user');
+      return userRaw ? JSON.parse(userRaw) : null;
+    } catch (error) {
+      return null;
+    }
+  })();
+
+  const userRoles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : currentUser?.role
+      ? [currentUser.role]
+      : [];
+  const isTechnicianUser = typeof isTechnician === 'boolean'
+    ? isTechnician
+    : userRoles.some((role) => (typeof role === 'string' ? role : role?.name) === 'technician');
+  const canManageActionReport = Boolean(isAdmin) || isTechnicianUser;
+
   const [job, setJob] = useState(null);
   const [activeTab, setActiveTab] = useState(TABS[0]);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [form, setForm] = useState({
     diagnosis: '',
@@ -97,11 +118,69 @@ export default function JobOrderOngoingModal({
     '—';
 
   const deniedAt = job?.action_report?.cancelled_at || job?.action_report?.updated_at;
-  const isConfirmed = !!job?.action_report?.confirmed_at;
+  const isConfirmed = !!(job?.action_report?.confirmed_at || job?.action_report?.confirmed || job?.action_report?.conformed);
+  const isOngoing = job?.action_report?.status === 'Ongoing' || job?.status === 'Ongoing' || job?.request_status?.name === 'Ongoing';
+  const canEdit = canManageActionReport && isOngoing && !isConfirmed && !isCompleted && !isCancelled && !isDeniedByAdminOrTech && isEditable;
 
   // Read only if cancelled/denied or admin/tech restrictions apply
-  const readOnly = isCancelledByUser || isCancelledByAdminOrTech || isDeniedByAdminOrTech || !isAdmin || !isEditable || isCompleted;
+  const readOnly = isCancelledByUser || isCancelledByAdminOrTech || isDeniedByAdminOrTech || !canManageActionReport || !isEditable || isCompleted;
 
+  const notify = (type, title, message) => {
+    if (showNotification) {
+      showNotification(type, title, message);
+      return;
+    }
+
+    if (type === 'error') {
+      console.error(title, message);
+    }
+  };
+
+  const handleFieldChange = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!job?.id) return;
+
+    if (!form.diagnosis?.trim()) {
+      notify('error', 'Validation Failed', 'Diagnosis is required before saving.');
+      return;
+    }
+
+    if (!form.action_taken?.trim()) {
+      notify('error', 'Validation Failed', 'Action Taken is required before saving.');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...form,
+        conformed: false,
+        serial_number: hardwareFields.serial_number,
+        brand_name: hardwareFields.brand_name,
+        brand_model: hardwareFields.brand_model,
+        software_name: softwareName,
+      };
+
+      await axios.put(`/job-orders/${job.id}/action-report`, payload);
+
+      const response = await axios.get(`/job-orders/${job.id}`);
+      setJob(response.data);
+      setIsEditing(false);
+
+      notify('success', 'Action Report Updated', 'The action report was updated successfully.');
+
+      if (onStatusChange) {
+        onStatusChange(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to update action report:', error);
+      const errorMessage = error?.response?.data?.message || 'Something went wrong while updating the action report.';
+      notify('error', 'Update Failed', errorMessage);
+    }
+  };
 
   // Date formatting utilities
   const formatDisplayDate = (dateString) => {
@@ -184,6 +263,7 @@ export default function JobOrderOngoingModal({
   // Reload job data when modal opens
   useEffect(() => {
     if (isOpen) {
+      setIsEditing(false);
       loadJob();
     }
   }, [isOpen, jobId, loadJob]);
@@ -381,6 +461,18 @@ export default function JobOrderOngoingModal({
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
                     {getJobOrderStatusName()}
                   </span>
+                  {canEdit && !isEditing && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Edit
+                    </button>
+                  )}
                   {/* Show Completed Report button */}
                   {isCompleted && (
                     <button
@@ -474,37 +566,57 @@ export default function JobOrderOngoingModal({
                         {/* Show the rest of the Action Report fields only if a technician is selected */}
                         <>
                             <Field title="Diagnosis">
-                              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
-                                {form.diagnosis || '—'}
-                              </div>
+                              {isEditing ? (
+                                <textarea
+                                  name="diagnosis"
+                                  value={form.diagnosis}
+                                  onChange={handleFieldChange}
+                                  rows={4}
+                                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                />
+                              ) : (
+                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                                  {form.diagnosis || '—'}
+                                </div>
+                              )}
                             </Field>
 
                             {/* Action Taken field first */}
                             <Field title="Action Taken">
-                              <div className="flex items-center gap-2">
-                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
-                                  {form.action_taken || '—'}
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  name="action_taken"
+                                  value={form.action_taken}
+                                  onChange={handleFieldChange}
+                                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                />
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                                    {form.action_taken || '—'}
+                                  </div>
+                                  {/* Show Unserviceable Report button if Unserviceable and Completed */}
+                                  {job?.action_report?.action_taken === "Unserviceable" &&
+                                    (job?.request_status?.name === "Completed" ||
+                                      job?.status === "Completed") && (
+                                    <button
+                                      onClick={() =>
+                                        window.open(
+                                          `/api/job-orders/${jobId}/unserviceable/pdf`,
+                                          "_blank"
+                                        )
+                                      }
+                                      className="inline-flex items-center px-4 py-2 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all ml-2"
+                                    >
+                                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                      </svg>
+                                      View Unserviceable Report
+                                    </button>
+                                  )}
                                 </div>
-                                {/* Show Unserviceable Report button if Unserviceable and Completed */}
-                                {job?.action_report?.action_taken === "Unserviceable" &&
-                                  (job?.request_status?.name === "Completed" ||
-                                    job?.status === "Completed") && (
-                                  <button
-                                    onClick={() =>
-                                      window.open(
-                                        `/api/job-orders/${jobId}/unserviceable/pdf`,
-                                        "_blank"
-                                      )
-                                    }
-                                    className="inline-flex items-center px-4 py-2 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all ml-2"
-                                  >
-                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    View Unserviceable Report
-                                  </button>
-                                )}
-                              </div>
+                              )}
                             </Field>
 
                             {/* Hardware extra fields - moved after Action Taken */}
@@ -514,27 +626,54 @@ export default function JobOrderOngoingModal({
                                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                                     Serial Number
                                   </label>
-                                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
-                                    {hardwareFields.serial_number || '—'}
-                                  </div>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={hardwareFields.serial_number}
+                                      onChange={(e) => setHardwareFields((prev) => ({ ...prev, serial_number: e.target.value }))}
+                                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    />
+                                  ) : (
+                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
+                                      {hardwareFields.serial_number || '—'}
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div>
                                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                                     Brand Name
                                   </label>
-                                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
-                                    {hardwareFields.brand_name || '—'}
-                                  </div>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={hardwareFields.brand_name}
+                                      onChange={(e) => setHardwareFields((prev) => ({ ...prev, brand_name: e.target.value }))}
+                                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    />
+                                  ) : (
+                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
+                                      {hardwareFields.brand_name || '—'}
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div>
                                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                                     Brand Model
                                   </label>
-                                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
-                                    {hardwareFields.brand_model || '—'}
-                                  </div>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={hardwareFields.brand_model}
+                                      onChange={(e) => setHardwareFields((prev) => ({ ...prev, brand_model: e.target.value }))}
+                                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    />
+                                  ) : (
+                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
+                                      {hardwareFields.brand_model || '—'}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -546,23 +685,47 @@ export default function JobOrderOngoingModal({
                                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                                     Software Name
                                   </label>
-                                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
-                                    {softwareName || '—'}
-                                  </div>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={softwareName}
+                                      onChange={(e) => setSoftwareName(e.target.value)}
+                                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    />
+                                  ) : (
+                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm text-gray-900">
+                                      {softwareName || '—'}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}
 
                             {/* Show remarks if present */}
-                            {form.remarks && (
+                            {isEditing ? (
                               <div className="mt-2">
                                 <label className="block text-sm font-semibold text-gray-700 mb-1">
                                   Remarks
                                 </label>
-                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
-                                  {form.remarks}
-                                </div>
+                                <textarea
+                                  name="remarks"
+                                  value={form.remarks}
+                                  onChange={handleFieldChange}
+                                  rows={3}
+                                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                />
                               </div>
+                            ) : (
+                              form.remarks && (
+                                <div className="mt-2">
+                                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                    Remarks
+                                  </label>
+                                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-900">
+                                    {form.remarks}
+                                  </div>
+                                </div>
+                              )
                             )}
                         </>
                       </div>
@@ -625,6 +788,26 @@ export default function JobOrderOngoingModal({
         {/* Footer Actions */}
         <div className="bg-gray-50 border-t border-gray-200 px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              {canEdit && isEditing && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSaveEdit}
+                    className="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
+                  >
+                    Save Changes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-6 py-2.5 bg-gray-200 text-gray-800 rounded-lg text-sm font-medium hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
             <button
               type="button"
               onClick={handleClose}

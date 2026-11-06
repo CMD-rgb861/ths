@@ -663,6 +663,7 @@ export default function JobOrderList({
             <PendingConfirmation
               openModal={openModal}
               isJobNew={isJobNew}
+              showNotification={showNotification}
             />
           ) : (
             <UserPendingConfirmation
