@@ -25,17 +25,20 @@ class WIPURDashboardController extends Controller
                 'attachments',
             ])
             ->where('user_id', $user->id)
-            ->whereHas('status', function ($q) {
-                $q->whereNotIn('name', ['Completed', 'Cancelled', 'Unserviceable']);
-            })
             ->orderByDesc('created_at');
 
         if ($request->filled('status')) {
-            $statusName = trim((string) $request->input('status'));
-            $status = RequestStatus::where('name', $statusName)->first();
+            $statusValue = trim((string) $request->input('status'));
+            $statusName = strtolower($statusValue);
 
-            if ($status) {
-                $query->where('status_id', $status->id);
+            if ($statusName === 'pending') {
+                $query->where('status_id', function ($q) {
+                    $q->select('id')->from('request_statuses')->where('name', 'Pending');
+                });
+            } elseif ($statusName === 'ongoing') {
+                $query->where('status_id', function ($q) {
+                    $q->select('id')->from('request_statuses')->whereIn('name', ['Ongoing', 'In Progress']);
+                });
             }
         }
 
@@ -52,14 +55,15 @@ class WIPURDashboardController extends Controller
         $paginated = $query->paginate($perPage);
 
         $rows = collect($paginated->items())->map(function (WipurRequest $requestItem) {
-            $statusName = $requestItem->status?->name ?? 'Unknown';
+            $statusLabel = $requestItem->status?->name ?? 'Pending';
+            $currentWorkflowStatus = $requestItem->currentWorkflowStatus();
 
             return [
                 'id' => $requestItem->id,
                 'control_number' => $requestItem->control_number,
                 'department' => $requestItem->department?->name,
-                'status' => $statusName,
-                'sub_status' => $requestItem->sub_status,
+                'status' => $statusLabel,
+                'sub_status' => $currentWorkflowStatus,
                 'date_requested' => $requestItem->date_requested?->format('Y-m-d'),
                 'date_requested_human' => $requestItem->date_requested?->format('M d, Y'),
                 'is_cancelled' => (bool) $requestItem->is_cancelled,
@@ -105,7 +109,7 @@ class WIPURDashboardController extends Controller
                 'request_desc' => $wipurRequest->request_desc,
                 'department' => $wipurRequest->department?->name,
                 'status' => $wipurRequest->status?->name,
-                'sub_status' => $wipurRequest->sub_status,
+                'sub_status' => $wipurRequest->currentWorkflowStatus(),
                 'approved_by' => $wipurRequest->approved_by,
                 'processed_by' => $wipurRequest->processed_by,
                 'acknowledged_by' => $wipurRequest->acknowledged_by,
@@ -122,17 +126,19 @@ class WIPURDashboardController extends Controller
 
     private function countsForUser(int $userId): array
     {
-        $statuses = RequestStatus::pluck('name', 'id');
+        $completedStatusId = RequestStatus::where('name', 'Completed')->value('id');
+        $cancelledStatusId = RequestStatus::where('name', 'Cancelled')->value('id');
 
         $base = WipurRequest::where('user_id', $userId)
-            ->whereHas('status', function ($q) {
-                $q->whereNotIn('name', ['Completed', 'Cancelled', 'Unserviceable']);
+            ->where(function ($query) use ($completedStatusId, $cancelledStatusId) {
+                $query->whereNull('status_id')
+                    ->orWhereNotIn('status_id', array_filter([$completedStatusId, $cancelledStatusId]));
             });
 
         return [
             'all' => (clone $base)->count(),
-            'Pending' => (clone $base)->where('status_id', $statuses->search('Pending'))->count(),
-            'Ongoing' => (clone $base)->where('status_id', $statuses->search('Ongoing'))->count(),
+            'Pending' => (clone $base)->where('status_id', RequestStatus::where('name', 'Pending')->value('id'))->count(),
+            'Ongoing' => (clone $base)->where('status_id', RequestStatus::where('name', 'Ongoing')->value('id'))->count(),
         ];
     }
 

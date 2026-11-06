@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RequestStatus;
 use App\Models\WipurAttachment;
 use App\Models\WipurRequest;
+use App\Models\WipurStep;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -59,6 +60,10 @@ class WIPURNewRequestController extends Controller
 
         try {
             $record = DB::transaction(function () use ($request, $user, $departmentId, $requestDesc, $pendingStatus) {
+                $subStatus = $user->isWipurSupervisor()
+                    ? 'waiting_for_admin_approval'
+                    : 'waiting_for_supervisor_approval';
+
                 $wipurRequest = WipurRequest::create([
                     'control_number' => WipurRequest::generateControlNumber(),
                     'user_id' => $user->id,
@@ -66,12 +71,22 @@ class WIPURNewRequestController extends Controller
                     'requested_by' => $user->name,
                     'request_desc' => $requestDesc,
                     'status_id' => $pendingStatus->id,
-                    'sub_status' => null,
                     'is_cancelled' => false,
                     'is_conformed' => false,
                     'notified' => false,
                     'date_requested' => now(),
                     'signature' => $request->input('signature') ?: null,
+                ]);
+
+                $supervisor = $this->resolveSupervisorForDepartment($departmentId);
+
+                WipurStep::create([
+                    'wipur_request_id' => $wipurRequest->id,
+                    'step' => 'supervisor',
+                    'step_order' => 1,
+                    'status' => 'waiting_for_supervisor_approval',
+                    'assigned_to_user_id' => $supervisor?->id,
+                    'remarks' => $requestDesc,
                 ]);
 
                 foreach ($request->file('attachments', []) as $file) {
@@ -113,5 +128,22 @@ class WIPURNewRequestController extends Controller
             'control_number' => $record->control_number,
             'data' => $record,
         ], 201);
+    }
+
+    private function resolveSupervisorForDepartment(int $departmentId): ?\App\Models\User
+    {
+        $role = \App\Models\Role::where(function ($query) {
+            $query->whereRaw('LOWER(REPLACE(REPLACE(name, "-", "_"), " ", "_")) = ?', ['wipur_supervisor'])
+                ->orWhereRaw('LOWER(REPLACE(REPLACE(name, "-", "_"), " ", "_")) = ?', ['supervisor']);
+        })->first();
+
+        if (! $role) {
+            return null;
+        }
+
+        return \App\Models\WipurRoleUser::query()
+            ->where('role_id', $role->id)
+            ->where('department_id', $departmentId)
+            ->first()?->user;
     }
 }

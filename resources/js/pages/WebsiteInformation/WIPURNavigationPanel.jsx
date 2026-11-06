@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { usePage } from '@inertiajs/react';
 
@@ -7,14 +8,17 @@ import ConfirmModal from '../../components/modals/ConfirmModal';
 
 const navLinkClass = ({ isActive }) =>
   isActive
-    ? 'px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white shadow-sm transition-all duration-200'
-    : 'px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200';
+    ? 'relative px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white shadow-sm transition-all duration-200'
+    : 'relative px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200';
 
 export default function GJORNavigationPanel({ role: roleProp }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { auth } = usePage().props;
   const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
+  const [supervisorPendingCount, setSupervisorPendingCount] = useState(0);
+  const [newSupervisorPendingCount, setNewSupervisorPendingCount] = useState(0);
+  const previousSupervisorPendingRef = useRef(null);
 
   const user = useMemo(() => {
     if (auth?.user) return auth.user;
@@ -54,6 +58,55 @@ export default function GJORNavigationPanel({ role: roleProp }) {
   ].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`));
   const isWebsiteInformationSystem = location.pathname.startsWith('/requests/website-information');
   const isGjorSystem = location.pathname.startsWith('/requests/general-service');
+  const isWipurSupervisor = Boolean(auth?.user?.is_wipur_supervisor ?? user?.is_wipur_supervisor ?? false);
+  const displayRoleLabel = isWebsiteInformationSystem && isWipurSupervisor
+    ? 'User-Supervisor'
+    : roles.join(', ') || user?.role || 'Staff';
+
+  useEffect(() => {
+    if (!isWipurSupervisor) {
+      setSupervisorPendingCount(0);
+      setNewSupervisorPendingCount(0);
+      previousSupervisorPendingRef.current = null;
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchSupervisorPending = async () => {
+      try {
+        const { data } = await axios.get('/api/website-information/supervisor/pending', {
+          params: { per_page: 1 },
+        });
+
+        if (!isMounted) return;
+
+        const nextTotal = Number(data?.meta?.total ?? 0);
+
+        if (previousSupervisorPendingRef.current === null) {
+          previousSupervisorPendingRef.current = nextTotal;
+          setSupervisorPendingCount(nextTotal);
+          setNewSupervisorPendingCount(0);
+          return;
+        }
+
+        const delta = nextTotal - previousSupervisorPendingRef.current;
+        previousSupervisorPendingRef.current = nextTotal;
+        setSupervisorPendingCount(nextTotal);
+        setNewSupervisorPendingCount(delta > 0 ? delta : 0);
+      } catch (error) {
+        console.error('Error fetching supervisor review count:', error);
+      }
+    };
+
+    fetchSupervisorPending();
+    const intervalId = setInterval(fetchSupervisorPending, 13000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [isWipurSupervisor]);
 
   const items = [
     {
@@ -86,6 +139,16 @@ export default function GJORNavigationPanel({ role: roleProp }) {
         </svg>
       ),
     },
+    ...(isWipurSupervisor ? [{
+      label: 'Supervisor Review',
+      to: '/requests/website-information/supervisor',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    }] : []),
   ];
 
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
@@ -195,7 +258,7 @@ export default function GJORNavigationPanel({ role: roleProp }) {
                       {user?.name || 'User'}
                     </p>
                     <p className="text-xs text-gray-500 leading-tight capitalize">
-                      {roles.join(', ') || user?.role || 'Staff'}
+                      {displayRoleLabel}
                     </p>
                   </div>
                 </div>
@@ -238,14 +301,30 @@ export default function GJORNavigationPanel({ role: roleProp }) {
           {/* Nav row — only the page tabs now */}
           <div className="border-t border-gray-200">
             <nav className="flex space-x-1 py-2 overflow-x-auto">
-              {items.map(({ label, icon, to }) => (
-                <NavLink key={label} to={to} end className={navLinkClass}>
-                  <span className="flex items-center space-x-2">
-                    {icon}
-                    <span>{label}</span>
-                  </span>
-                </NavLink>
-              ))}
+              {items.map(({ label, icon, to }) => {
+                const showSupervisorBadge = label === 'Supervisor Review' && isWipurSupervisor && supervisorPendingCount > 0;
+                const badgeText = showSupervisorBadge
+                  ? (newSupervisorPendingCount > 0 ? `+${newSupervisorPendingCount}` : String(supervisorPendingCount))
+                  : null;
+
+                return (
+                  <NavLink key={label} to={to} end className={navLinkClass}>
+                    <span className="flex items-center space-x-2">
+                      {icon}
+                      <span>{label}</span>
+                    </span>
+
+                    {badgeText && (
+                      <span
+                        className="absolute -top-2 -right-2 inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-xs font-bold leading-none text-white shadow-sm"
+                        aria-label={`${badgeText} pending supervisor review requests`}
+                      >
+                        {badgeText}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
             </nav>
           </div>
         </div>

@@ -64,7 +64,7 @@ class WIPURHistoryController extends Controller
                 'request_desc' => $requestItem->request_desc,
                 'department' => $requestItem->department?->name,
                 'status' => $requestItem->status?->name ?? 'Unknown',
-                'sub_status' => $requestItem->sub_status,
+                'sub_status' => $requestItem->currentWorkflowStatus(),
                 'created_at' => optional($requestItem->created_at)->toIso8601String(),
                 'created_at_human' => optional($requestItem->created_at)->format('M d, Y'),
                 'attachments' => $requestItem->attachments,

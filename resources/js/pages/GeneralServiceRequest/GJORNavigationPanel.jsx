@@ -54,6 +54,10 @@ export default function GJORNavigationPanel({ role: roleProp }) {
   ].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`));
   const isWebsiteInformationSystem = location.pathname.startsWith('/requests/website-information');
   const isGjorSystem = location.pathname.startsWith('/requests/general-service');
+  const isWipurSupervisor = Boolean(auth?.user?.is_wipur_supervisor ?? user?.is_wipur_supervisor ?? false);
+  const displayRoleLabel = isWebsiteInformationSystem && isWipurSupervisor
+    ? 'User-Supervisor'
+    : roles.join(', ') || user?.role || 'Staff';
 
   const items = [
     {
@@ -197,7 +201,7 @@ export default function GJORNavigationPanel({ role: roleProp }) {
                       {user?.name || 'User'}
                     </p>
                     <p className="text-xs text-gray-500 leading-tight capitalize">
-                      {roles.join(', ') || user?.role || 'Staff'}
+                      {displayRoleLabel}
                     </p>
                   </div>
                 </div>

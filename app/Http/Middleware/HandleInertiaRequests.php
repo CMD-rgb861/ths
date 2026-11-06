@@ -33,10 +33,15 @@ class HandleInertiaRequests extends Middleware
         $user = $request->user();
         $canLoadRoles = Schema::hasTable('roles') && Schema::hasTable('role_user');
 
+        if ($user) {
+            $user->setAttribute('is_wipur_supervisor', $user->isWipurSupervisor());
+            $user->loadMissing('roles', 'departments', 'wipurRoles.role');
+        }
+
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $user && $canLoadRoles ? $user->loadMissing('roles', 'departments') : $user,
+                'user' => $user && $canLoadRoles ? $user : $user,
             ],
             'flash' => [
                 'api_token' => fn () => $request->session()->get('api_token')

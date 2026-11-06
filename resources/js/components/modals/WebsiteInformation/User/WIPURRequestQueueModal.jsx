@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { FaList } from 'react-icons/fa';
-
+//IT HAS NOT BEEN EDITED YET, BUT IT IS A NEW FILE.
 export default function RequestQueueModal({ isOpen, onClose }) {
   const [entries, setEntries] = useState([]);
   const [totalInQueue, setTotalInQueue] = useState(0);

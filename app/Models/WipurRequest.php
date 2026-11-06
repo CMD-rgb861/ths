@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class WipurRequest extends Model
 {
@@ -20,7 +21,6 @@ class WipurRequest extends Model
         'requested_by',
         'request_desc',
         'status_id',
-        'sub_status',
         'is_cancelled',
         'cancelled_by',
         'is_conformed',
@@ -64,6 +64,36 @@ class WipurRequest extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(WipurAttachment::class, 'wipur_request_id');
+    }
+
+    public function steps(): HasMany
+    {
+        return $this->hasMany(WipurStep::class, 'wipur_request_id');
+    }
+
+    public function latestStep(): HasOne
+    {
+        return $this->hasOne(WipurStep::class, 'wipur_request_id')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
+    }
+
+    public function currentWorkflowStatus(): ?string
+    {
+        return $this->latestStep?->status;
+    }
+
+    public function latestRemarks(): ?string
+    {
+        $remarks = $this->latestStep?->remarks;
+
+        if (is_string($remarks) && trim($remarks) !== '') {
+            return trim($remarks);
+        }
+
+        return is_string($this->request_desc) && trim($this->request_desc) !== ''
+            ? trim($this->request_desc)
+            : null;
     }
 
     public static function generateControlNumber(): string

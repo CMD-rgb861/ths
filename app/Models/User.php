@@ -86,9 +86,51 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class);
     }
 
+    public function wipurRoles()
+    {
+        return $this->hasMany(WipurRoleUser::class, 'user_id');
+    }
+
     public function hasRole($roleName)
     {
         return $this->roles->contains('name', $roleName);
+    }
+
+    public function isWipurSupervisor(): bool
+    {
+        $normalized = ['wipur_supervisor', 'wipur-supervisor', 'wipur supervisor', 'supervisor'];
+
+        return $this->wipurRoles()
+            ->whereHas('role', function ($query) use ($normalized) {
+                $query->where(function ($innerQuery) use ($normalized) {
+                    foreach ($normalized as $value) {
+                        $normalizedValue = strtolower(str_replace('-', '_', $value));
+                        $innerQuery->orWhereRaw('LOWER(REPLACE(REPLACE(name, "-", "_"), " ", "_")) = ?', [$normalizedValue]);
+                    }
+                });
+            })
+            ->exists();
+    }
+
+    public function wipurSupervisorForDepartment(?int $departmentId = null): bool
+    {
+        if ($departmentId === null) {
+            return $this->isWipurSupervisor();
+        }
+
+        $normalized = ['wipur_supervisor', 'wipur-supervisor', 'wipur supervisor', 'supervisor'];
+
+        return $this->wipurRoles()
+            ->where('department_id', $departmentId)
+            ->whereHas('role', function ($query) use ($normalized) {
+                $query->where(function ($innerQuery) use ($normalized) {
+                    foreach ($normalized as $value) {
+                        $normalizedValue = strtolower(str_replace('-', '_', $value));
+                        $innerQuery->orWhereRaw('LOWER(REPLACE(REPLACE(name, "-", "_"), " ", "_")) = ?', [$normalizedValue]);
+                    }
+                });
+            })
+            ->exists();
     }
 }
 

@@ -25,6 +25,9 @@ use App\Http\Controllers\GeneralJobOrderControllers\Users\RequestQueueController
 use App\Http\Controllers\WebsiteInformation\Users\WIPURDashboardController;
 use App\Http\Controllers\WebsiteInformation\Users\WIPURHistoryController;
 use App\Http\Controllers\WebsiteInformation\Users\WIPURNewRequestController;
+use App\Http\Controllers\WebsiteInformation\Supervisor\WIPURSupervisorController;
+use App\Http\Controllers\WebsiteInformation\Supervisor\WIPURApprovalController;
+use App\Http\Controllers\WebsiteInformation\Supervisor\WIPURReturnController;
 use App\Models\JobOrder;
 
 
@@ -46,6 +49,7 @@ Route::middleware('auth')->get('/auth/status', function (Request $request) {
             'name' => $user->name,
             'email' => $user->email,
             'roles' => $user->roles->pluck('name')->toArray(),
+            'is_wipur_supervisor' => $user->isWipurSupervisor(),
         ] : null,
     ]);
 });
@@ -213,4 +217,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/website-information/requests', [WIPURNewRequestController::class, 'store']);
     Route::patch('/website-information/requests/{wipurRequest}/cancel', [WIPURDashboardController::class, 'cancel']);
     Route::get('/website-information/requests/{wipurRequest}', [WIPURDashboardController::class, 'show']);
+
+    // ============================================
+    // WEBSITE INFORMATION — SUPERVISOR
+    // ============================================
+    Route::middleware('wipur.supervisor')->group(function () {
+        // Queue & Log
+        Route::get('/website-information/supervisor', [\App\Http\Controllers\WebsiteInformation\Supervisor\WIPURSupervisorController::class, 'index']);
+        Route::get('/website-information/supervisor/pending', [\App\Http\Controllers\WebsiteInformation\Supervisor\WIPURSupervisorController::class, 'pending']);
+        Route::get('/website-information/supervisor/returned', [WIPURSupervisorController::class, 'returned']);
+        Route::get('/website-information/supervisor/audit', [\App\Http\Controllers\WebsiteInformation\Supervisor\WIPURSupervisorController::class, 'audit']);
+        Route::get('/website-information/supervisor/requests/{wipurRequest}', [WIPURSupervisorController::class, 'show']);
+
+        // Actions
+        Route::post('/website-information/supervisor/requests/{wipurRequest}/approve', [\App\Http\Controllers\WebsiteInformation\Supervisor\WIPURApprovalController::class, 'store']);
+        Route::post('/website-information/supervisor/requests/{wipurRequest}/return', [\App\Http\Controllers\WebsiteInformation\Supervisor\WIPURReturnController::class, 'store']);
+    });
 });
