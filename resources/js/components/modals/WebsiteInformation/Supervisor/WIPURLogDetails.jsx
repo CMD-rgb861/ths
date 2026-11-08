@@ -17,9 +17,7 @@ export default function WIPURLogDetails({ isOpen, onClose, entry }) {
       try {
         setLoading(true);
         setError(null);
-        // We use the existing user endpoint to fetch the full request data
-        // Assuming this endpoint exists and returns attachments, description, etc.
-        const res = await axios.get(`/api/website-information/requests/${entry.request_id}`);
+        const res = await axios.get(`/api/website-information/supervisor/requests/${entry.request_id}`);
         if (!cancelled) {
           setDetails(res.data?.data || res.data || entry);
         }
@@ -153,7 +151,7 @@ export default function WIPURLogDetails({ isOpen, onClose, entry }) {
                 <div className="space-y-4">
                   <div>
                     <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Request Description</h4>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{data?.remarks || data?.request_desc || '—'}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{entry?.request_desc || data?.remarks || data?.request_desc || '—'}</p>
                   </div>
                 </div>
 

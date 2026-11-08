@@ -71,6 +71,11 @@ class WipurRequest extends Model
         return $this->hasMany(WipurStep::class, 'wipur_request_id');
     }
 
+    public function events(): HasMany
+    {
+        return $this->hasMany(WipurRequestEvent::class, 'wipur_request_id');
+    }
+
     public function latestStep(): HasOne
     {
         return $this->hasOne(WipurStep::class, 'wipur_request_id')

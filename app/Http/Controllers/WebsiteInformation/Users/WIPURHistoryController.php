@@ -20,10 +20,16 @@ class WIPURHistoryController extends Controller
                 'status',
                 'department:id,name,shorten',
                 'attachments',
+                'latestStep',
             ])
             ->where('user_id', $user->id)
-            ->whereHas('status', function ($q) {
-                $q->whereIn('name', ['Completed', 'Cancelled', 'Unserviceable']);
+            ->where(function ($query) {
+                $query->whereHas('status', function ($statusQuery) {
+                    $statusQuery->whereIn('name', ['Completed', 'Cancelled', 'Unserviceable']);
+                })->orWhereHas('steps', function ($stepQuery) {
+                    $stepQuery->where('step', 'supervisor')
+                        ->where('is_declined', true);
+                });
             })
             ->orderByDesc('updated_at');
 
@@ -38,10 +44,16 @@ class WIPURHistoryController extends Controller
 
         if ($request->filled('status')) {
             $statusName = trim((string) $request->input('status'));
-            $status = RequestStatus::where('name', $statusName)->first();
-
-            if ($status) {
-                $query->where('status_id', $status->id);
+            if ($statusName === 'Declined') {
+                $query->whereHas('steps', function ($stepQuery) {
+                    $stepQuery->where('step', 'supervisor')
+                        ->where('is_declined', true);
+                });
+            } else {
+                $status = RequestStatus::where('name', $statusName)->first();
+                if ($status) {
+                    $query->where('status_id', $status->id);
+                }
             }
         }
 
@@ -57,14 +69,19 @@ class WIPURHistoryController extends Controller
         $paginated = $query->paginate($perPage);
 
         $rows = collect($paginated->items())->map(function (WipurRequest $requestItem) {
+            $latestStep = $requestItem->latestStep;
+            $isDeclined = $latestStep?->step === 'supervisor' && $latestStep->is_declined;
+
             return [
                 'id' => $requestItem->id,
                 'control_number' => $requestItem->control_number,
                 'requested_by' => $requestItem->requested_by,
                 'request_desc' => $requestItem->request_desc,
                 'department' => $requestItem->department?->name,
-                'status' => $requestItem->status?->name ?? 'Unknown',
-                'sub_status' => $requestItem->currentWorkflowStatus(),
+                'status' => $isDeclined ? 'Declined' : ($requestItem->status?->name ?? 'Unknown'),
+                'sub_status' => $isDeclined ? null : $requestItem->currentWorkflowStatus(),
+                'return_reason' => $latestStep?->status === 'returned' ? $latestStep->remarks : null,
+                'decline_reason' => $isDeclined ? $latestStep->decline_reason : null,
                 'created_at' => optional($requestItem->created_at)->toIso8601String(),
                 'created_at_human' => optional($requestItem->created_at)->format('M d, Y'),
                 'attachments' => $requestItem->attachments,
@@ -79,7 +96,10 @@ class WIPURHistoryController extends Controller
                 'per_page' => $paginated->perPage(),
                 'total' => $paginated->total(),
             ],
-            'status_options' => RequestStatus::whereIn('name', ['Completed', 'Cancelled', 'Unserviceable'])->get(['id', 'name']),
+            'status_options' => RequestStatus::whereIn('name', ['Completed', 'Cancelled', 'Unserviceable'])
+                ->get(['id', 'name'])
+                ->push(['id' => 'declined', 'name' => 'Declined'])
+                ->values(),
         ]);
     }
 }

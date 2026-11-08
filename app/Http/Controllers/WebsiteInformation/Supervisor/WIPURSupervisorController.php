@@ -4,6 +4,7 @@ namespace App\Http\Controllers\WebsiteInformation\Supervisor;
 
 use App\Http\Controllers\Controller;
 use App\Models\WipurRequest;
+use App\Models\WipurRequestEvent;
 use App\Models\WipurStep;
 use App\Models\WipurRoleUser;
 use Illuminate\Http\JsonResponse;
@@ -106,27 +107,35 @@ class WIPURSupervisorController extends Controller
         $user = $this->authorizeSupervisor();
         $departmentIds = $this->getAllowedDepartmentIds($user);
 
-        $query = WipurStep::query()
-            ->with(['request.department', 'request.user'])
+        $query = WipurRequestEvent::query()
+            ->with(['request.department', 'request.user', 'actor'])
+            ->whereIn('event_type', [
+                'supervisor_approved',
+                'supervisor_returned',
+                'supervisor_declined',
+            ])
+            ->where('actor_user_id', $user->id)
             ->whereHas('request', function ($q) use ($departmentIds) {
                 $q->whereIn('department_id', $departmentIds);
             })
-            ->where('step', 'supervisor')
-            ->whereIn('status', ['approved', 'declined', 'returned'])
-            ->where(function ($q) use ($user) {
-                $q->where('assigned_to_user_id', $user->id)
-                  ->orWhere('approved_by', $user->id)
-                  ->orWhere('declined_by', $user->id);
-            })
-            ->orderByDesc('updated_at');
+            ->orderByDesc('created_at');
 
-        $this->applySearchFilter($query, $request);
+        if ($request->filled('search')) {
+            $search = '%' . trim((string) $request->input('search')) . '%';
+            $query->whereHas('request', function ($requestQuery) use ($search) {
+                $requestQuery->where('control_number', 'like', $search)
+                    ->orWhere('requested_by', 'like', $search)
+                    ->orWhere('request_desc', 'like', $search);
+            });
+        }
 
         $perPage = min(max((int) $request->input('per_page', 10), 1), 50);
         $paginated = $query->paginate($perPage);
 
         return response()->json([
-            'data' => $paginated->items() ? collect($paginated->items())->map(fn ($step) => $this->serializeAuditEntry($step, $user))->values() : [],
+            'data' => $paginated->items()
+                ? collect($paginated->items())->map(fn ($event) => $this->serializeAuditEvent($event))->values()
+                : [],
             'meta' => $this->buildPaginationMeta($paginated),
         ]);
     }
@@ -214,6 +223,30 @@ class WIPURSupervisorController extends Controller
         ];
     }
 
+    private function serializeAuditEvent(WipurRequestEvent $event): array
+    {
+        $request = $event->request;
+
+        return [
+            'id' => $request ? $this->formatRequestId($request) : '—',
+            'request_id' => $request?->id,
+            'requester' => $request?->requested_by ?? $request?->user?->name ?? 'Unknown requester',
+            'department' => $request?->department?->name ?? 'Unassigned',
+            'decision' => match ($event->event_type) {
+                'supervisor_approved' => 'Approved',
+                'supervisor_returned' => 'Returned',
+                'supervisor_declined' => 'Declined',
+                default => 'Updated',
+            },
+            'decidedBy' => $event->actor?->name ?? 'Unknown supervisor',
+            'date' => $event->created_at?->format('Y-m-d'),
+            'dateLabel' => $event->created_at?->format('M j, Y'),
+            'remarks' => $event->remarks ?: 'No remarks provided.',
+            'request_desc' => $event->request_desc,
+            'metadata' => $event->metadata,
+        ];
+    }
+
     // =========================================================================
     // AUTHORIZATION & SECURITY
     // =========================================================================
@@ -221,10 +254,8 @@ class WIPURSupervisorController extends Controller
     private function authorizeSupervisor()
     {
         $user = request()->user();
-        $isSupervisor = $user->isWipurSupervisor() ?? WipurRoleUser::where('user_id', $user->id)->exists();
-        
-        abort_unless($user && $isSupervisor, 403, 'Forbidden: WIPUR supervisor access only.');
-        
+        abort_unless($user && $user->isWipurSupervisor(), 403, 'Forbidden: WIPUR supervisor access only.');
+
         return $user;
     }
 

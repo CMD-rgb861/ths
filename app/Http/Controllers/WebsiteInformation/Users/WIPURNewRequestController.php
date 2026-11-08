@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RequestStatus;
 use App\Models\WipurAttachment;
 use App\Models\WipurRequest;
+use App\Models\WipurRequestEvent;
 use App\Models\WipurStep;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -89,6 +90,7 @@ class WIPURNewRequestController extends Controller
                     'remarks' => $requestDesc,
                 ]);
 
+                $attachmentNames = [];
                 foreach ($request->file('attachments', []) as $file) {
                     $original = $file->getClientOriginalName();
                     $extension = $file->getClientOriginalExtension() ?: $file->extension() ?: 'bin';
@@ -108,7 +110,18 @@ class WIPURNewRequestController extends Controller
                         'file_path' => $path,
                         'type' => $file->getClientMimeType(),
                     ]);
+                    $attachmentNames[] = $original;
                 }
+
+                WipurRequestEvent::record([
+                    'wipur_request_id' => $wipurRequest->id,
+                    'actor_user_id' => $user->id,
+                    'event_type' => 'submitted',
+                    'to_status' => 'waiting_for_supervisor_approval',
+                    'request_desc' => $requestDesc,
+                    'remarks' => 'Request submitted for supervisor review.',
+                    'metadata' => ['attachments' => $attachmentNames],
+                ]);
 
                 return $wipurRequest;
             });

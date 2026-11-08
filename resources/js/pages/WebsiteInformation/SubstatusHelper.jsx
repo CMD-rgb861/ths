@@ -33,7 +33,7 @@ export default function SubstatusHelper({ status, subStatus, workflowStatus }) {
     'waiting for admin': 'Pending',
     returned: 'Pending',
     approved: 'Ongoing',
-    declined: 'Cancelled',
+    declined: 'Declined',
   }[mainStatusKey] || String(mainStatusValue);
 
   const subStatusKey = normalizeSubStatus(subStatus || workflowStatus);

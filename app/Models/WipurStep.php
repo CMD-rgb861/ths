@@ -17,6 +17,7 @@ class WipurStep extends Model
         'step',
         'step_order',
         'status',
+        'is_declined',
         'assigned_to_user_id',
         'approved_by',
         'approved_at',
@@ -29,6 +30,7 @@ class WipurStep extends Model
 
     protected $casts = [
         'step_order' => 'integer',
+        'is_declined' => 'boolean',
         'approved_at' => 'datetime',
         'declined_at' => 'datetime',
         'notified_at' => 'datetime',

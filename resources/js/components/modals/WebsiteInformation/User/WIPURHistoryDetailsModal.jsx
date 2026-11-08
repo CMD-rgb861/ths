@@ -133,6 +133,17 @@ export default function HistoryDetailsModal({ isOpen, onClose, job }) {
                   </div>
                 </div>
 
+                {data?.status === 'Declined' && data?.decline_reason && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-rose-800">
+                      Supervisor decline reason
+                    </h4>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-rose-900">
+                      {data.decline_reason}
+                    </p>
+                  </div>
+                )}
+
                 {/* Request Information */}
                 <div className="space-y-4">
                   <div>

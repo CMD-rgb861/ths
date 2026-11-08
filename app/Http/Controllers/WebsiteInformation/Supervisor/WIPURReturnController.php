@@ -4,10 +4,12 @@ namespace App\Http\Controllers\WebsiteInformation\Supervisor;
 
 use App\Http\Controllers\Controller;
 use App\Models\WipurRequest;
+use App\Models\WipurRequestEvent;
 use App\Models\WipurStep;
 use App\Models\WipurRoleUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WIPURReturnController extends Controller
 {
@@ -18,10 +20,11 @@ class WIPURReturnController extends Controller
     public function store(Request $request, WipurRequest $wipurRequest): JsonResponse
     {
         $user = $request->user();
+        abort_unless($user, 401, 'Unauthenticated.');
         
         // 1. Ensure the user is an authorized WIPUR supervisor
-        $isSupervisor = $user->isWipurSupervisor() ?? WipurRoleUser::where('user_id', $user->id)->exists();
-        abort_unless($user && $isSupervisor, 403, 'Forbidden: WIPUR supervisor access only.');
+        $isSupervisor = $user->isWipurSupervisor();
+        abort_unless($isSupervisor, 403, 'Forbidden: WIPUR supervisor access only.');
 
         // 2. Ensure the request belongs to a department this supervisor manages
         $departmentIds = WipurRoleUser::query()
@@ -46,28 +49,57 @@ class WIPURReturnController extends Controller
             ], 422);
         }
 
-        // 4. Update the Supervisor Step (Mark as Returned)
-        WipurStep::updateOrCreate(
-            ['wipur_request_id' => $wipurRequest->id, 'step' => 'supervisor'],
-            [
+        $updatedRequest = DB::transaction(function () use ($wipurRequest, $departmentIds, $user, $remarks) {
+            $lockedRequest = WipurRequest::query()
+                ->whereKey($wipurRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            abort_unless(
+                $departmentIds->contains($lockedRequest->department_id),
+                403,
+                'Forbidden: This request is not assigned to your department.'
+            );
+
+            $step = $lockedRequest->steps()
+                ->where('step', 'supervisor')
+                ->lockForUpdate()
+                ->first();
+            abort_unless(
+                $step && in_array($step->status, ['waiting_for_approval', 'waiting_for_supervisor_approval'], true),
+                422,
+                'Only requests awaiting supervisor review can be returned.'
+            );
+
+            $fromStatus = $step->status;
+            $step->update([
                 'step_order' => 1, 
                 'assigned_to_user_id' => $user->id, 
                 'remarks' => $remarks,
-                'status' => 'returned', // 👈 The status becomes returned
-                'declined_by' => $user->id,
-                'declined_at' => now(),
-                'decline_reason' => $remarks,
+                'status' => 'returned',
+                'is_declined' => false,
+                'declined_by' => null,
+                'declined_at' => null,
+                'decline_reason' => null,
                 'approved_by' => null,
                 'approved_at' => null,
-            ]
-        );
+            ]);
 
-        // Note: We do NOT create an admin step here.
-        // The request goes back to the user, and the status remains 'Pending' overall.
+            WipurRequestEvent::record([
+                'wipur_request_id' => $lockedRequest->id,
+                'actor_user_id' => $user->id,
+                'event_type' => 'supervisor_returned',
+                'from_status' => $fromStatus,
+                'to_status' => 'returned',
+                'request_desc' => $lockedRequest->request_desc,
+                'remarks' => $remarks,
+            ]);
+
+            return $lockedRequest;
+        });
 
         return response()->json([
             'message' => 'Request returned for revision successfully.',
-            'data' => $wipurRequest->load('steps'),
+            'data' => $updatedRequest->fresh()->load('steps'),
         ]);
     }
 }

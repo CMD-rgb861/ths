@@ -4,9 +4,11 @@ namespace App\Http\Controllers\WebsiteInformation\Users;
 
 use App\Http\Controllers\Controller;
 use App\Models\RequestStatus;
+use App\Models\WipurRequestEvent;
 use App\Models\WipurRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WIPURDashboardController extends Controller
 {
@@ -23,8 +25,13 @@ class WIPURDashboardController extends Controller
                 'status',
                 'department:id,name,shorten',
                 'attachments',
+                'latestStep',
             ])
             ->where('user_id', $user->id)
+            ->whereDoesntHave('steps', function ($stepQuery) {
+                $stepQuery->where('step', 'supervisor')
+                    ->where('is_declined', true);
+            })
             ->orderByDesc('created_at');
 
         if ($request->filled('status')) {
@@ -99,7 +106,12 @@ class WIPURDashboardController extends Controller
             'status',
             'department:id,name',
             'attachments',
+            'latestStep',
+            'events.actor',
         ]);
+
+        $latestStep = $wipurRequest->latestStep;
+        $isDeclined = $latestStep?->step === 'supervisor' && $latestStep->is_declined;
 
         return response()->json([
             'data' => [
@@ -108,8 +120,11 @@ class WIPURDashboardController extends Controller
                 'requested_by' => $wipurRequest->requested_by,
                 'request_desc' => $wipurRequest->request_desc,
                 'department' => $wipurRequest->department?->name,
-                'status' => $wipurRequest->status?->name,
+                'status' => $isDeclined ? 'Declined' : $wipurRequest->status?->name,
                 'sub_status' => $wipurRequest->currentWorkflowStatus(),
+                'is_declined' => (bool) $isDeclined,
+                'return_reason' => $latestStep?->status === 'returned' ? $latestStep->remarks : null,
+                'decline_reason' => $isDeclined ? $latestStep->decline_reason : null,
                 'approved_by' => $wipurRequest->approved_by,
                 'processed_by' => $wipurRequest->processed_by,
                 'acknowledged_by' => $wipurRequest->acknowledged_by,
@@ -119,6 +134,19 @@ class WIPURDashboardController extends Controller
                     'file_path' => $attachment->file_path,
                     'type' => $attachment->type,
                 ])->values(),
+                'events' => $wipurRequest->events
+                    ->sortBy('created_at')
+                    ->values()
+                    ->map(fn ($event) => [
+                        'event_type' => $event->event_type,
+                        'from_status' => $event->from_status,
+                        'to_status' => $event->to_status,
+                        'request_desc' => $event->request_desc,
+                        'remarks' => $event->remarks,
+                        'metadata' => $event->metadata,
+                        'actor' => $event->actor?->name,
+                        'created_at' => $event->created_at?->toIso8601String(),
+                    ]),
                 'created_at_human' => optional($wipurRequest->created_at)->format('M d, Y'),
             ],
         ]);
@@ -126,13 +154,20 @@ class WIPURDashboardController extends Controller
 
     private function countsForUser(int $userId): array
     {
-        $completedStatusId = RequestStatus::where('name', 'Completed')->value('id');
-        $cancelledStatusId = RequestStatus::where('name', 'Cancelled')->value('id');
+        $terminalStatusIds = RequestStatus::whereIn('name', [
+            'Completed',
+            'Cancelled',
+            'Unserviceable',
+        ])->pluck('id')->all();
 
         $base = WipurRequest::where('user_id', $userId)
-            ->where(function ($query) use ($completedStatusId, $cancelledStatusId) {
+            ->where(function ($query) use ($terminalStatusIds) {
                 $query->whereNull('status_id')
-                    ->orWhereNotIn('status_id', array_filter([$completedStatusId, $cancelledStatusId]));
+                    ->orWhereNotIn('status_id', $terminalStatusIds);
+            })
+            ->whereDoesntHave('steps', function ($stepQuery) {
+                $stepQuery->where('step', 'supervisor')
+                    ->where('is_declined', true);
             });
 
         return [
@@ -151,25 +186,50 @@ class WIPURDashboardController extends Controller
             abort(403, 'Forbidden.');
         }
 
-        if ($wipurRequest->is_cancelled) {
-            return response()->json(['message' => 'Request is already cancelled.'], 400);
-        }
-
         $cancelledStatus = RequestStatus::where('name', 'Cancelled')->first();
 
         if (! $cancelledStatus) {
             return response()->json(['message' => 'Cancelled status not configured.'], 500);
         }
 
-        $wipurRequest->update([
-            'status_id' => $cancelledStatus->id,
-            'is_cancelled' => true,
-            'cancelled_by' => $user->name,
-        ]);
+        $updatedRequest = DB::transaction(function () use ($wipurRequest, $cancelledStatus, $user) {
+            $lockedRequest = WipurRequest::query()
+                ->whereKey($wipurRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedRequest->is_cancelled) {
+                abort(400, 'Request is already cancelled.');
+            }
+
+            $isDeclined = $lockedRequest->steps()
+                ->where('step', 'supervisor')
+                ->where('is_declined', true)
+                ->exists();
+            abort_if($isDeclined, 422, 'Declined requests cannot be cancelled.');
+
+            WipurRequestEvent::record([
+                'wipur_request_id' => $lockedRequest->id,
+                'actor_user_id' => $user->id,
+                'event_type' => 'cancelled',
+                'from_status' => $lockedRequest->currentWorkflowStatus(),
+                'to_status' => 'cancelled',
+                'request_desc' => $lockedRequest->request_desc,
+                'remarks' => 'Request cancelled by the requester.',
+            ]);
+
+            $lockedRequest->update([
+                'status_id' => $cancelledStatus->id,
+                'is_cancelled' => true,
+                'cancelled_by' => $user->name,
+            ]);
+
+            return $lockedRequest;
+        });
 
         return response()->json([
             'message' => 'Request cancelled successfully.',
-            'data' => $wipurRequest,
+            'data' => $updatedRequest->fresh(),
         ]);
     }
 }

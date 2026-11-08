@@ -4,26 +4,22 @@ namespace App\Http\Controllers\WebsiteInformation\Supervisor;
 
 use App\Http\Controllers\Controller;
 use App\Models\WipurRequest;
-use App\Models\WipurStep;
+use App\Models\WipurRequestEvent;
 use App\Models\WipurRoleUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WIPURDeclineController extends Controller
 {
-    /**
-     * Handle the supervisor declining a request.
-     * The reason is required and saved to decline_reason, while remarks are optional side notes.
-     */
     public function store(Request $request, WipurRequest $wipurRequest): JsonResponse
     {
         $user = $request->user();
-        
-        // 1. Ensure the user is an authorized WIPUR supervisor
-        $isSupervisor = $user->isWipurSupervisor() ?? WipurRoleUser::where('user_id', $user->id)->exists();
-        abort_unless($user && $isSupervisor, 403, 'Forbidden: WIPUR supervisor access only.');
+        abort_unless($user, 401, 'Unauthenticated.');
 
-        // 2. Ensure the request belongs to a department this supervisor manages
+        $isSupervisor = $user->isWipurSupervisor();
+        abort_unless($isSupervisor, 403, 'Forbidden: WIPUR supervisor access only.');
+
         $departmentIds = WipurRoleUser::query()
             ->where('user_id', $user->id)
             ->whereNotNull('department_id')
@@ -32,44 +28,80 @@ class WIPURDeclineController extends Controller
             ->unique()
             ->values();
 
-        if (! $departmentIds->contains($wipurRequest->department_id)) {
-            abort(403, 'Forbidden: This request is not assigned to your department.');
-        }
+        abort_unless(
+            $departmentIds->contains($wipurRequest->department_id),
+            403,
+            'Forbidden: This request is not assigned to your department.'
+        );
 
-        // 3. Validate the mandatory reason
         $reason = trim((string) $request->input('reason', ''));
         $remarks = trim((string) $request->input('remarks', ''));
-        
+
         if ($reason === '') {
             return response()->json([
                 'message' => 'A reason is required when declining a request.',
-                'errors' => ['reason' => ['You must provide a reason for declining this request.']]
+                'errors' => ['reason' => ['You must provide a reason for declining this request.']],
             ], 422);
         }
 
-        // 4. Update the Supervisor Step (Mark as Declined)
-        WipurStep::updateOrCreate(
-            ['wipur_request_id' => $wipurRequest->id, 'step' => 'supervisor'],
-            [
-                'step_order' => 1, 
-                'assigned_to_user_id' => $user->id, 
-                'status' => 'declined', // 👈 The status becomes declined
+        $updatedRequest = DB::transaction(function () use (
+            $wipurRequest,
+            $departmentIds,
+            $user,
+            $reason,
+            $remarks
+        ) {
+            $lockedRequest = WipurRequest::query()
+                ->whereKey($wipurRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            abort_unless(
+                $departmentIds->contains($lockedRequest->department_id),
+                403,
+                'Forbidden: This request is not assigned to your department.'
+            );
+
+            $step = $lockedRequest->steps()
+                ->where('step', 'supervisor')
+                ->lockForUpdate()
+                ->first();
+            abort_unless(
+                $step && in_array($step->status, ['waiting_for_approval', 'waiting_for_supervisor_approval'], true),
+                422,
+                'Only requests awaiting supervisor review can be declined.'
+            );
+            $fromStatus = $step->status;
+
+            $step->update([
+                'step_order' => 1,
+                'assigned_to_user_id' => $user->id,
+                'status' => 'declined',
+                'is_declined' => true,
                 'declined_by' => $user->id,
                 'declined_at' => now(),
-                'decline_reason' => $reason, // 👈 Saved in the dedicated column
-                'remarks' => $remarks ?: null, // 👈 Side notes in their own column
+                'decline_reason' => $reason,
+                'remarks' => $remarks ?: null,
                 'approved_by' => null,
                 'approved_at' => null,
-            ]
-        );
+            ]);
 
-        // Note: No Admin step is created here. The request is dead.
-        // If you have a logic to update the main status_id to Cancelled or Declined, add it here.
-        // e.g., $wipurRequest->status_id = $cancelledStatusId; $wipurRequest->save();
+            WipurRequestEvent::record([
+                'wipur_request_id' => $lockedRequest->id,
+                'actor_user_id' => $user->id,
+                'event_type' => 'supervisor_declined',
+                'from_status' => $fromStatus,
+                'to_status' => 'declined',
+                'request_desc' => $lockedRequest->request_desc,
+                'remarks' => $reason,
+                'metadata' => ['supervisor_remarks' => $remarks ?: null],
+            ]);
+
+            return $lockedRequest;
+        });
 
         return response()->json([
             'message' => 'Request declined successfully.',
-            'data' => $wipurRequest->load('steps'),
+            'data' => $updatedRequest->fresh()->load('steps'),
         ]);
     }
 }

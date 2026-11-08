@@ -4,6 +4,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import ConfirmModal from '../../ConfirmModal';
 import RequestCSMModal from './WIPURRequestCSMModal'; // ✅ Import the new Modal
+import WIPURResubmitModal from './WIPURResubmitModal';
 
 export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancelled }) {
   const [details, setDetails] = useState(null);
@@ -14,6 +15,7 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
   
   // ✅ New state for CSM Modal
   const [isCsmOpen, setIsCsmOpen] = useState(false);
+  const [isResubmitOpen, setIsResubmitOpen] = useState(false);
 
   // ✅ State for the Image Lightbox
   const [lightboxIndex, setLightboxIndex] = useState(null);
@@ -78,6 +80,7 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
 
   // ✅ Conditional Logic for the Footer Buttons
   const isWaitingForConfirmation = data?.status === 'Ongoing' && data?.sub_status === 'Waiting for Confirmation';
+  const isReturned = data?.sub_status === 'returned';
   const canCancel = !isWaitingForConfirmation && data?.status !== 'Completed' && data?.status !== 'Cancelled' && data?.status !== 'Unserviceable';
 
   const isImageAttachment = (file) => {
@@ -170,9 +173,29 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
                   </div>
                 </div>
 
+                {isReturned && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                      Returned for revision
+                    </h4>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-amber-900">
+                      {data?.return_reason || 'The supervisor returned this request for revision.'}
+                    </p>
+                  </div>
+                )}
+
                 {/* Request Information */}
                 <div className="space-y-4">
                   <div>
+                    {isReturned && !loading && (
+                      <button
+                        onClick={() => setIsResubmitOpen(true)}
+                        className="mr-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700"
+                      >
+                        Revise and Resubmit
+                      </button>
+                    )}
+
                     <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Website  Page to be Posted/Updated</h4>
                     <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{data?.request_desc || data?.purpose || '—'}</p>
                   </div>
@@ -346,6 +369,17 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
         isOpen={isCsmOpen}
         onClose={() => setIsCsmOpen(false)}
         onSubmit={handleCsmSubmit}
+      />
+
+      <WIPURResubmitModal
+        isOpen={isResubmitOpen}
+        request={data}
+        onClose={() => setIsResubmitOpen(false)}
+        onResubmitted={() => {
+          setIsResubmitOpen(false);
+          onCancelled?.();
+          onClose();
+        }}
       />
     </>
   );

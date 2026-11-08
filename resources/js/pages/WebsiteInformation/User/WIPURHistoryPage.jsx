@@ -34,7 +34,7 @@ export default function HistoryPage() {
         const historyStatuses = allStatuses.filter(s => 
           ['Completed', 'Cancelled', 'Unserviceable'].includes(s.name)
         );
-        setStatusOptions(historyStatuses);
+        setStatusOptions([...historyStatuses, { id: 'declined', name: 'Declined' }]);
       })
       .catch(console.error);
 
@@ -106,7 +106,7 @@ export default function HistoryPage() {
           {/* Header Card */}
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
             <h1 className="text-2xl font-bold text-gray-900">Website Information Request History</h1>
-            <p className="text-gray-600 mt-1">Completed, Cancelled, and Unserviceable requests</p>
+            <p className="text-gray-600 mt-1">Completed, Cancelled, Declined, and Unserviceable requests</p>
           </div>
 
           {/* Filter and Search Card */}

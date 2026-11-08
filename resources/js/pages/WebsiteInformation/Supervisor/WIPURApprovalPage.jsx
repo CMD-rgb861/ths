@@ -306,6 +306,8 @@ export default function WIPURSupervisorReviewPage() {
     date: item.date ?? '',
     dateLabel: item.dateLabel ?? '',
     remarks: item.remarks ?? 'No remarks provided.',
+    request_desc: item.request_desc ?? '',
+    metadata: item.metadata ?? null,
   });
 
   const fetchPendingQueue = async () => {
