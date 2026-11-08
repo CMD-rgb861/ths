@@ -58,8 +58,8 @@ export default function HistoryPage() {
     return () => clearTimeout(delay);
   }, [search, status, requestFor, dateFrom, dateTo, page]);
 
-  const fetchHistory = async () => {
-    setLoading(true);
+  const fetchHistory = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const token = localStorage.getItem('token');
       const params = { page };
@@ -79,12 +79,22 @@ export default function HistoryPage() {
       setPagination(res.data?.meta || {});
     } catch (error) {
       console.error('Error fetching history:', error);
-      setOrders([]);
-      setPagination({});
+      if (!silent) {
+        setOrders([]);
+        setPagination({});
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (!document.hidden) fetchHistory(true);
+    }, 13000);
+
+    return () => clearInterval(intervalId);
+  }, [search, status, requestFor, dateFrom, dateTo, page]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">

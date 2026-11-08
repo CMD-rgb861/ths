@@ -78,7 +78,7 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
 
   // ✅ Conditional Logic for the Footer Buttons
   const isWaitingForConfirmation = data?.status === 'Ongoing' && data?.sub_status === 'Waiting for Confirmation';
-  const canCancel = !isWaitingForConfirmation && data?.status !== 'Completed' && data?.status !== 'Cancelled' && data?.status !== 'Unserviceable';
+  const canCancel = data?.status !== 'Ongoing' && data?.status !== 'Completed' && data?.status !== 'Cancelled' && data?.status !== 'Unserviceable';
 
   const isImageAttachment = (file) => {
     const mime = (file?.type || '').toLowerCase();
