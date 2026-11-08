@@ -8,6 +8,7 @@ export default function SubstatusHelper({ status, subStatus }) {
 
   // Determine the text for the sub-status
   const isWaiting = subStatus === 'Waiting for Confirmation';
+  const isConfirmed = status === 'Ongoing' && subStatus === 'Confirmed';
   
   // Main status color logic (mirrors your existing statusBadgeClass)
   let mainStatusClasses = 'text-gray-800 bg-gray-100';
@@ -22,6 +23,12 @@ export default function SubstatusHelper({ status, subStatus }) {
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${mainStatusClasses}`}>
         {status}
       </span>
+
+      {isConfirmed && (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium text-emerald-800 bg-emerald-50/80 ring-1 ring-emerald-200/50">
+          Confirmed
+        </span>
+      )}
 
       {/* Sub-status Pill (Only shows if waiting for confirmation) */}
       {isWaiting && (

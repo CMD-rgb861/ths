@@ -21,6 +21,7 @@ use App\Http\Controllers\SoftwareNameController;
 use App\Http\Controllers\GeneralJobOrderControllers\Users\NewRequestController;
 use App\Http\Controllers\GeneralJobOrderControllers\Users\DashboardController;
 use App\Http\Controllers\GeneralJobOrderControllers\Users\HistoryController;
+use App\Http\Controllers\GeneralJobOrderControllers\Users\CSMController;
 use App\Http\Controllers\GeneralJobOrderControllers\Users\RequestQueueController;
 use App\Http\Controllers\WebsiteInformation\Users\WIPURDashboardController;
 use App\Http\Controllers\WebsiteInformation\Users\WIPURHistoryController;
@@ -203,6 +204,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Static routes must stay before the wildcard route below
     Route::get('/gjor/job-orders/history', [HistoryController::class, 'index']);
     Route::get('/gjor/queue/window', [RequestQueueController::class, 'getUserWindow']);
+    Route::get('/gjor/job-orders/{jobOrder}/csm', [CSMController::class, 'show']);
+    Route::post('/gjor/job-orders/{jobOrder}/csm', [CSMController::class, 'store']);
     Route::patch('/gjor/job-orders/{jobOrder}/cancel', [DashboardController::class, 'cancel']);
     Route::get('/gjor/job-orders/{jobOrder}', [DashboardController::class, 'show']);
 

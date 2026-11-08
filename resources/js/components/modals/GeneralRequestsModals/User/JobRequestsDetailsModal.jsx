@@ -104,13 +104,17 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
     }
   };
 
-  // ✅ Handle CSM Submission (Backend integration to come later)
-  const handleCsmSubmit = (formData) => {
-    console.log('CSM Data to submit:', formData);
-    toast.success('Thank you for your feedback!');
-    setIsCsmOpen(false);
-    if (onCancelled) onCancelled(); // Refresh the list
-    onClose();
+  const handleCsmSubmit = async (formData) => {
+    try {
+      await axios.post(`/api/gjor/job-orders/${data.id}/csm`, formData);
+      toast.success('Thank you for your feedback. The request has been confirmed.');
+      setIsCsmOpen(false);
+      if (onCancelled) onCancelled();
+      onClose();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit your feedback.');
+      throw err;
+    }
   };
 
   return (
@@ -385,6 +389,7 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
         isOpen={isCsmOpen}
         onClose={() => setIsCsmOpen(false)}
         onSubmit={handleCsmSubmit}
+        jobOrderId={data?.id}
       />
     </>
   );

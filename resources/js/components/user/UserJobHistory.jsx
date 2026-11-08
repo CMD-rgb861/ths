@@ -37,8 +37,8 @@ export default function UserJobHistory({ showNotification }) {
     return () => clearTimeout(delay);
   }, [search, status, category, dateFrom, dateTo, page]);
 
-  const fetchHistory = async () => {
-    setLoading(true);
+  const fetchHistory = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       // Fix: Use correct parameter names for backend filtering
       const params = {
@@ -71,15 +71,25 @@ export default function UserJobHistory({ showNotification }) {
 
     } catch (error) {
       console.error('Error fetching job history:', error);
-      setOrders([]);
-      setPagination({});
-      if (showNotification) {
+      if (!silent) {
+        setOrders([]);
+        setPagination({});
+      }
+      if (!silent && showNotification) {
         showNotification('error', 'Error', 'Failed to load job history.');
       }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (!document.hidden) fetchHistory(true);
+    }, 13000);
+
+    return () => clearInterval(intervalId);
+  }, [search, status, category, dateFrom, dateTo, page]);
 
   // Helper to get status name by id
   const getStatusName = (statusId) => {

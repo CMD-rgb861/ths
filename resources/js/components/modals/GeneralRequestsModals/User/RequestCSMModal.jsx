@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 
 export default function RequestCSMModal({
   isOpen,
   onClose,
   onSubmit,
+  jobOrderId,
 }) {
   const defaultForm = {
     client_type: '',
@@ -31,6 +33,9 @@ export default function RequestCSMModal({
   const [currentSQD, setCurrentSQD] = useState(0);
   const [showFeedback, setShowFeedback] = useState(false);
   const [errors, setErrors] = useState({});
+  const [loadingRecord, setLoadingRecord] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   const sectionFields = {
     basic: [
@@ -61,14 +66,49 @@ export default function RequestCSMModal({
   };
 
   useEffect(() => {
-    if (isOpen) {
-      setForm(defaultForm);
-      setStep(0);
-      setCurrentSQD(0);
-      setShowFeedback(false);
-      setErrors({});
-    }
-  }, [isOpen]);
+    if (!isOpen || !jobOrderId) return undefined;
+
+    let cancelled = false;
+    setForm(defaultForm);
+    setStep(0);
+    setCurrentSQD(0);
+    setShowFeedback(false);
+    setErrors({});
+    setLoadError('');
+    setLoadingRecord(true);
+
+    const fetchCsm = async () => {
+      try {
+        const response = await axios.get(`/api/gjor/job-orders/${jobOrderId}/csm`);
+        const savedCsm = response.data?.data;
+
+        if (!cancelled && savedCsm) {
+          const savedForm = { ...defaultForm };
+          Object.keys(savedForm).forEach((field) => {
+            if (savedCsm[field] !== null && savedCsm[field] !== undefined) {
+              const value = savedCsm[field];
+              savedForm[field] = field === 'date_time_visited'
+                ? String(value).replace(' ', 'T').slice(0, 16)
+                : String(value);
+            }
+          });
+          setForm(savedForm);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(error.response?.data?.message || 'Failed to load saved feedback.');
+        }
+      } finally {
+        if (!cancelled) setLoadingRecord(false);
+      }
+    };
+
+    fetchCsm();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, jobOrderId, loadAttempt]);
 
   if (!isOpen) return null;
 
@@ -128,9 +168,13 @@ export default function RequestCSMModal({
     }
 
     setSaving(true);
-    // Pass the form data to the parent component
-    onSubmit?.(form);
-    setSaving(false);
+    try {
+      await onSubmit(form);
+    } catch {
+      // The parent displays the request error; keep the form open for retry.
+    } finally {
+      setSaving(false);
+    }
   };
 
   const goNext = () => {
@@ -180,6 +224,23 @@ export default function RequestCSMModal({
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl p-6 max-h-[90vh] overflow-y-auto">
+        {loadingRecord && (
+          <div className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-800" role="status">
+            Loading saved feedback...
+          </div>
+        )}
+        {loadError && (
+          <div className="mb-4 rounded-lg bg-rose-50 p-3 text-sm text-rose-800" role="alert">
+            <p>{loadError}</p>
+            <button
+              type="button"
+              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+              className="mt-2 font-semibold underline"
+            >
+              Retry loading
+            </button>
+          </div>
+        )}
         <div className="mb-6">
           <h3 className="text-2xl font-bold text-gray-900 mb-3">Client Satisfaction Measurement</h3>
 
@@ -661,7 +722,7 @@ export default function RequestCSMModal({
               type="button"
               onClick={onClose}
               className="px-6 py-2.5 border-2 border-gray-300 rounded-lg hover:bg-white hover:border-gray-400 transition font-medium"
-              disabled={saving}
+              disabled={saving || loadingRecord}
             >
               Cancel
             </button>
@@ -684,7 +745,7 @@ export default function RequestCSMModal({
                     goBack();
                   }}
                   className="px-6 py-2.5 border-2 border-gray-300 rounded-lg hover:bg-white hover:border-gray-400 transition font-medium"
-                  disabled={saving}
+                  disabled={saving || loadingRecord || Boolean(loadError)}
                 >
                   ← Previous
                 </button>
@@ -695,6 +756,7 @@ export default function RequestCSMModal({
                   type="button"
                   onClick={goNext}
                   className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-md"
+                  disabled={loadingRecord || Boolean(loadError)}
                 >
                   Next →
                 </button>
@@ -721,7 +783,7 @@ export default function RequestCSMModal({
                     }
                   }}
                   className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={saving}
+                  disabled={saving || loadingRecord || Boolean(loadError)}
                 >
                   {saving
                     ? 'Saving...'

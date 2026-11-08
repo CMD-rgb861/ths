@@ -25,6 +25,7 @@ class GjorJobOrder extends Model
         'location',
         'others_desc',
         'status_id',
+        'sub_status',
         'is_cancelled',
         'cancelled_by',
         'is_conformed',
@@ -64,6 +65,11 @@ class GjorJobOrder extends Model
     public function actionTaken(): HasOne
     {
         return $this->hasOne(GjorActionTaken::class, 'gjor_job_order_id');
+    }
+
+    public function csm(): HasOne
+    {
+        return $this->hasOne(GjorCsm::class, 'job_order_id');
     }
 
     public function attachments(): HasMany

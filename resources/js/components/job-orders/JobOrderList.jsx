@@ -174,8 +174,10 @@ export default function JobOrderList({
       });
     } catch (error) {
       console.error('Failed to fetch job orders:', error);
-      setJobs([]);
-      setMeta({});
+      if (!silent) {
+        setJobs([]);
+        setMeta({});
+      }
     } finally {
       if (!silent) setLoading(false);
     }
@@ -187,8 +189,6 @@ export default function JobOrderList({
 
   // 13s silent refresh
   useEffect(() => {
-    if (!isAdmin && !isTechnician) return;
-
     const intervalId = setInterval(() => {
       if (document.hidden) return;
       if (modalOpen || ongoingModalOpen) return;
@@ -196,7 +196,7 @@ export default function JobOrderList({
     }, 13000);
 
     return () => clearInterval(intervalId);
-  }, [isAdmin, isTechnician, fetchJobs, search, page, filter, statusFilter, modalOpen, ongoingModalOpen]);
+  }, [fetchJobs, search, page, filter, statusFilter, modalOpen, ongoingModalOpen]);
 
   useEffect(() => {
     return () => {
