@@ -41,7 +41,6 @@ import NewRequestPage from '../pages/GeneralServiceRequest/User/NewRequestPage';
 import WebsiteInformationUserDashboard from '../pages/WebsiteInformation/User/WIPURDashboardPage';
 import WebsiteInformationHistoryPage from '../pages/WebsiteInformation/User/WIPURHistoryPage';
 import WebsiteInformationNewRequestPage from '../pages/WebsiteInformation/User/WIPURNewRequestPage';
-import WIPURApprovalPage from '../pages/WebsiteInformation/Supervisor/WIPURApprovalPage';
 
 function isRole(user, roleName) {
   if (!user) return false;
@@ -118,8 +117,7 @@ export default function App() {
     '/users',
     '/signatories',
   ].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`));
-  const isGjorSystem = location.pathname.startsWith('/requests/general-service');
-  const isWebsiteInformationSystem = location.pathname.startsWith('/requests/website-information');
+  // Temporary: hide the non-ITSRMS tab entries while the WIPUR/GJOR modules are being kept out of the main portal UI.
 
   // ============================================================
   // Pending bell — polls for admins + technicians
@@ -303,14 +301,6 @@ export default function App() {
           </RequireAuth>
         }
       />
-      <Route
-        path="/requests/website-information/supervisor"
-        element={
-          <RequireAuth>
-            <WIPURApprovalPage />
-          </RequireAuth>
-        }
-      />
 
       <Route
         path="/*"
@@ -324,33 +314,22 @@ export default function App() {
                   <div className="px-6 sm:px-8 lg:px-12">
                     <div className="flex items-center justify-between h-16">
                       {isUserOnly ? (
-                        <div className="flex items-center rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 ease-out">
-                          <NavLink
-                            to="/job-orders"
-                            className={() =>
-                              `relative flex items-center gap-2 rounded-lg px-3 py-2 transition-all duration-250 ease-out ${
-                                isItsrmsSystem
-                                  ? 'bg-blue-50 text-blue-800'
-                                  : 'text-slate-600 hover:bg-white hover:text-slate-800'
-                              }`
-                            }
-                          >
-                            <span className={`absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-blue-600 transition-all duration-250 ${isItsrmsSystem ? 'opacity-100' : 'opacity-0'}`} />
-                            <img
-                              src="/images/cmt-logo.png"
-                              alt="CMT Logo"
-                              className="h-6 w-6 object-contain"
-                            />
-                            <div className="text-left">
-                              <div className="text-sm font-semibold leading-tight">
-                                IT Service Request & Maintenance System
-                              </div>
-                              <div className="text-[10px] leading-tight text-inherit opacity-85">
-                                IT Job Order Management Portal
-                              </div>
+                        <div className="flex items-center gap-2 text-slate-700">
+                          <img
+                            src="/images/cmt-logo.png"
+                            alt="CMT Logo"
+                            className="h-10 w-10 object-contain"
+                          />
+                          <div className="text-left leading-tight">
+                            <div className="text-lg font-semibold text-slate-800">
+                              IT Service Request & Maintenance System
                             </div>
-                          </NavLink>
+                            <div className="text-xs text-slate-500 opacity-85">
+                              IT Job Order Management Portal
+                            </div>
+                          </div>
 
+                          {/* Temporary: hide WIPUR/GJOR tabs from the main ITSRMS portal UI.
                           <NavLink
                             to="/requests/website-information/user"
                             className={() =>
@@ -402,6 +381,7 @@ export default function App() {
                               </div>
                             </div>
                           </NavLink>
+                          */}
                         </div>
                       ) : (
                         <div className="flex items-center space-x-4">
