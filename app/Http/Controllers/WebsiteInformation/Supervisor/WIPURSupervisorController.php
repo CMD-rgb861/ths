@@ -54,7 +54,7 @@ class WIPURSupervisorController extends Controller
             })
             ->orderByRaw('COALESCE(date_requested, created_at) ASC');
 
-        $this->applySearchFilter($query, $request);
+        $this->applyFilters($query, $request);
 
         $perPage = min(max((int) $request->input('per_page', 10), 1), 50);
         $paginated = $query->paginate($perPage);
@@ -91,7 +91,7 @@ class WIPURSupervisorController extends Controller
             })
             ->orderByDesc('updated_at');
 
-        $this->applySearchFilter($query, $request);
+        $this->applyFilters($query, $request);
 
         $perPage = min(max((int) $request->input('per_page', 10), 1), 50);
         $paginated = $query->paginate($perPage);
@@ -120,14 +120,7 @@ class WIPURSupervisorController extends Controller
             })
             ->orderByDesc('created_at');
 
-        if ($request->filled('search')) {
-            $search = '%' . trim((string) $request->input('search')) . '%';
-            $query->whereHas('request', function ($requestQuery) use ($search) {
-                $requestQuery->where('control_number', 'like', $search)
-                    ->orWhere('requested_by', 'like', $search)
-                    ->orWhere('request_desc', 'like', $search);
-            });
-        }
+        $this->applyFilters($query, $request);
 
         $perPage = min(max((int) $request->input('per_page', 10), 1), 50);
         $paginated = $query->paginate($perPage);
@@ -140,9 +133,6 @@ class WIPURSupervisorController extends Controller
         ]);
     }
 
-    /**
-     * Get the full details of a specific request for the supervisor's modal.
-     */
     public function show(Request $request, WipurRequest $wipurRequest): JsonResponse
     {
         $user = $this->authorizeSupervisor();
@@ -212,23 +202,6 @@ class WIPURSupervisorController extends Controller
         ];
     }
 
-    private function serializeAuditEntry(WipurStep $step, $user): array
-    {
-        $req = $step->request;
-
-        return [
-            'id' => $this->formatRequestId($req),
-            'request_id' => $req?->id,
-            'requester' => $req?->requested_by ?? $req?->user?->name ?? 'Unknown requester',
-            'department' => $req?->department?->name ?? 'Unassigned',
-            'decision' => ucfirst($step->status),
-            'decidedBy' => $user->name,
-            'date' => $step->updated_at?->format('Y-m-d'),
-            'dateLabel' => $step->updated_at?->format('M j, Y'),
-            'remarks' => $step->remarks ?: $step->decline_reason ?: 'No remarks provided.',
-        ];
-    }
-
     private function serializeAuditEvent(WipurRequestEvent $event): array
     {
         $request = $event->request;
@@ -284,13 +257,14 @@ class WIPURSupervisorController extends Controller
     // HELPERS
     // =========================================================================
 
-    private function applySearchFilter($query, Request $request): void
+    private function applyFilters($query, Request $request): void
     {
+        // General Search
         if ($request->filled('search')) {
             $search = '%' . trim((string) $request->input('search')) . '%';
             
             $query->where(function ($q) use ($search) {
-                if ($q->getModel() instanceof WipurStep) {
+                if ($q->getModel() instanceof WipurRequestEvent) {
                     $q->whereHas('request', function ($rq) use ($search) {
                         $rq->where('control_number', 'like', $search)
                            ->orWhere('requested_by', 'like', $search)
@@ -302,6 +276,35 @@ class WIPURSupervisorController extends Controller
                       ->orWhere('request_desc', 'like', $search);
                 }
             });
+        }
+
+        // Department Filter
+        if ($request->filled('department_id')) {
+            $deptId = $request->input('department_id');
+            if ($query->getModel() instanceof WipurRequestEvent) {
+                $query->whereHas('request', fn($q) => $q->where('department_id', $deptId));
+            } else {
+                $query->where('department_id', $deptId);
+            }
+        }
+
+        // Date Range Filters
+        if ($request->filled('start_date')) {
+            $startDate = $request->input('start_date') . ' 00:00:00';
+            if ($query->getModel() instanceof WipurRequestEvent) {
+                $query->where('created_at', '>=', $startDate);
+            } else {
+                $query->where('date_requested', '>=', $startDate);
+            }
+        }
+
+        if ($request->filled('end_date')) {
+            $endDate = $request->input('end_date') . ' 23:59:59';
+            if ($query->getModel() instanceof WipurRequestEvent) {
+                $query->where('created_at', '<=', $endDate);
+            } else {
+                $query->where('date_requested', '<=', $endDate);
+            }
         }
     }
 

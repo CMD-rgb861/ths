@@ -15,6 +15,7 @@ import {
   FaClock,
   FaFileAlt,
   FaTimes,
+  FaFilter,
 } from 'react-icons/fa';
 import WIPURNavigationPanel from '../WIPURNavigationPanel';
 import WIPURApproveModal from '../../../components/modals/WebsiteInformation/Supervisor/WIPURApproveModal';
@@ -30,10 +31,23 @@ const DECISION_TOKENS = {
   Declined: { badge: 'bg-rose-100 text-rose-700', border: 'border-l-rose-500', icon: FaTimesCircle, label: 'Declined' },
 };
 
-function SupervisorTitleCard({ supervisorName = 'Supervisor', pendingCount }) {
+function SupervisorTitleCard({ 
+  supervisorName = 'Supervisor', 
+  pendingCount,
+  departments,
+  filterDept,
+  setFilterDept,
+  filterStart,
+  setFilterStart,
+  filterEnd,
+  setFilterEnd,
+  onClearFilters
+}) {
+  const hasFilters = filterDept || filterStart || filterEnd;
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-700">Supervisor</p>
           <h1 className="mt-2 text-2xl font-bold text-gray-900">Supervisor Review Desk</h1>
@@ -48,6 +62,64 @@ function SupervisorTitleCard({ supervisorName = 'Supervisor', pendingCount }) {
               </>
             )}
           </p>
+        </div>
+
+        {/* 👇 Filters */}
+        <div className="flex flex-col sm:flex-row items-end gap-3 w-full lg:w-auto">
+          {/* Department Filter */}
+          <div>
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-500">
+              Department
+            </label>
+            <select
+              value={filterDept}
+              onChange={(e) => setFilterDept(e.target.value)}
+              className="w-full sm:w-40 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition"
+            >
+              <option value="">All Departments</option>
+              {departments.map((dept) => (
+                <option key={dept.id} value={dept.id}>{dept.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date From */}
+          <div>
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-500">
+              From
+            </label>
+            <input
+              type="date"
+              value={filterStart}
+              onChange={(e) => setFilterStart(e.target.value)}
+              className="w-full sm:w-36 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition"
+            />
+          </div>
+
+          {/* Date To */}
+          <div>
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-500">
+              To
+            </label>
+            <input
+              type="date"
+              value={filterEnd}
+              onChange={(e) => setFilterEnd(e.target.value)}
+              className="w-full sm:w-36 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition"
+            />
+          </div>
+
+          {/* Clear Filters Button */}
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={onClearFilters}
+              className="inline-flex h-[38px] items-center justify-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-4 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-100"
+            >
+              <FaTimes className="h-3 w-3" />
+              Clear
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -204,7 +276,6 @@ function RequestDetailPane({ request, onOpenDecisionModal, onOpenLightbox }) {
           <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700">{request.remarks}</p>
         </div>
         
-        {/* Updated Attachments Display */}
         {request.attachments?.length > 0 && (
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Attachments</h4>
@@ -215,7 +286,6 @@ function RequestDetailPane({ request, onOpenDecisionModal, onOpenLightbox }) {
                   <div
                     key={file.id}
                     onClick={() => {
-                      // 👇 FIX: Only use lightbox for images, otherwise open in new tab
                       if (image) {
                         onOpenLightbox(file, request.attachments);
                       } else {
@@ -320,6 +390,12 @@ export default function WIPURSupervisorReviewPage() {
   const [decisionModal, setDecisionModal] = useState({ type: null, request: null });
   const [selectedLogEntry, setSelectedLogEntry] = useState(null);
 
+  // Filter States
+  const [departments, setDepartments] = useState([]);
+  const [filterDept, setFilterDept] = useState('');
+  const [filterStart, setFilterStart] = useState('');
+  const [filterEnd, setFilterEnd] = useState('');
+
   // Lightbox State
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [lightboxImages, setLightboxImages] = useState([]);
@@ -343,7 +419,6 @@ export default function WIPURSupervisorReviewPage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [lightboxIndex, lightboxImages.length]);
-
 
   const mapPendingRequest = (item) => ({
     id: item.id,
@@ -376,10 +451,27 @@ export default function WIPURSupervisorReviewPage() {
     metadata: item.metadata ?? null,
   });
 
+  // Fetch Departments on mount
+  useEffect(() => {
+    axios.get('/api/departments')
+      .then(res => {
+        const data = res.data?.data ?? res.data ?? [];
+        setDepartments(data);
+      })
+      .catch(console.error);
+  }, []);
+
   const fetchPendingQueue = async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get('/api/website-information/supervisor/pending', { params: { page, search, per_page: PER_PAGE } });
+      const { data } = await axios.get('/api/website-information/supervisor/pending', { 
+        params: { 
+          page, search, per_page: PER_PAGE,
+          department_id: filterDept || undefined,
+          start_date: filterStart || undefined,
+          end_date: filterEnd || undefined,
+        } 
+      });
       const rows = (data?.data ?? []).map(mapPendingRequest);
       setPendingRequests(rows);
       setPagination(data?.meta ?? { current_page: 1, last_page: 1, total: rows.length, per_page: PER_PAGE });
@@ -395,7 +487,14 @@ export default function WIPURSupervisorReviewPage() {
 
   const fetchReturnedCount = async () => {
     try {
-      const { data } = await axios.get('/api/website-information/supervisor/returned', { params: { search, per_page: 1 } });
+      const { data } = await axios.get('/api/website-information/supervisor/returned', { 
+        params: { 
+          search, per_page: 1,
+          department_id: filterDept || undefined,
+          start_date: filterStart || undefined,
+          end_date: filterEnd || undefined,
+        } 
+      });
       setReturnedPagination(data?.meta ?? { current_page: 1, last_page: 1, total: 0, per_page: 1 });
     } catch (error) {
       console.error('Error fetching returned WIPUR count:', error);
@@ -405,7 +504,14 @@ export default function WIPURSupervisorReviewPage() {
   const fetchReturnedQueue = async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get('/api/website-information/supervisor/returned', { params: { page, search, per_page: PER_PAGE } });
+      const { data } = await axios.get('/api/website-information/supervisor/returned', { 
+        params: { 
+          page, search, per_page: PER_PAGE,
+          department_id: filterDept || undefined,
+          start_date: filterStart || undefined,
+          end_date: filterEnd || undefined,
+        } 
+      });
       const rows = (data?.data ?? []).map(mapPendingRequest);
       setReturnedRequests(rows);
       setReturnedPagination(data?.meta ?? { current_page: 1, last_page: 1, total: rows.length, per_page: PER_PAGE });
@@ -421,7 +527,14 @@ export default function WIPURSupervisorReviewPage() {
 
   const fetchDecisionLog = async () => {
     try {
-      const { data } = await axios.get('/api/website-information/supervisor/audit', { params: { search, per_page: 20 } });
+      const { data } = await axios.get('/api/website-information/supervisor/audit', { 
+        params: { 
+          search, per_page: 20,
+          department_id: filterDept || undefined,
+          start_date: filterStart || undefined,
+          end_date: filterEnd || undefined,
+        } 
+      });
       setDecisionLog((data?.data ?? []).map(mapAuditEntry));
     } catch (error) {
       console.error('Error fetching WIPUR audit log:', error);
@@ -432,12 +545,12 @@ export default function WIPURSupervisorReviewPage() {
   useEffect(() => {
     fetchPendingQueue();
     fetchReturnedCount();
-  }, [search]);
+  }, [search, filterDept, filterStart, filterEnd]);
 
   useEffect(() => {
     if (view === 'awaiting') fetchPendingQueue();
     else if (view === 'returned') fetchReturnedQueue();
-  }, [page, search, view]);
+  }, [page, search, view, filterDept, filterStart, filterEnd]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -446,9 +559,9 @@ export default function WIPURSupervisorReviewPage() {
       fetchReturnedCount();
     }, 13000);
     return () => clearInterval(intervalId);
-  }, [page, search, view]);
+  }, [page, search, view, filterDept, filterStart, filterEnd]);
 
-  useEffect(() => { fetchDecisionLog(); }, [search, view]);
+  useEffect(() => { fetchDecisionLog(); }, [search, view, filterDept, filterStart, filterEnd]);
 
   const filteredLog = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -459,7 +572,7 @@ export default function WIPURSupervisorReviewPage() {
     );
   }, [decisionLog, search]);
 
-  useEffect(() => { setPage(1); }, [search, view]);
+  useEffect(() => { setPage(1); }, [search, view, filterDept, filterStart, filterEnd]);
 
   const handleDecision = async (request, decisionType, payload = {}) => {
     if (!request?.request_id) return;
@@ -517,6 +630,12 @@ export default function WIPURSupervisorReviewPage() {
 
   const closeDecisionModal = () => setDecisionModal({ type: null, request: null });
 
+  const handleClearFilters = () => {
+    setFilterDept('');
+    setFilterStart('');
+    setFilterEnd('');
+  };
+
   const currentQueue = view === 'returned' ? returnedRequests : pendingRequests;
   const currentPagination = view === 'returned' ? returnedPagination : pagination;
   const currentLoading = loading;
@@ -527,7 +646,17 @@ export default function WIPURSupervisorReviewPage() {
       <main className="flex-1">
         <div className="px-6 sm:px-8 lg:px-12 py-8 space-y-6">
           
-          <SupervisorTitleCard pendingCount={pagination.total ?? pendingRequests.length} />
+          <SupervisorTitleCard 
+            pendingCount={pagination.total ?? pendingRequests.length} 
+            departments={departments}
+            filterDept={filterDept}
+            setFilterDept={setFilterDept}
+            filterStart={filterStart}
+            setFilterStart={setFilterStart}
+            filterEnd={filterEnd}
+            setFilterEnd={setFilterEnd}
+            onClearFilters={handleClearFilters}
+          />
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="w-full max-w-lg">
