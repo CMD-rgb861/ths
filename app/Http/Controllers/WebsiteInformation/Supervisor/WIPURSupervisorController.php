@@ -202,6 +202,12 @@ class WIPURSupervisorController extends Controller
             'decline_reason' => $declineReason,
             'priority' => 'normal',
             'attachmentsCount' => $requestItem->attachments->count(),
+            'attachments' => $requestItem->attachments->map(fn ($file) => [
+                'id' => $file->id,
+                'original_name' => $file->original_name,
+                'file_path' => $file->file_path,
+                'type' => $file->type,
+            ])->values(),
             'sub_status' => $subStatus,
         ];
     }

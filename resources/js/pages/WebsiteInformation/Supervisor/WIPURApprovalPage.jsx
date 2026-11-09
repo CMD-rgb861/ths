@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { toast } from 'react-toastify'; 
 import {
   FaCheckCircle,
   FaUndoAlt,
@@ -12,12 +13,14 @@ import {
   FaBuilding,
   FaCalendarAlt,
   FaClock,
+  FaFileAlt,
+  FaTimes,
 } from 'react-icons/fa';
 import WIPURNavigationPanel from '../WIPURNavigationPanel';
 import WIPURApproveModal from '../../../components/modals/WebsiteInformation/Supervisor/WIPURApproveModal';
 import WIPURReturnModal from '../../../components/modals/WebsiteInformation/Supervisor/WIPURReturnModal';
 import WIPURDeclineModal from '../../../components/modals/WebsiteInformation/Supervisor/WIPURDeclineModal';
-import WIPURLogDetails from '../../../components/modals/WebsiteInformation/Supervisor/WIPURLogDetails'; // 👈 Imported the new modal
+import WIPURLogDetails from '../../../components/modals/WebsiteInformation/Supervisor/WIPURLogDetails';
 
 const PER_PAGE = 10;
 
@@ -153,7 +156,7 @@ function QueuePagination({ currentPage, lastPage, onChange }) {
   );
 }
 
-function RequestDetailPane({ request, onOpenDecisionModal }) {
+function RequestDetailPane({ request, onOpenDecisionModal, onOpenLightbox }) {
   if (!request) {
     return (
       <div className="flex h-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-6 py-16 text-center">
@@ -200,12 +203,51 @@ function RequestDetailPane({ request, onOpenDecisionModal }) {
           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Request details</h4>
           <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700">{request.remarks}</p>
         </div>
-        {request.attachmentsCount > 0 && (
+        
+        {/* Updated Attachments Display */}
+        {request.attachments?.length > 0 && (
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Attachments</h4>
-            <div className="mt-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              <FaPaperclip className="h-4 w-4 text-slate-400" />
-              {request.attachmentsCount} supporting file{request.attachmentsCount === 1 ? '' : 's'} attached
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Attachments</h4>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {request.attachments.map((file) => {
+                const image = (file?.type || '').toLowerCase().startsWith('image/');
+                return (
+                  <div
+                    key={file.id}
+                    onClick={() => {
+                      // 👇 FIX: Only use lightbox for images, otherwise open in new tab
+                      if (image) {
+                        onOpenLightbox(file, request.attachments);
+                      } else {
+                        window.open(`/storage/${file.file_path}`, '_blank');
+                      }
+                    }}
+                    className="group block cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition hover:border-blue-200 hover:bg-blue-50"
+                  >
+                    {image ? (
+                      <div className="overflow-hidden">
+                        <img
+                          src={`/storage/${file.file_path}`}
+                          alt={file.original_name || 'Attachment'}
+                          className="h-40 w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 p-3">
+                        <FaFileAlt className="h-7 w-7 text-gray-400" />
+                        <span className="truncate text-sm font-medium text-blue-600 group-hover:underline">
+                          {file.original_name || 'Attachment'}
+                        </span>
+                      </div>
+                    )}
+                    {image && (
+                      <div className="border-t border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 truncate">
+                        {file.original_name || 'Image attachment'}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -235,7 +277,6 @@ function RequestDetailPane({ request, onOpenDecisionModal }) {
   );
 }
 
-// 👇 Updated to include onClick handler
 function DecisionLogEntry({ entry, onClick }) {
   const token = DECISION_TOKENS[entry.decision] || DECISION_TOKENS.Approved;
   const Icon = token.icon;
@@ -277,8 +318,32 @@ export default function WIPURSupervisorReviewPage() {
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [decisionModal, setDecisionModal] = useState({ type: null, request: null });
-  // 👇 New state for the log modal
   const [selectedLogEntry, setSelectedLogEntry] = useState(null);
+
+  // Lightbox State
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [lightboxImages, setLightboxImages] = useState([]);
+
+  const handleOpenLightbox = (file, attachments) => {
+    const imageFiles = attachments.filter(f => (f?.type || '').toLowerCase().startsWith('image/'));
+    const index = imageFiles.findIndex(f => f.id === file.id);
+    if (index !== -1) {
+      setLightboxImages(imageFiles);
+      setLightboxIndex(index);
+    }
+  };
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setLightboxIndex(null);
+      if (e.key === 'ArrowRight' && lightboxIndex < lightboxImages.length - 1) setLightboxIndex(prev => prev + 1);
+      if (e.key === 'ArrowLeft' && lightboxIndex > 0) setLightboxIndex(prev => prev - 1);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxIndex, lightboxImages.length]);
+
 
   const mapPendingRequest = (item) => ({
     id: item.id,
@@ -294,6 +359,7 @@ export default function WIPURSupervisorReviewPage() {
     sub_status: item.sub_status ?? '',
     attachmentsCount: item.attachmentsCount ?? 0,
     control_number: item.control_number ?? '',
+    attachments: item.attachments ?? [],
   });
 
   const mapAuditEntry = (item) => ({
@@ -420,6 +486,14 @@ export default function WIPURSupervisorReviewPage() {
     try {
       await axios.post(endpoint, requestPayload);
       
+      if (decisionType === 'approve') {
+        toast.success('Request has been approved and forwarded to the admin.');
+      } else if (decisionType === 'return') {
+        toast.warn('Request has been returned to the requester for revision.');
+      } else if (decisionType === 'decline') {
+        toast.error('Request has been declined.');
+      }
+
       if (view === 'awaiting') {
          await fetchPendingQueue();
       } else if (view === 'returned') {
@@ -432,6 +506,8 @@ export default function WIPURSupervisorReviewPage() {
       setView('log');
     } catch (error) {
       console.error(`Error recording WIPUR supervisor ${decisionType}:`, error);
+      const message = error.response?.data?.message || `Failed to ${decisionType} the request.`;
+      toast.error(message);
     }
   };
 
@@ -507,7 +583,11 @@ export default function WIPURSupervisorReviewPage() {
               </div>
 
               <div className="min-h-[500px]">
-                <RequestDetailPane request={selected} onOpenDecisionModal={openDecisionModal} />
+                <RequestDetailPane 
+                  request={selected} 
+                  onOpenDecisionModal={openDecisionModal} 
+                  onOpenLightbox={handleOpenLightbox} 
+                />
               </div>
             </div>
           )}
@@ -530,7 +610,7 @@ export default function WIPURSupervisorReviewPage() {
                     <DecisionLogEntry 
                       key={entry.id} 
                       entry={entry} 
-                      onClick={setSelectedLogEntry} // 👈 Click handler added
+                      onClick={setSelectedLogEntry}
                     />
                   ))}
                 </div>
@@ -562,12 +642,65 @@ export default function WIPURSupervisorReviewPage() {
         onConfirm={(payload) => handleDecision(decisionModal.request, 'decline', payload)}
       />
 
-      {/* 👇 New Log Details Modal */}
       <WIPURLogDetails 
         isOpen={!!selectedLogEntry} 
         onClose={() => setSelectedLogEntry(null)} 
         entry={selectedLogEntry} 
       />
+
+      {/* Image Lightbox Overlay */}
+      {lightboxIndex !== null && lightboxImages.length > 0 && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+          onClick={() => setLightboxIndex(null)}
+        >
+          <button 
+            onClick={() => setLightboxIndex(null)}
+            className="absolute top-6 right-6 rounded-full bg-black/50 p-2 text-white hover:bg-black/80 transition-colors"
+          >
+            <FaTimes className="h-6 w-6" />
+          </button>
+
+          {lightboxIndex > 0 && (
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (lightboxIndex > 0) setLightboxIndex(prev => prev - 1);
+              }}
+              className="absolute left-6 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white hover:bg-black/80 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+
+          <img
+            src={`/storage/${lightboxImages[lightboxIndex].file_path}`}
+            alt={lightboxImages[lightboxIndex].original_name || 'Preview'}
+            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          {lightboxIndex < lightboxImages.length - 1 && (
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (lightboxIndex < lightboxImages.length - 1) setLightboxIndex(prev => prev + 1);
+              }}
+              className="absolute right-6 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white hover:bg-black/80 transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
+
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 text-sm font-medium text-white tracking-wide">
+            {lightboxIndex + 1} / {lightboxImages.length}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

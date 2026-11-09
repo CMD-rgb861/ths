@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { FaList } from 'react-icons/fa';
@@ -34,12 +34,10 @@ function CountBadge({ count, active }) {
 }
 
 export default function DashboardPage() {
-  // ── Filter / paging state ───────────────────────────────────
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState(null); // 'Pending' | 'Ongoing' | null
+  const [statusFilter, setStatusFilter] = useState(null); 
 
-  // ── Data state ──────────────────────────────────────────────
   const [rows, setRows] = useState([]);
   const [counts, setCounts] = useState({
     all: 0,
@@ -49,17 +47,14 @@ export default function DashboardPage() {
   const [meta, setMeta] = useState({ current_page: 1, last_page: 1 });
   const [loading, setLoading] = useState(false);
 
-  // ── Modal state ─────────────────────────────────────────────
   const [selectedJob, setSelectedJob] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
 
-  // ── Row highlight for newly-arrived rows ────────────────────
   const [newIds, setNewIds] = useState(() => new Set());
   const knownIdsRef = useRef(new Set());
   const newIdsTimerRef = useRef(null);
 
-  // ── Fetch ───────────────────────────────────────────────────
   const fetchRows = useCallback(
     async (searchValue, pageValue, statusValue, options = {}) => {
       const { silent = false } = options;
@@ -125,13 +120,11 @@ export default function DashboardPage() {
     fetchRows(search, page, statusFilter);
   }, [fetchRows, search, page, statusFilter]);
 
-  // Debounced search
   useEffect(() => {
     const id = setTimeout(() => setPage(1), 300);
     return () => clearTimeout(id);
   }, [search]);
 
-  // Silent refresh every 13s
   useEffect(() => {
     const id = setInterval(() => {
       if (document.hidden) return;
@@ -140,14 +133,12 @@ export default function DashboardPage() {
     return () => clearInterval(id);
   }, [fetchRows, search, page, statusFilter]);
 
-  // Cleanup highlight timer
   useEffect(() => {
     return () => {
       if (newIdsTimerRef.current) clearTimeout(newIdsTimerRef.current);
     };
   }, []);
 
-  // ── Helpers ─────────────────────────────────────────────────
   const toggleStatusFilter = (status) => {
     setPage(1);
     setStatusFilter((prev) => (prev === status ? null : status));
@@ -165,7 +156,6 @@ export default function DashboardPage() {
   const isPendingFilterActive = statusFilter === 'Pending';
   const isOngoingFilterActive = statusFilter === 'Ongoing';
 
-  // ── Render ──────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <WIPURNavigationPanel />
@@ -195,7 +185,6 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              {/* Stats & Queue Button Container */}
               <div className="flex items-center space-x-4">
                 <button
                   type="button"
@@ -235,7 +224,6 @@ export default function DashboardPage() {
 
                 <div className="h-12 w-px bg-gray-300" />
 
-                {/* View Queue Button */}
                 <button
                   type="button"
                   onClick={() => setIsQueueOpen(true)}

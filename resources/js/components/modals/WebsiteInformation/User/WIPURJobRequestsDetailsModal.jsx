@@ -1,9 +1,8 @@
-// resources/js/components/modals/GeneralRequestsModals/User/JobRequestsDetailsModal.jsx
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import ConfirmModal from '../../ConfirmModal';
-import RequestCSMModal from './WIPURRequestCSMModal'; // ✅ Import the new Modal
+import RequestCSMModal from './WIPURRequestCSMModal'; 
 import WIPURResubmitModal from './WIPURResubmitModal';
 
 export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancelled }) {
@@ -13,14 +12,11 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [error, setError] = useState(null);
   
-  // ✅ New state for CSM Modal
   const [isCsmOpen, setIsCsmOpen] = useState(false);
   const [isResubmitOpen, setIsResubmitOpen] = useState(false);
-
-  // ✅ State for the Image Lightbox
   const [lightboxIndex, setLightboxIndex] = useState(null);
 
-  // Fetch full details when the modal opens
+  // 👇 ALL HOOKS AT THE TOP
   useEffect(() => {
     if (!isOpen || !job?.id) return;
 
@@ -49,14 +45,12 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
     return () => { cancelled = true; };
   }, [isOpen, job]);
 
-  // ✅ Extract only the image attachments for the lightbox
   const imageAttachments = details?.attachments?.filter(file => {
     const mime = (file?.type || '').toLowerCase();
     const name = (file?.original_name || file?.name || '').toLowerCase();
     return mime.startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(name);
   }) || [];
 
-  // ✅ Lightbox Keyboard Navigation & Escape key
   useEffect(() => {
     if (lightboxIndex === null) return;
 
@@ -74,11 +68,11 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [lightboxIndex, imageAttachments.length]);
 
+  // 👇 EARLY RETURN MOVED DOWN HERE
   if (!isOpen) return null;
 
   const data = details || job;
 
-  // ✅ Conditional Logic for the Footer Buttons
   const isWaitingForConfirmation = data?.status === 'Ongoing' && data?.sub_status === 'Waiting for Confirmation';
   const isReturned = data?.sub_status === 'returned';
   const canCancel = !isWaitingForConfirmation && data?.status !== 'Completed' && data?.status !== 'Cancelled' && data?.status !== 'Unserviceable';
@@ -107,12 +101,11 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
     }
   };
 
-  // ✅ Handle CSM Submission (Backend integration to come later)
   const handleCsmSubmit = (formData) => {
     console.log('CSM Data to submit:', formData);
     toast.success('Thank you for your feedback!');
     setIsCsmOpen(false);
-    if (onCancelled) onCancelled(); // Refresh the list
+    if (onCancelled) onCancelled();
     onClose();
   };
 
@@ -187,16 +180,7 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
                 {/* Request Information */}
                 <div className="space-y-4">
                   <div>
-                    {isReturned && !loading && (
-                      <button
-                        onClick={() => setIsResubmitOpen(true)}
-                        className="mr-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700"
-                      >
-                        Revise and Resubmit
-                      </button>
-                    )}
-
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Website  Page to be Posted/Updated</h4>
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Website Page to be Posted/Updated</h4>
                     <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{data?.request_desc || data?.purpose || '—'}</p>
                   </div>
                 </div>
@@ -255,9 +239,20 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
 
           {/* Footer Actions */}
           <div className="flex justify-between items-center border-t border-gray-200 px-6 py-4">
-            {/* Action Button (Left) */}
-            <div>
-              {/* ✅ Show Confirm button if waiting for confirmation */}
+            
+            {/* Action Buttons (Left) */}
+            <div className="flex items-center gap-3">
+              {/* ✅ Revise and Resubmit Button */}
+              {isReturned && !loading && (
+                <button
+                  onClick={() => setIsResubmitOpen(true)}
+                  className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700 shadow-sm"
+                >
+                  Revise and Resubmit
+                </button>
+              )}
+
+              {/* ✅ Confirm Request Button */}
               {isWaitingForConfirmation && !loading && (
                 <button
                   onClick={() => setIsCsmOpen(true)}
@@ -267,7 +262,7 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
                 </button>
               )}
 
-              {/* Otherwise, show Cancel if allowed */}
+              {/* ✅ Cancel Request Button */}
               {canCancel && !loading && (
                 <button
                   onClick={() => setShowCancelConfirm(true)}
@@ -291,13 +286,12 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
         </div>
       </div>
 
-      {/* ✅ Image Lightbox Overlay */}
+      {/* Image Lightbox Overlay */}
       {lightboxIndex !== null && imageAttachments.length > 0 && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
           onClick={() => setLightboxIndex(null)}
         >
-          {/* Close Button */}
           <button 
             onClick={() => setLightboxIndex(null)}
             className="absolute top-6 right-6 rounded-full bg-black/50 p-2 text-white hover:bg-black/80 transition-colors"
@@ -307,7 +301,6 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
             </svg>
           </button>
 
-          {/* Prev Button */}
           {lightboxIndex > 0 && (
             <button 
               onClick={(e) => {
@@ -322,7 +315,6 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
             </button>
           )}
 
-          {/* Image */}
           <img
             src={`/storage/${imageAttachments[lightboxIndex].file_path}`}
             alt={imageAttachments[lightboxIndex].original_name || 'Preview'}
@@ -330,7 +322,6 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
             onClick={(e) => e.stopPropagation()}
           />
 
-          {/* Next Button */}
           {lightboxIndex < imageAttachments.length - 1 && (
             <button 
               onClick={(e) => {
@@ -345,7 +336,6 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
             </button>
           )}
 
-          {/* Image Counter */}
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 text-sm font-medium text-white tracking-wide">
             {lightboxIndex + 1} / {imageAttachments.length}
           </div>
@@ -364,7 +354,6 @@ export default function JobRequestsDetailsModal({ isOpen, onClose, job, onCancel
         onCancel={() => setShowCancelConfirm(false)}
       />
 
-      {/* ✅ CSM Modal */}
       <RequestCSMModal 
         isOpen={isCsmOpen}
         onClose={() => setIsCsmOpen(false)}
