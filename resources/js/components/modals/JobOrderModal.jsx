@@ -25,6 +25,7 @@ export default function JobOrderModal({
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showCancelRemarks, setShowCancelRemarks] = useState(false);
   const [showMissingSignatoryModal, setShowMissingSignatoryModal] = useState(false);
+  const [showTechnicianAdminRequiredModal, setShowTechnicianAdminRequiredModal] = useState(false);
   const [cancelRemarks, setCancelRemarks] = useState('');
   const [statusOptions, setStatusOptions] = useState([]);
   let user = null;
@@ -101,6 +102,12 @@ export default function JobOrderModal({
 
     try {
       if (statusName === 'Ongoing' && (isAdmin || isTechnician)) {
+        if (isTechnician && !isAdmin) {
+          setShowTechnicianAdminRequiredModal(true);
+          setLoadingAction(null);
+          return;
+        }
+
         const hasSignatory = await checkSignatoryBeforeAccept();
         if (!hasSignatory) {
           setLoadingAction(null);
@@ -579,6 +586,36 @@ export default function JobOrderModal({
                   className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700"
                 >
                   Go to Signatories Page
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showTechnicianAdminRequiredModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Admin Approval Needed</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    The ITS Director signatory has not been assigned yet. Please contact the admin to set it first before accepting this request.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end mt-5">
+                <button
+                  type="button"
+                  onClick={() => setShowTechnicianAdminRequiredModal(false)}
+                  className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  Okay
                 </button>
               </div>
             </div>
