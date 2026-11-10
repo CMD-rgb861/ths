@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import ConfirmModal from './ConfirmModal';
 
@@ -19,9 +20,11 @@ export default function JobOrderModal({
   onStatusChange,
   showNotification,
 }) {
+  const navigate = useNavigate();
   const [loadingAction, setLoadingAction] = useState(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showCancelRemarks, setShowCancelRemarks] = useState(false);
+  const [showMissingSignatoryModal, setShowMissingSignatoryModal] = useState(false);
   const [cancelRemarks, setCancelRemarks] = useState('');
   const [statusOptions, setStatusOptions] = useState([]);
   let user = null;
@@ -75,10 +78,36 @@ export default function JobOrderModal({
     return found ? found.name : statusId;
   };
 
+  const checkSignatoryBeforeAccept = async () => {
+    try {
+      const response = await axios.get('/signatory/it-director');
+      const signatory = response?.data;
+
+      if (!signatory || !String(signatory.name || '').trim()) {
+        setShowMissingSignatoryModal(true);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to fetch ITS Director signatory:', error);
+      setShowMissingSignatoryModal(true);
+      return false;
+    }
+  };
+
   const handleAction = async (statusName) => {
     setLoadingAction(statusName);
 
     try {
+      if (statusName === 'Ongoing' && (isAdmin || isTechnician)) {
+        const hasSignatory = await checkSignatoryBeforeAccept();
+        if (!hasSignatory) {
+          setLoadingAction(null);
+          return;
+        }
+      }
+
       const statusId = getStatusId(statusName);
       const response = await axios.put(`/job-orders/${job.id}`, { status: statusId });
       const updatedJob = response.data;
@@ -509,6 +538,47 @@ export default function JobOrderModal({
                     </svg>
                   )}
                   {isLoading && loadingAction === 'Cancelled' ? 'Processing...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showMissingSignatoryModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">No ITS Director Signatory Set</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    There is no signatory for the ITS Director yet. Please set one before accepting a new job order request.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setShowMissingSignatoryModal(false)}
+                  className="px-4 py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMissingSignatoryModal(false);
+                    onClose();
+                    navigate('/signatories', { replace: false });
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  Go to Signatories Page
                 </button>
               </div>
             </div>
