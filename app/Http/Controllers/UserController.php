@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -73,6 +74,15 @@ class UserController extends Controller
      */
     public function counts()
     {
+        if (!Schema::hasTable('users') || !Schema::hasTable('roles') || !Schema::hasTable('role_user')) {
+            return response()->json([
+                'total' => 0,
+                'admins' => 0,
+                'technicians' => 0,
+                'regular' => 0,
+            ], 200);
+        }
+
         $totalUsers = User::count();
 
         $adminCount = User::whereHas('roles', function ($query) {
@@ -103,6 +113,10 @@ class UserController extends Controller
      */
     public function roles()
     {
+        if (!Schema::hasTable('roles')) {
+            return response()->json([], 200);
+        }
+
         $roles = DB::table('roles')
             ->orderBy('name')
             ->get(['id', 'name']);
@@ -161,6 +175,10 @@ class UserController extends Controller
      */
     public function technicians()
     {
+        if (!Schema::hasTable('users') || !Schema::hasTable('roles') || !Schema::hasTable('role_user')) {
+            return response()->json([], 200);
+        }
+
         return User::whereHas('roles', function ($query) {
                 $query->where('name', 'technician');
             })

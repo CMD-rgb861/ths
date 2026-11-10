@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use setasign\Fpdi\Tcpdf\Fpdi;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -690,6 +691,13 @@ class JobOrderController extends Controller
 
     public function serviceStatus(Request $request)
     {
+        if (!Schema::hasTable('job_orders') || !Schema::hasTable('action_reports')) {
+            return response()->json([
+                'data' => [],
+                'count' => 0,
+            ], 200);
+        }
+
         $serviceStatus = $request->input('service_status');
         $search = $request->input('search');
         $sort = $request->input('sort', 'newest');

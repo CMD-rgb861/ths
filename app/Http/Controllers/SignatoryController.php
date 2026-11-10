@@ -5,12 +5,17 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Signatory;
 use App\Models\User;
+use Illuminate\Support\Facades\Schema;
 
 class SignatoryController extends Controller
 {
     // GET /signatory/it-director
     public function show(Request $request)
     {
+        if (!Schema::hasTable('signatories')) {
+            return response()->json(null, 200);
+        }
+
         $signatory = Signatory::where('role', 'it_director')->with('user')->first();
         return response()->json($signatory, 200);
     }

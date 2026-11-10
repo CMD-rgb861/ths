@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\JobOrderController;
+use App\Http\Controllers\RequestStatusController;
+use App\Http\Controllers\SignatoryController;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
@@ -91,6 +93,46 @@ class JobOrderStatusFilterTest extends TestCase
             $table->unsignedBigInteger('job_order_id');
             $table->timestamps();
         });
+    }
+
+    public function test_missing_report_tables_return_empty_payloads_instead_of_500(): void
+    {
+        Schema::dropIfExists('request_statuses');
+        Schema::dropIfExists('action_reports');
+        Schema::dropIfExists('signatories');
+        Schema::dropIfExists('roles');
+        Schema::dropIfExists('role_user');
+
+        $statusResponse = (new RequestStatusController())->index();
+        $this->assertSame(200, $statusResponse->getStatusCode());
+        $this->assertSame([], json_decode($statusResponse->getContent(), true));
+
+        $signatoryResponse = (new SignatoryController())->show(Request::create('/signatory/it-director', 'GET'));
+        $this->assertSame(200, $signatoryResponse->getStatusCode());
+
+        $signatoryPayload = json_decode($signatoryResponse->getContent(), true);
+        $this->assertTrue($signatoryPayload === null || $signatoryPayload === []);
+
+        $admin = new User([
+            'id' => 999,
+            'id_number' => 'A-001',
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
+        ]);
+        $admin->setRelation('roles', collect([(object) ['name' => 'admin']]));
+
+        $request = Request::create('/job-orders/service-status', 'GET', ['service_status' => 'closed']);
+        $request->setUserResolver(fn () => $admin);
+
+        $serviceResponse = (new JobOrderController())->serviceStatus($request);
+        $this->assertSame(200, $serviceResponse->getStatusCode());
+        $payload = json_decode($serviceResponse->getContent(), true);
+        $this->assertSame([], $payload['data']);
+        $this->assertSame(0, $payload['count']);
+
+        $techniciansResponse = (new \App\Http\Controllers\UserController())->technicians();
+        $this->assertSame(200, $techniciansResponse->getStatusCode());
+        $this->assertSame([], json_decode($techniciansResponse->getContent(), true));
     }
 
     public function test_completed_status_page_returns_completed_jobs(): void

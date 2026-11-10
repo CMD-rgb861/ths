@@ -1,6 +1,943 @@
-before coming to the reservation the app will go through lnu-ids, so in the lnu_id for the dropdown selection, 
-we will be needing to compare the Employee_default function from the users model in the lnu-ids(basically comparing the office_id column of the _work table) 
-to the offices table of the lnu-ids(this is where we are getting the choices for the dropdown) so that it will preselect the department dropdown before proceeding to 
-the other app, and then insert them in the users department?(i need to see if i will be needing to create a new table or just modify the user table for this thing)
+WIPUR ADMIN FLOW PLAN
 
-you need to edit the _work because the account you are using in the local lnu-ids dont have any data yet in there
+IMPORTANT NOTE FOR THIS PROJECT
+-------------------------------------------------------------------
+This document is specifically for the admin-only project.
+
+The supervisor-side flow in the other project is already completed and should be treated as final.
+Do not recreate, duplicate, or reinterpret the supervisor workflow inside this admin project.
+
+This admin project is not a second WIPUR implementation. It is an admin layer on top of the existing request workflow.
+
+The goal of this project is to provide:
+- admin dashboard and queue
+- admin review and approval controls
+- user role management
+- reporting
+- signatory management
+
+It does not require rebuilding the user/supervisor flow from scratch.
+
+-------------------------------------------------------------------
+Scope boundary
+-------------------------------------------------------------------
+This admin project should only deal with:
+- admin review of WIPUR requests
+- routing requests back to requester when needed
+- role and access management for admin and supervisor users
+- reporting and signatory records
+
+It should not create a new set of supervisor models, supervisor controllers, or a separate admin request process that duplicates the already-completed supervisor logic.
+
+If a controller or model is related to the supervisor-side flow, it should be treated as completed work and not re-created here unless it is being reused as a shared pattern.
+
+-------------------------------------------------------------------
+AI working rules for this project
+-------------------------------------------------------------------
+Before creating any code, the AI or developer must read this note first and apply the following rules:
+
+1. Analyze the current completed supervisor flow before creating anything new.
+   - Treat the already-built supervisor implementation as final.
+   - Do not rebuild the same logic in the admin project.
+
+2. This project is admin-only.
+   - Do not create user-facing WIPUR logic that duplicates the user flow.
+   - Do not create a second supervisor flow.
+   - Focus only on admin review, admin routing, user role management, reporting, and signatory handling.
+
+3. No database migration work is required for this project.
+   - Do not create migrations.
+   - Do not modify the existing database schema unless the user explicitly asks for a new change.
+   - This project is assumed to be using the finalized schema already in place.
+
+4. Ask clarifying questions if the requirement is ambiguous.
+   - If there are multiple valid ways to handle an admin decision, ask which one the user prefers.
+   - Do not assume a path without checking the requirement.
+
+5. Favor simple code over large, over-engineered implementations.
+   - If a 100-line controller or component can do the same job as a 300-line version, prefer the shorter version.
+   - Simpler code is easier to debug, easier to maintain, and easier to review.
+
+6. Keep admin-specific naming obvious.
+   - Use names like AdminDashboardController, AdminApprovalController, AdminReturnRequesterController, AdminReportsPage, etc.
+   - Do not use generic or supervisor-like names for admin code.
+
+7. Reuse existing models and patterns when possible.
+   - Reuse WipurRequest, WipurStep, WipurRequestEvent, WipurRoleUser, and WipurSignatory.
+   - Do not create parallel models or duplicate workflow tables.
+
+8. Keep the code focused and bounded.
+   - One controller should do one clear admin job.
+   - One component should do one corresponding admin page or modal action.
+   - Avoid combining multiple unrelated responsibilities in a single class or component.
+
+9. If the admin flow needs a special return destination, default to requester.
+   - Return to supervisor should be a specific exception only.
+   - Do not make the special-case path the default behavior.
+
+10. Do not overbuild the initial admin version.
+   - Implement the clean core admin flow first.
+   - Add extra features only after the main flow is working.
+
+-------------------------------------------------------------------
+Recommended architecture
+-------------------------------------------------------------------
+Use the same core WIPUR request structure instead of building a parallel admin-only request system.
+
+Recommended foundation:
+- One request record for each WIPUR
+- One workflow history for the request
+- One event log for actions taken
+- Role mapping for admin and supervisor permissions
+- Optional signatory list for reporting or approval display
+
+Recommended model responsibility:
+- WipurRequest = actual request and core request data
+- WipurStep = current workflow step and current assignee
+- WipurRequestEvent = action trail and decisions
+- WipurRoleUser = admin/supervisor assignment by department
+- WipurSignatory = master signatory list
+
+Do not create a separate admin request table unless there is a genuine business need outside the current workflow.
+
+-------------------------------------------------------------------
+How this admin project should be built
+-------------------------------------------------------------------
+The admin project should be built as a clean extension of the completed pattern, not as a copy of the supervisor project.
+
+Build pattern to follow:
+1. Use the same request and workflow model structure as the completed WIPUR flow.
+2. Create admin-only controllers that operate on the same WipurRequest records.
+3. Build admin-specific queue pages and actions using the same general UI pattern as the supervisor review page.
+4. Keep the controller logic focused on admin decisions only.
+5. Reuse existing WipurStep and WipurRequestEvent for state changes and action history.
+6. Keep all admin routes under an admin namespace or admin middleware.
+7. Avoid creating a duplicate supervisor controller or a duplicate workflow controller in this project.
+
+This means the admin-side code should look like this conceptually:
+- AdminDashboardController -> summary view
+- AdminPendingController -> admin queue
+- AdminRequestController -> request detail and route decisions
+- AdminApprovalController -> approve final request
+- AdminReturnRequesterController -> send back to requester
+- AdminUserManagementController -> assign roles and departments
+- AdminReportsController -> report data
+- AdminSignatoryController -> manage signatory list
+
+These should be admin-specific, not supervisor re-implementations.
+
+-------------------------------------------------------------------
+Admin-only workflow
+-------------------------------------------------------------------
+This is the correct flow for the admin project:
+
+1. User submits request
+   - request enters the main WIPUR flow
+   - supervisor sees it first
+
+2. Supervisor reviews the request
+   - supervisor may approve, return, or decline
+   - this part is already completed and should not be rebuilt here
+
+3. Supervisor approves the request
+   - request moves into admin review queue
+   - current step becomes waiting_for_admin_approval
+
+4. Admin logs into the admin-only project
+   - admin sees all requests awaiting final review
+   - admin reviews the request and attachments
+
+5. Admin chooses one action
+   - Approve
+   - Return to Requester
+   - Return to Supervisor
+
+6. If admin approves
+   - request is finalized as approved/completed according to business rules
+   - admin records the final decision in WipurRequestEvent
+
+7. If admin returns to requester
+   - request goes back to the requester for revision or clarification
+   - the requester resubmits through the existing resubmission flow
+   - event metadata should include return_to = requester
+
+8. If admin returns to supervisor
+   - request is re-routed to supervisor for review or reassignment
+   - event metadata should include return_to = supervisor
+   - this is an exception case, not the default behavior
+
+-------------------------------------------------------------------
+Default return rule
+-------------------------------------------------------------------
+The default admin return should be:
+- Return to Requester
+
+This is the normal path because:
+- the requester is the one who must correct/clarify the request
+- the current resubmission logic already supports this flow
+- it keeps the process simple and consistent
+- it avoids unnecessary supervisor loops
+
+Return to Supervisor should be optional and only used when:
+- wrong department or wrong supervisor was assigned
+- the admin wants a department or policy re-check before sending it back
+- the admin is re-routing for reassignment or escalation
+- there is a need for a second review before requester action
+
+This means the admin UI should present:
+- Approve
+- Return to Requester (default action)
+- Return to Supervisor (exception / escalation)
+
+This is the recommended admin-only flow because the supervisor role is only the first check, not the final decision-maker.
+
+-------------------------------------------------------------------
+No duplicate admin request system
+-------------------------------------------------------------------
+This is the most important rule for the admin project:
+
+Do not create a separate admin request model, admin request table, or admin-only request lifecycle.
+
+The admin project should only add access, review, routing, and reporting on top of the existing request flow.
+
+The system should be based on:
+- one WIPUR record
+- one workflow path
+- one event history
+
+This prevents the same request from being represented in two different systems.
+
+-------------------------------------------------------------------
+Why no new tables are needed
+-------------------------------------------------------------------
+For the admin-only project, the current model structure is already enough for the required features.
+
+Probably sufficient tables/models:
+- WipurRequest
+- WipurStep
+- WipurRequestEvent
+- WipurRoleUser
+- WipurSignatory
+- User
+- Department
+- RequestStatus
+
+These already cover:
+- request data
+- workflow state
+- decisions and audit trail
+- departments and role assignments
+- signatory list
+- reporting queries
+
+Only add new DB structures if the business rules become more complex, such as:
+- a separate multi-signatory approval flow
+- custom approval stages beyond admin/supervisor
+- stricter formal return-routing tracking for compliance reporting
+
+For the current admin project, that is not necessary.
+
+-------------------------------------------------------------------
+How to represent admin return decisions
+-------------------------------------------------------------------
+Use the existing metadata field on WipurRequestEvent rather than creating another table.
+
+Recommended metadata structure:
+- return_to: requester or supervisor
+- reason: short message explaining the return decision
+- admin_user_id: ID of the admin who decided
+- actor_name: admin name for easier display
+- department_id: source department for reporting
+
+Example:
+- metadata['return_to'] = 'requester'
+- metadata['reason'] = 'Missing required details and supporting attachment.'
+- metadata['admin_user_id'] = 12
+
+This keeps auditing simple and avoids a schema explosion.
+
+If later a formal return route report is required, then add a dedicated field such as return_to to the event or step record. Do not add a whole new table during the first implementation.
+
+-------------------------------------------------------------------
+Controller pattern to follow
+-------------------------------------------------------------------
+The controller structure for this admin project should be designed in the same way as the completed supervisor controllers, but clearly scoped to admin-only responsibilities.
+
+Recommended pattern:
+- Every controller should accept a request, validate the user, validate access, and then perform a single, explicit action.
+- Use transaction locking for updates.
+- Use WipurStep to determine the current workflow state.
+- Use WipurRequestEvent to log the action.
+- Return JSON responses with the updated request payload.
+
+Recommended naming pattern:
+- AdminDashboardController
+- AdminPendingController
+- AdminRequestController
+- AdminApprovalController
+- AdminReturnRequesterController
+- AdminReturnSupervisorController
+- AdminUserManagementController
+- AdminReportsController
+- AdminSignatoryController
+
+This is important because the AI or another developer should be able to see that these are admin-specific controllers and not copies of supervisor logic.
+
+-------------------------------------------------------------------
+Component pattern to follow
+-------------------------------------------------------------------
+The frontend should also follow the same structure as the completed supervisor UI, but with admin-only labels and actions.
+
+Recommended UI pattern:
+- Dashboard page with summary cards
+- Pending queue page with request table
+- Review modal for request details
+- Approve button
+- Return to Requester button
+- Return to Supervisor button
+- User management page
+- Reports page
+- Signatory page
+
+Recommended naming pattern:
+- AdminDashboardPage
+- AdminPendingPage
+- AdminReviewModal
+- AdminApproveModal
+- AdminReturnRequesterModal
+- AdminReturnSupervisorModal
+- AdminUserManagementPage
+- AdminReportsPage
+- AdminSignatoryPage
+
+Each component should be purpose-specific and clearly marked as admin-only.
+
+This helps avoid confusion with the existing supervisor pages, especially if both projects live in the same workspace or use similar naming.
+
+-------------------------------------------------------------------
+Route pattern to follow
+-------------------------------------------------------------------
+The route structure should also be clear and admin-specific.
+
+Recommended route pattern:
+- GET /api/admin/wipur/dashboard
+- GET /api/admin/wipur/pending
+- GET /api/admin/wipur/returned
+- GET /api/admin/wipur/audit
+- GET /api/admin/wipur/requests/{wipurRequest}
+- POST /api/admin/wipur/requests/{wipurRequest}/approve
+- POST /api/admin/wipur/requests/{wipurRequest}/return-requester
+- POST /api/admin/wipur/requests/{wipurRequest}/return-supervisor
+- POST /api/admin/wipur/requests/{wipurRequest}/decline
+- GET /api/admin/wipur/reports
+- GET /api/admin/wipur/users
+- POST /api/admin/wipur/users/{user}/roles
+- GET /api/admin/wipur/signatories
+- POST /api/admin/wipur/signatories
+- PATCH /api/admin/wipur/signatories/{signatory}
+- DELETE /api/admin/wipur/signatories/{signatory}
+
+The routes should clearly indicate they belong to the admin project, not to the already-completed supervisor flow.
+
+-------------------------------------------------------------------
+Admin responsibilities in this project
+-------------------------------------------------------------------
+The admin project should include the following modules:
+
+1. Admin Dashboard
+- summary cards
+- pending admin queue count
+- returned requests count
+- recent action log
+- department summary
+
+2. Admin Pending Requests Page
+- list requests waiting for admin approval
+- filter by department, date, and status
+- show requester, department, remarks, attachments count
+
+3. Admin Request Detail / Review Page
+- request description
+- requester details
+- attachments
+- previous supervisor action
+- event history
+- approve, return to requester, or return to supervisor actions
+
+4. User Management Page
+- assign or remove admin role
+- assign or remove supervisor role
+- assign department mappings to users
+- show which users are admin or supervisor
+
+5. Reports Page
+- total requests by status
+- approval rate
+- return count
+- decline count
+- per department summary
+- per user summary
+- turnaround time summary
+
+6. Signatory Management Page
+- create/edit/delete signatory entries
+- activate/deactivate signatories
+- manage signatory list used by the module
+
+7. Optional admin new request page
+- only if admin must create requests on behalf of users
+- keep it optional because it is not necessary for the core admin flow
+
+-------------------------------------------------------------------
+Admin page design recommendation
+-------------------------------------------------------------------
+The admin dashboard and queue should be designed similar to the supervisor queue but clearly marked as admin-only.
+
+Recommended layout:
+- Summary cards at top
+- Pending queue table in the middle
+- Returned requests section
+- Recent activity log at bottom
+- Review modal for selected request
+
+This gives the admin a familiar UX without redoing the supervisor flow.
+
+-------------------------------------------------------------------
+Important project rule
+-------------------------------------------------------------------
+This admin project must not be mistaken for a second implementation of the supervisor flow.
+
+The existing supervisor project is already completed and should remain as the completed supervisor system.
+
+The admin project should be built as a separate layer that:
+- reviews what has already passed supervisor approval
+- makes final administrative decisions
+- manages access, reports, and signatories
+
+It should not recreate the same supervisor workflow in a different controller stack.
+
+-------------------------------------------------------------------
+Final recommendation
+-------------------------------------------------------------------
+For this admin-only project, the correct design is:
+- one core WIPUR flow
+- admin as final review layer
+- no duplicate admin request table
+- default return to requester
+- optional return to supervisor only for exceptions
+- role-based access management via existing WipurRoleUser pattern
+- reporting from request and event data
+- signatory list via existing signatory model
+- no duplicate supervisor controller creation
+
+This is the cleanest and most maintainable plan for the current admin project.
+
+-------------------------------------------------------------------
+Short implementation rule
+-------------------------------------------------------------------
+If the logic is already handled in the completed supervisor project, do not copy it blindly into this admin project.
+Instead:
+- reuse the pattern
+- add admin-only decisions
+- keep the workflow centralized
+- avoid creating parallel models or tables unnecessarily
+
+This keeps the admin project focused and prevents confusion between the completed supervisor work and the new admin workflow.
+
+
+MODELS from the USER SIDE FOR CONTEXT
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class WipurStep extends Model
+{
+    use HasFactory;
+
+    protected $table = 'wipur_steps';
+
+    protected $fillable = [
+        'wipur_request_id',
+        'step',
+        'step_order',
+        'status',
+        'is_declined',
+        'assigned_to_user_id',
+        'approved_by',
+        'approved_at',
+        'declined_by',
+        'declined_at',
+        'decline_reason',
+        'remarks',
+        'notified_at',
+    ];
+
+    protected $casts = [
+        'step_order' => 'integer',
+        'is_declined' => 'boolean',
+        'approved_at' => 'datetime',
+        'declined_at' => 'datetime',
+        'notified_at' => 'datetime',
+    ];
+
+    public function request(): BelongsTo
+    {
+        return $this->belongsTo(WipurRequest::class, 'wipur_request_id');
+    }
+
+    public function assignedTo(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_to_user_id');
+    }
+
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function declinedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'declined_by');
+    }
+}
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class WipurSignatory extends Model
+{
+    use HasFactory;
+
+    protected $table = 'wipur_signatories';
+
+    protected $fillable = [
+        'name',
+        'position',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+}
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Model;
+
+class WipurRoleUser extends Model
+{
+    protected $table = 'wipur_role_user';
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'user_id',
+        'role_id',
+        'department_id',
+    ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function role(): BelongsTo
+    {
+        return $this->belongsTo(Role::class, 'role_id');
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'department_id');
+    }
+}
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class WipurRequestEvent extends Model
+{
+    protected $table = 'wipur_request_events';
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'wipur_request_id',
+        'actor_user_id',
+        'event_type',
+        'from_status',
+        'to_status',
+        'request_desc',
+        'remarks',
+        'metadata',
+        'created_at',
+    ];
+
+    protected $casts = [
+        'metadata' => 'array',
+        'created_at' => 'datetime',
+    ];
+
+    public static function record(array $attributes): self
+    {
+        return static::create($attributes + ['created_at' => now()]);
+    }
+
+    public function request(): BelongsTo
+    {
+        return $this->belongsTo(WipurRequest::class, 'wipur_request_id');
+    }
+
+    public function actor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'actor_user_id');
+    }
+}<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+
+class WipurRequest extends Model
+{
+    use HasFactory;
+
+    protected $table = 'wipur_requests';
+
+    protected $fillable = [
+        'control_number',
+        'user_id',
+        'department_id',
+        'requested_by',
+        'request_desc',
+        'status_id',
+        'is_cancelled',
+        'cancelled_by',
+        'is_conformed',
+        'confirmed_by',
+        'approved_by',
+        'approved_date',
+        'processed_by',
+        'processed_date',
+        'acknowledged_by',
+        'acknowledged_date',
+        'notified',
+        'date_requested',
+        'signature',
+    ];
+
+    protected $casts = [
+        'is_cancelled' => 'boolean',
+        'is_conformed' => 'boolean',
+        'notified' => 'boolean',
+        'approved_date' => 'datetime',
+        'processed_date' => 'datetime',
+        'acknowledged_date' => 'datetime',
+        'date_requested' => 'datetime',
+    ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
+    }
+
+    public function status(): BelongsTo
+    {
+        return $this->belongsTo(RequestStatus::class, 'status_id');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(WipurAttachment::class, 'wipur_request_id');
+    }
+
+    public function steps(): HasMany
+    {
+        return $this->hasMany(WipurStep::class, 'wipur_request_id');
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(WipurRequestEvent::class, 'wipur_request_id');
+    }
+
+    public function latestStep(): HasOne
+    {
+        return $this->hasOne(WipurStep::class, 'wipur_request_id')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
+    }
+
+    public function currentWorkflowStatus(): ?string
+    {
+        return $this->latestStep?->status;
+    }
+
+    public function latestRemarks(): ?string
+    {
+        $remarks = $this->latestStep?->remarks;
+
+        if (is_string($remarks) && trim($remarks) !== '') {
+            return trim($remarks);
+        }
+
+        return is_string($this->request_desc) && trim($this->request_desc) !== ''
+            ? trim($this->request_desc)
+            : null;
+    }
+
+    public static function generateControlNumber(): string
+    {
+        $period = now()->format('Ym');
+
+        $last = static::where('control_number', 'like', $period . '%')
+            ->lockForUpdate()
+            ->orderByDesc('control_number')
+            ->first();
+
+        $nextSequence = $last
+            ? ((int) substr($last->control_number, -4)) + 1
+            : 1;
+
+        return $period . str_pad((string) $nextSequence, 4, '0', STR_PAD_LEFT);
+    }
+}
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class WipurAttachment extends Model
+{
+    use HasFactory;
+
+    protected $table = 'wipur_attachments';
+
+    protected $fillable = [
+        'wipur_request_id',
+        'original_name',
+        'file_path',
+        'type',
+    ];
+
+    public function request(): BelongsTo
+    {
+        return $this->belongsTo(WipurRequest::class, 'wipur_request_id');
+    }
+}
+<?php
+
+// app/Models/User.php
+
+namespace App\Models;
+
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Laravel\Sanctum\HasApiTokens;
+
+class User extends Authenticatable
+{
+    use HasApiTokens, HasFactory, Notifiable;
+
+    protected $fillable = [
+        'id_number',
+        'name',
+        'email',
+        'password',
+        'role', // Make sure role is in the fillable fields
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+    ];
+
+    /*
+    |---------------------------------------------------------------------------
+    | Role Helper Methods
+    |---------------------------------------------------------------------------
+    */
+    public function isAdmin()
+    {
+        return $this->hasRole('admin');
+    }
+
+    public function isTechnician()
+    {
+        return $this->hasRole('technician');
+    }
+
+    public function isUser()
+    {
+        return $this->hasRole('user');
+    }
+
+    /*
+    |---------------------------------------------------------------------------
+    | Relationships
+    |---------------------------------------------------------------------------
+    */
+    public function departments()
+    {
+        return $this->belongsToMany(Department::class, 'user_departments');
+    }
+
+    public function requestedJobOrders()
+    {
+        return $this->hasMany(JobOrder::class, 'requested_by');
+    }
+
+    public function createdJobOrders()
+    {
+        return $this->hasMany(JobOrder::class, 'created_by');
+    }
+
+
+    public function conformedJobOrders()
+    {
+        return $this->hasMany(JobOrder::class, 'conformed_by');
+    }
+
+    public function servicedActionReports()
+    {
+        return $this->hasMany(ActionReport::class, 'serviced_by');
+    }
+
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class);
+    }
+
+    public function wipurRoles()
+    {
+        return $this->hasMany(WipurRoleUser::class, 'user_id');
+    }
+
+    public function hasRole($roleName)
+    {
+        return $this->roles->contains('name', $roleName);
+    }
+
+    public function isWipurSupervisor(): bool
+    {
+        $normalized = ['wipur_supervisor', 'wipur-supervisor', 'wipur supervisor', 'supervisor'];
+
+        return $this->wipurRoles()
+            ->whereHas('role', function ($query) use ($normalized) {
+                $query->where(function ($innerQuery) use ($normalized) {
+                    foreach ($normalized as $value) {
+                        $normalizedValue = strtolower(str_replace('-', '_', $value));
+                        $innerQuery->orWhereRaw('LOWER(REPLACE(REPLACE(name, "-", "_"), " ", "_")) = ?', [$normalizedValue]);
+                    }
+                });
+            })
+            ->exists();
+    }
+
+    public function wipurSupervisorForDepartment(?int $departmentId = null): bool
+    {
+        if ($departmentId === null) {
+            return $this->isWipurSupervisor();
+        }
+
+        $normalized = ['wipur_supervisor', 'wipur-supervisor', 'wipur supervisor', 'supervisor'];
+
+        return $this->wipurRoles()
+            ->where('department_id', $departmentId)
+            ->whereHas('role', function ($query) use ($normalized) {
+                $query->where(function ($innerQuery) use ($normalized) {
+                    foreach ($normalized as $value) {
+                        $normalizedValue = strtolower(str_replace('-', '_', $value));
+                        $innerQuery->orWhereRaw('LOWER(REPLACE(REPLACE(name, "-", "_"), " ", "_")) = ?', [$normalizedValue]);
+                    }
+                });
+            })
+            ->exists();
+    }
+}
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
+class Role extends Model
+{
+    protected $fillable = ['name'];
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class);
+    }
+}
+<?php
+
+// app/Models/Department.php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+
+class Department extends Model
+{
+    use HasFactory;
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'name',
+        'shorten',
+        'parent_office_id',
+        'icon',
+        'updated_by',
+        'created_at',
+        'update_at',
+    ];
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'user_departments');
+    }
+
+    public function jobOrders()
+    {
+        return $this->hasMany(JobOrder::class);
+    }
+}
