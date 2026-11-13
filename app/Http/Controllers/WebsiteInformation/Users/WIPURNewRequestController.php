@@ -81,13 +81,13 @@ class WIPURNewRequestController extends Controller
 
                 $supervisor = $this->resolveSupervisorForDepartment($departmentId);
 
+                // Removed 'remarks' => $requestDesc here
                 WipurStep::create([
                     'wipur_request_id' => $wipurRequest->id,
                     'step' => 'supervisor',
                     'step_order' => 1,
                     'status' => 'waiting_for_supervisor_approval',
                     'assigned_to_user_id' => $supervisor?->id,
-                    'remarks' => $requestDesc,
                 ]);
 
                 $attachmentNames = [];

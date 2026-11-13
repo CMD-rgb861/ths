@@ -12,9 +12,6 @@ use Illuminate\Support\Facades\DB;
 
 class WIPURDashboardController extends Controller
 {
-    /**
-     * GET /api/website-information/my-requests
-     */
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -28,9 +25,15 @@ class WIPURDashboardController extends Controller
                 'latestStep',
             ])
             ->where('user_id', $user->id)
-            ->whereDoesntHave('steps', function ($stepQuery) {
-                $stepQuery->where('step', 'supervisor')
-                    ->where('is_declined', true);
+            ->where(function ($q) {
+                // 1. Exclude terminal statuses (Completed, Cancelled, Unserviceable)
+                $q->whereDoesntHave('status', function ($statusQuery) {
+                    $statusQuery->whereIn('name', ['Completed', 'Cancelled', 'Unserviceable']);
+                })
+                // 2. Exclude declined requests (by Supervisor OR Admin)
+                ->whereDoesntHave('steps', function ($stepQuery) {
+                    $stepQuery->where('is_declined', true);
+                });
             })
             ->orderByDesc('created_at');
 
@@ -90,9 +93,6 @@ class WIPURDashboardController extends Controller
         ]);
     }
 
-    /**
-     * GET /api/website-information/requests/{wipurRequest}
-     */
     public function show(Request $request, WipurRequest $wipurRequest): JsonResponse
     {
         $user = $request->user();
@@ -111,7 +111,10 @@ class WIPURDashboardController extends Controller
         ]);
 
         $latestStep = $wipurRequest->latestStep;
-        $isDeclined = $latestStep?->step === 'supervisor' && $latestStep->is_declined;
+        
+        // Find if there is a decline anywhere in the steps
+        $declinedStep = $wipurRequest->steps()->where('is_declined', true)->first();
+        $isDeclined = (bool) $declinedStep;
 
         return response()->json([
             'data' => [
@@ -122,9 +125,10 @@ class WIPURDashboardController extends Controller
                 'department' => $wipurRequest->department?->name,
                 'status' => $isDeclined ? 'Declined' : $wipurRequest->status?->name,
                 'sub_status' => $wipurRequest->currentWorkflowStatus(),
-                'is_declined' => (bool) $isDeclined,
+                'is_declined' => $isDeclined,
+                'declined_by' => $isDeclined ? $declinedStep->step : null,
                 'return_reason' => $latestStep?->status === 'returned' ? $latestStep->remarks : null,
-                'decline_reason' => $isDeclined ? $latestStep->decline_reason : null,
+                'decline_reason' => $isDeclined ? $declinedStep->decline_reason : null,
                 'approved_by' => $wipurRequest->approved_by,
                 'processed_by' => $wipurRequest->processed_by,
                 'acknowledged_by' => $wipurRequest->acknowledged_by,
@@ -154,20 +158,16 @@ class WIPURDashboardController extends Controller
 
     private function countsForUser(int $userId): array
     {
-        $terminalStatusIds = RequestStatus::whereIn('name', [
-            'Completed',
-            'Cancelled',
-            'Unserviceable',
-        ])->pluck('id')->all();
-
         $base = WipurRequest::where('user_id', $userId)
-            ->where(function ($query) use ($terminalStatusIds) {
-                $query->whereNull('status_id')
-                    ->orWhereNotIn('status_id', $terminalStatusIds);
-            })
-            ->whereDoesntHave('steps', function ($stepQuery) {
-                $stepQuery->where('step', 'supervisor')
-                    ->where('is_declined', true);
+            ->where(function ($q) {
+                // Exclude terminal statuses
+                $q->whereDoesntHave('status', function ($statusQuery) {
+                    $statusQuery->whereIn('name', ['Completed', 'Cancelled', 'Unserviceable']);
+                })
+                // Exclude declined requests
+                ->whereDoesntHave('steps', function ($stepQuery) {
+                    $stepQuery->where('is_declined', true);
+                });
             });
 
         return [
@@ -203,7 +203,6 @@ class WIPURDashboardController extends Controller
             }
 
             $isDeclined = $lockedRequest->steps()
-                ->where('step', 'supervisor')
                 ->where('is_declined', true)
                 ->exists();
             abort_if($isDeclined, 422, 'Declined requests cannot be cancelled.');

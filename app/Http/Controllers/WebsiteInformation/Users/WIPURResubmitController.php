@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\WebsiteInformation\Users;
 
 use App\Http\Controllers\Controller;
-use App\Models\WipurAttachment;
 use App\Models\WipurRequest;
 use App\Models\WipurRequestEvent;
 use Illuminate\Http\JsonResponse;
@@ -132,7 +131,7 @@ class WIPURResubmitController extends Controller
                     'declined_by' => null,
                     'declined_at' => null,
                     'decline_reason' => null,
-                    'remarks' => $requestDesc,
+                    'remarks' => null, // Cleared out the remarks on resubmit
                 ]);
 
                 $lockedRequest->update([

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify'; 
 import {
@@ -400,8 +400,19 @@ export default function WIPURSupervisorReviewPage() {
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [lightboxImages, setLightboxImages] = useState([]);
 
+  const pageRef = useRef(page);
+  const filtersRef = useRef({ search: '', dept: '', start: '', end: '' });
+
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+
+  useEffect(() => {
+    filtersRef.current = { search, dept: filterDept, start: filterStart, end: filterEnd };
+  }, [search, filterDept, filterStart, filterEnd]);
+
   const handleOpenLightbox = (file, attachments) => {
-    const imageFiles = attachments.filter(f => (f?.type || '').toLowerCase().startsWith('image/'));
+    const imageFiles = (attachments ?? []).filter(f => (f?.type || '').toLowerCase().startsWith('image/'));
     const index = imageFiles.findIndex(f => f.id === file.id);
     if (index !== -1) {
       setLightboxImages(imageFiles);
@@ -456,112 +467,121 @@ export default function WIPURSupervisorReviewPage() {
     axios.get('/api/departments')
       .then(res => {
         const data = res.data?.data ?? res.data ?? [];
-        setDepartments(data);
+        setDepartments(Array.isArray(data) ? data : []);
       })
       .catch(console.error);
   }, []);
 
-  const fetchPendingQueue = async () => {
-    setLoading(true);
+  const buildParams = useCallback((pageValue, filters) => {
+    const params = {
+      page: pageValue,
+      per_page: PER_PAGE,
+    };
+
+    if (filters.search?.trim()) params.search = filters.search.trim();
+    if (filters.dept) params.department_id = filters.dept;
+    if (filters.start) params.start_date = filters.start;
+    if (filters.end) params.end_date = filters.end;
+
+    return params;
+  }, []);
+
+  const applySelection = useCallback((rows, currentSelection) => {
+    if (!rows.length) return null;
+    if (!currentSelection) return rows[0];
+
+    const stillThere = rows.some((row) => row.id === currentSelection.id);
+    return stillThere ? currentSelection : rows[0];
+  }, []);
+
+  const fetchPendingQueue = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+
     try {
-      const { data } = await axios.get('/api/website-information/supervisor/pending', { 
-        params: { 
-          page, search, per_page: PER_PAGE,
-          department_id: filterDept || undefined,
-          start_date: filterStart || undefined,
-          end_date: filterEnd || undefined,
-        } 
-      });
+      const params = buildParams(pageRef.current, filtersRef.current);
+      const { data } = await axios.get('/api/website-information/supervisor/pending', { params });
       const rows = (data?.data ?? []).map(mapPendingRequest);
+
       setPendingRequests(rows);
       setPagination(data?.meta ?? { current_page: 1, last_page: 1, total: rows.length, per_page: PER_PAGE });
-      setSelected((current) => (!rows.length ? null : !current || !rows.some((r) => r.id === current.id) ? rows[0] : current));
+      setSelected((current) => applySelection(rows, current));
     } catch (error) {
       console.error('Error fetching pending WIPUR queue:', error);
       setPendingRequests([]);
       setSelected(null);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [applySelection, buildParams]);
 
-  const fetchReturnedCount = async () => {
+  const fetchReturnedCount = useCallback(async () => {
     try {
-      const { data } = await axios.get('/api/website-information/supervisor/returned', { 
-        params: { 
-          search, per_page: 1,
-          department_id: filterDept || undefined,
-          start_date: filterStart || undefined,
-          end_date: filterEnd || undefined,
-        } 
+      const params = buildParams(1, filtersRef.current);
+      const { data } = await axios.get('/api/website-information/supervisor/returned', {
+        params: { ...params, per_page: 1 },
       });
       setReturnedPagination(data?.meta ?? { current_page: 1, last_page: 1, total: 0, per_page: 1 });
     } catch (error) {
       console.error('Error fetching returned WIPUR count:', error);
     }
-  };
+  }, [buildParams]);
 
-  const fetchReturnedQueue = async () => {
-    setLoading(true);
+  const fetchReturnedQueue = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+
     try {
-      const { data } = await axios.get('/api/website-information/supervisor/returned', { 
-        params: { 
-          page, search, per_page: PER_PAGE,
-          department_id: filterDept || undefined,
-          start_date: filterStart || undefined,
-          end_date: filterEnd || undefined,
-        } 
-      });
+      const params = buildParams(pageRef.current, filtersRef.current);
+      const { data } = await axios.get('/api/website-information/supervisor/returned', { params });
       const rows = (data?.data ?? []).map(mapPendingRequest);
+
       setReturnedRequests(rows);
       setReturnedPagination(data?.meta ?? { current_page: 1, last_page: 1, total: rows.length, per_page: PER_PAGE });
-      setSelected((current) => (!rows.length ? null : !current || !rows.some((r) => r.id === current.id) ? rows[0] : current));
+      setSelected((current) => applySelection(rows, current));
     } catch (error) {
       console.error('Error fetching returned WIPUR queue:', error);
       setReturnedRequests([]);
       setSelected(null);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [applySelection, buildParams]);
 
-  const fetchDecisionLog = async () => {
+  const fetchDecisionLog = useCallback(async () => {
     try {
-      const { data } = await axios.get('/api/website-information/supervisor/audit', { 
-        params: { 
-          search, per_page: 20,
-          department_id: filterDept || undefined,
-          start_date: filterStart || undefined,
-          end_date: filterEnd || undefined,
-        } 
+      const { data } = await axios.get('/api/website-information/supervisor/audit', {
+        params: {
+          ...buildParams(1, filtersRef.current),
+          per_page: 20,
+        },
       });
       setDecisionLog((data?.data ?? []).map(mapAuditEntry));
     } catch (error) {
       console.error('Error fetching WIPUR audit log:', error);
       setDecisionLog([]);
     }
-  };
+  }, [buildParams]);
+
+  const refreshSupervisorData = useCallback(async ({ silent = false } = {}) => {
+    if (view === 'awaiting') {
+      await fetchPendingQueue({ silent });
+    } else if (view === 'returned') {
+      await fetchReturnedQueue({ silent });
+    }
+
+    await fetchReturnedCount();
+    await fetchDecisionLog();
+  }, [fetchDecisionLog, fetchPendingQueue, fetchReturnedCount, fetchReturnedQueue, view]);
 
   useEffect(() => {
-    fetchPendingQueue();
-    fetchReturnedCount();
-  }, [search, filterDept, filterStart, filterEnd]);
-
-  useEffect(() => {
-    if (view === 'awaiting') fetchPendingQueue();
-    else if (view === 'returned') fetchReturnedQueue();
-  }, [page, search, view, filterDept, filterStart, filterEnd]);
+    refreshSupervisorData();
+  }, [view, page, search, filterDept, filterStart, filterEnd, refreshSupervisorData]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
-      if (view === 'awaiting') fetchPendingQueue();
-      else if (view === 'returned') fetchReturnedQueue();
-      fetchReturnedCount();
+      refreshSupervisorData({ silent: true });
     }, 13000);
     return () => clearInterval(intervalId);
-  }, [page, search, view, filterDept, filterStart, filterEnd]);
-
-  useEffect(() => { fetchDecisionLog(); }, [search, view, filterDept, filterStart, filterEnd]);
+  }, [refreshSupervisorData]);
 
   const filteredLog = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -607,14 +627,8 @@ export default function WIPURSupervisorReviewPage() {
         toast.error('Request has been declined.');
       }
 
-      if (view === 'awaiting') {
-         await fetchPendingQueue();
-      } else if (view === 'returned') {
-         await fetchReturnedQueue();
-      }
-      await fetchDecisionLog();
-      await fetchReturnedCount();
-      
+      await refreshSupervisorData({ silent: false });
+
       setDecisionModal({ type: null, request: null });
       setView('log');
     } catch (error) {
@@ -635,6 +649,16 @@ export default function WIPURSupervisorReviewPage() {
     setFilterStart('');
     setFilterEnd('');
   };
+
+  useEffect(() => {
+    if (view === 'log') return;
+    setSelected((current) => {
+      const queue = view === 'returned' ? returnedRequests : pendingRequests;
+      if (!queue.length) return null;
+      if (!current) return queue[0];
+      return queue.some((row) => row.id === current.id) ? current : queue[0];
+    });
+  }, [view, pendingRequests, returnedRequests]);
 
   const currentQueue = view === 'returned' ? returnedRequests : pendingRequests;
   const currentPagination = view === 'returned' ? returnedPagination : pagination;

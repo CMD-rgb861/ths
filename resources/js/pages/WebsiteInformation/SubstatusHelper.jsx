@@ -62,17 +62,19 @@ export default function SubstatusHelper({ status, subStatus, workflowStatus }) {
 
   const subStatusClasses = isWaiting
     ? 'text-violet-800 bg-violet-100 ring-1 ring-violet-200'
-    : 'text-slate-700 bg-slate-100 ring-1 ring-slate-200';
+    : subStatusKey === 'approved'
+      ? 'text-emerald-800 bg-emerald-100 ring-1 ring-emerald-200'
+      : 'text-slate-700 bg-slate-100 ring-1 ring-slate-200';
 
   return (
     <div className="flex flex-col items-center justify-center space-y-1.5">
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${mainStatusClasses}`}>
+      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${mainStatusClasses}`}>
         {mainStatusLabel}
       </span>
 
       {(subStatusLabel || isWaiting) && (
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium ${subStatusClasses}`}>
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium ${subStatusClasses}`}>
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           {subStatusLabel || 'Waiting for your confirmation'}

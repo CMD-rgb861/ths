@@ -27,6 +27,7 @@ use App\Http\Controllers\WebsiteInformation\Users\WIPURDashboardController;
 use App\Http\Controllers\WebsiteInformation\Users\WIPURHistoryController;
 use App\Http\Controllers\WebsiteInformation\Users\WIPURNewRequestController;
 use App\Http\Controllers\WebsiteInformation\Users\WIPURResubmitController;
+use App\Http\Controllers\WebsiteInformation\Users\WIPURRequestQueueController;
 use App\Http\Controllers\WebsiteInformation\Supervisor\WIPURSupervisorController;
 use App\Http\Controllers\WebsiteInformation\Supervisor\WIPURApprovalController;
 use App\Http\Controllers\WebsiteInformation\Supervisor\WIPURReturnController;
@@ -218,6 +219,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ============================================
     Route::get('/website-information/my-requests', [WIPURDashboardController::class, 'index']);
     Route::get('/website-information/history', [WIPURHistoryController::class, 'index']);
+    Route::get('/website-information/queue', [WIPURRequestQueueController::class, 'index']);
     Route::post('/website-information/requests', [WIPURNewRequestController::class, 'store']);
     Route::post('/website-information/requests/{wipurRequest}/resubmit', [WIPURResubmitController::class, 'store']);
     Route::patch('/website-information/requests/{wipurRequest}/cancel', [WIPURDashboardController::class, 'cancel']);

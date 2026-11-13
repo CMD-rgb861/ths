@@ -1,4 +1,3 @@
-// resources/js/pages/GeneralServiceRequest/User/HistoryPage.jsx
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import WIPURNavigationPanel from '../WIPURNavigationPanel';
@@ -12,7 +11,6 @@ export default function HistoryPage() {
   // Filter states
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
-  const [requestFor, setRequestFor] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
@@ -20,34 +18,6 @@ export default function HistoryPage() {
   // Meta states
   const [pagination, setPagination] = useState({});
   const [statusOptions, setStatusOptions] = useState([]);
-  const [requestForOptions, setRequestForOptions] = useState([]);
-
-  // Fetch lookup options on mount
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const headers = { Authorization: `Bearer ${token}` };
-
-    // Fetch statuses
-    axios.get('/api/request-statuses', { headers })
-      .then(res => {
-        const allStatuses = Array.isArray(res.data) ? res.data : res.data?.data || [];
-        const historyStatuses = allStatuses.filter(s => 
-          ['Completed', 'Cancelled', 'Unserviceable'].includes(s.name)
-        );
-        setStatusOptions([...historyStatuses, { id: 'declined', name: 'Declined' }]);
-      })
-      .catch(console.error);
-
-    // Hardcoded GJOR request-for options
-    setRequestForOptions([
-      { id: 1, name: 'Janitor(s)' },
-      { id: 2, name: 'Plumber(s)' },
-      { id: 3, name: 'Engineer(s)' },
-      { id: 4, name: 'Electrician(s)' },
-      { id: 5, name: 'Carpenter(s)' },
-      { id: 6, name: 'Others' },
-    ]);
-  }, []);
 
   // Auto Fetch (Debounced Search)
   useEffect(() => {
@@ -56,7 +26,7 @@ export default function HistoryPage() {
     }, 500);
 
     return () => clearTimeout(delay);
-  }, [search, status, requestFor, dateFrom, dateTo, page]);
+  }, [search, status, dateFrom, dateTo, page]);
 
   const fetchHistory = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -66,7 +36,6 @@ export default function HistoryPage() {
       
       if (search) params.search = search;
       if (status) params.status = status;
-      if (requestFor) params.request_for_id = requestFor;
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
 
@@ -77,6 +46,9 @@ export default function HistoryPage() {
 
       setOrders(res.data?.data || []);
       setPagination(res.data?.meta || {});
+      if (res.data?.status_options) {
+        setStatusOptions(res.data.status_options);
+      }
     } catch (error) {
       console.error('Error fetching history:', error);
       if (!silent) {
@@ -94,7 +66,20 @@ export default function HistoryPage() {
     }, 13000);
 
     return () => clearInterval(intervalId);
-  }, [search, status, requestFor, dateFrom, dateTo, page]);
+  }, [search, status, dateFrom, dateTo, page]);
+
+  // Helper to render the correct badge color based on the display status
+  const getStatusBadge = (order) => {
+    const s = order.status;
+    
+    if (s === 'Completed') return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    if (s === 'Approved by Admin' || s === 'Approved') return 'bg-blue-100 text-blue-800 border-blue-200';
+    if (s === 'Declined') return 'bg-rose-100 text-rose-800 border-rose-200';
+    if (s === 'Returned') return 'bg-amber-100 text-amber-800 border-amber-200';
+    if (s === 'Cancelled') return 'bg-red-100 text-red-800 border-red-200';
+    if (s === 'Unserviceable') return 'bg-gray-200 text-gray-800 border-gray-300';
+    return 'bg-gray-100 text-gray-600 border-gray-200';
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -106,7 +91,7 @@ export default function HistoryPage() {
           {/* Header Card */}
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
             <h1 className="text-2xl font-bold text-gray-900">Website Information Request History</h1>
-            <p className="text-gray-600 mt-1">Completed, Cancelled, Declined, and Unserviceable requests</p>
+            <p className="text-gray-600 mt-1">Approved, Completed, Declined, and Returned requests</p>
           </div>
 
           {/* Filter and Search Card */}
@@ -136,7 +121,7 @@ export default function HistoryPage() {
                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Filters</h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Status */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
@@ -172,21 +157,6 @@ export default function HistoryPage() {
                     onChange={(e) => { setPage(1); setDateTo(e.target.value); }}
                     className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
-                </div>
-
-                {/* Request For */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Request For</label>
-                  <select
-                    value={requestFor}
-                    onChange={(e) => { setPage(1); setRequestFor(e.target.value); }}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  >
-                    <option value="">All Types</option>
-                    {requestForOptions.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
                 </div>
               </div>
             </div>
@@ -226,14 +196,12 @@ export default function HistoryPage() {
                             <p className="text-base font-bold text-gray-900">
                               {order.control_number || order.request_no || '—'}
                             </p>
-                            <span
-                              className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                                order.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                                order.status === 'Cancelled' ? 'bg-red-100 text-red-800' :
-                                order.status === 'Unserviceable' ? 'bg-gray-200 text-gray-800' :
-                                'bg-gray-100 text-gray-600'
-                              }`}
-                            >
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full border ${getStatusBadge(order)}`}>
+                              {order.status === 'Completed' && (
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
                               {order.status}
                             </span>
                           </div>
@@ -247,6 +215,13 @@ export default function HistoryPage() {
                             <span className="mx-2 text-gray-300">•</span>
                             <span>{order.created_at_human || order.date_requested_human || '—'}</span>
                           </div>
+
+                          {/* Show reason if declined or returned */}
+                          {(order.status === 'Declined' || order.status === 'Returned') && order.reason && (
+                            <div className="mt-2 text-xs text-rose-600 bg-rose-50 px-2 py-1 rounded inline-block">
+                              <strong>{order.status === 'Declined' ? 'Declined' : 'Returned'} Reason:</strong> {order.reason}
+                            </div>
+                          )}
                         </div>
                         <button className="ml-4 text-blue-600 hover:text-blue-700 text-sm font-medium whitespace-nowrap">
                           View Details →
